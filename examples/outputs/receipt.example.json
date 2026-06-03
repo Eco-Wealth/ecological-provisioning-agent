@@ -1,0 +1,20 @@
+{
+  "id": "receipt_example_cleanup_jkl012",
+  "packet_id": "packet_example_cleanup_ghi789",
+  "intended": "Perform a bounded first-pass cleanup action that improves the site condition without exceeding human review boundaries.",
+  "done": "No real field work; demo proof only.",
+  "changed": "No real change claimed.",
+  "evidence": [
+    "example before-note placeholder",
+    "example after-note placeholder"
+  ],
+  "unknowns": [
+    "real site condition",
+    "owner approval",
+    "hazards"
+  ],
+  "next_action": "Collect real proof before claiming completion.",
+  "truth_warnings": [
+    "Review language for overclaim or live-action implication: complete"
+  ]
+}

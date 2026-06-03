@@ -1,0 +1,37 @@
+{
+  "id": "intent_owner-has-a-degraded-lot_abc123",
+  "summary": "Owner has a degraded lot with trash, runoff concerns, and overgrown edges. They want it safer, more beautiful, more water-aware, and easier to maintain.",
+  "place": "example degraded lot",
+  "problem": "The place appears to need safety, cleanup, repair, or stewardship attention.",
+  "desired_outcome": "Make the place safer, more coherent, easier to care for, and more beautiful.",
+  "stakeholders": [
+    "owner",
+    "neighbor",
+    "laborer"
+  ],
+  "constraints": [
+    "public demo only",
+    "permission required before field work",
+    "no live dispatch",
+    "human review required before field action"
+  ],
+  "unknowns": [
+    "exact site conditions",
+    "permissions",
+    "materials available",
+    "hazards not visible from intent"
+  ],
+  "candidate_work": [
+    "cleanup",
+    "safety",
+    "water",
+    "beauty"
+  ],
+  "proof_needed": [
+    "before photos or notes",
+    "specific location notes",
+    "after photos or notes",
+    "remaining risks and unknowns"
+  ],
+  "risk_level": "medium"
+}

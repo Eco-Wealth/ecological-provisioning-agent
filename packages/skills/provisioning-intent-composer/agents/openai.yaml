@@ -1,0 +1,5 @@
+interface:
+  display_name: "Provisioning Intent Composer"
+  short_description: "Convert messy ecological/civic intent into structured provisioning intent."
+  icon: "leaf"
+  primary_color: "#2f6f4e"

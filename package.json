@@ -1,0 +1,22 @@
+{
+  "name": "ecological-provisioning-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Brandless local-first kernel for ecological provisioning packets, proof, receipts, SDK, CLI, and MCP tools.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "node --test tests/*.test.mjs",
+    "demo": "node packages/cli/dist/index.js demo",
+    "validate:truth": "node packages/cli/dist/index.js validate examples/outputs/receipt.example.json"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  },
+  "packageManager": "pnpm@9.12.0"
+}

@@ -1,0 +1,73 @@
+{
+  "packet": {
+    "id": "packet_example_cleanup_ghi789",
+    "intent_id": "intent_owner-has-a-degraded-lot_abc123",
+    "route_id": "route_intent-owner-has-a-degraded-lot-cleanup_def456",
+    "title": "First cleanup packet for example degraded lot",
+    "context": "Owner has a degraded lot with trash, runoff concerns, and overgrown edges. They want it safer, more beautiful, more water-aware, and easier to maintain.",
+    "task": "Perform a bounded first-pass cleanup action that improves the site condition without exceeding human review boundaries.",
+    "location_assumptions": [
+      "example degraded lot",
+      "Exact boundaries must be confirmed before field work."
+    ],
+    "materials": [
+      "contractor bags",
+      "gloves",
+      "sorting containers"
+    ],
+    "tools": [
+      "grabber",
+      "broom",
+      "dustpan"
+    ],
+    "skills_needed": [
+      "site cleanup",
+      "basic hazard recognition"
+    ],
+    "difficulty": "medium",
+    "safety_notes": [
+      "Stop if unknown hazards are found.",
+      "Confirm permission before entering or altering any site.",
+      "Use appropriate protective equipment."
+    ],
+    "proof_required": [
+      "before photos or notes",
+      "specific location notes",
+      "after photos or notes",
+      "remaining risks and unknowns"
+    ],
+    "acceptance_criteria": [
+      "Before state is documented.",
+      "Work performed is described plainly.",
+      "After state is documented.",
+      "Remaining risks and unknowns are listed.",
+      "No certification or verified outcome is claimed without evidence."
+    ],
+    "next_action": "Create a proof checklist and assign a human reviewer before any real-world action."
+  },
+  "proofs": [
+    {
+      "id": "proof_example_001",
+      "packet_id": "packet_example_cleanup_ghi789",
+      "before_state": "Trash and overgrown edges observed in demo record.",
+      "during_work": "No real field work; demo proof only.",
+      "after_state": "No real change claimed.",
+      "measurements": [],
+      "evidence": [
+        "example before-note placeholder",
+        "example after-note placeholder"
+      ],
+      "observer_notes": [
+        "Demo proof record only."
+      ],
+      "risks": [
+        "Permission and site hazards unknown."
+      ],
+      "remaining_unknowns": [
+        "real site condition",
+        "owner approval",
+        "hazards"
+      ]
+    }
+  ]
+}

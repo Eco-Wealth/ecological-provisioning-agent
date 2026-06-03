@@ -1,0 +1,5 @@
+interface:
+  display_name: "Proof Receipt Writer"
+  short_description: "Turn proof records into cautious receipts with truth-boundary warnings."
+  icon: "leaf"
+  primary_color: "#2f6f4e"

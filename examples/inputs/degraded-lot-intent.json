@@ -1,0 +1,13 @@
+{
+  "text": "Owner has a degraded lot with trash, runoff concerns, and overgrown edges. They want it safer, more beautiful, more water-aware, and easier to maintain.",
+  "place": "example degraded lot",
+  "stakeholders": [
+    "owner",
+    "neighbor",
+    "laborer"
+  ],
+  "constraints": [
+    "public demo only",
+    "permission required before field work"
+  ]
+}

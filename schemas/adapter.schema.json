@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExternalAdapterRecord",
+  "type": "object",
+  "required": [
+    "name",
+    "mode",
+    "source",
+    "retrieved_at",
+    "license_or_terms_note",
+    "confidence",
+    "limitations"
+  ],
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "read-only",
+        "draft",
+        "live-disabled"
+      ]
+    },
+    "source": {
+      "type": "string"
+    },
+    "retrieved_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "license_or_terms_note": {
+      "type": "string"
+    },
+    "confidence": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "citation_url": {
+      "type": "string"
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
