@@ -1,0 +1,13 @@
+{
+  "id": "route_intent-owner-has-a-degraded-lot-cleanup_def456",
+  "intent_id": "intent_owner-has-a-degraded-lot_abc123",
+  "primary_category": "cleanup",
+  "secondary_categories": [
+    "safety",
+    "water",
+    "beauty",
+    "owner decision"
+  ],
+  "rationale": "Route selected because the intent signals cleanup work and requires bounded proof before broader action.",
+  "next_action": "Build a small work packet with safety notes and proof requirements."
+}

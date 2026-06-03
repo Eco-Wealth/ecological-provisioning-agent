@@ -1,0 +1,14 @@
+{
+  "name": "example public drainage map record",
+  "mode": "read-only",
+  "source": "public example source",
+  "retrieved_at": "2026-06-03T12:00:00.000Z",
+  "license_or_terms_note": "Example only. Check actual source terms before use.",
+  "confidence": "low",
+  "citation_url": "https://example.org/public-source",
+  "limitations": [
+    "placeholder data",
+    "not field proof",
+    "not permission to act"
+  ]
+}

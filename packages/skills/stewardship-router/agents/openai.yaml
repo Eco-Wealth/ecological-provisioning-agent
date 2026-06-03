@@ -1,0 +1,5 @@
+interface:
+  display_name: "Stewardship Router"
+  short_description: "Route structured intent into bounded stewardship work categories."
+  icon: "leaf"
+  primary_color: "#2f6f4e"

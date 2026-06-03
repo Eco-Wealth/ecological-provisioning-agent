@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StewardshipRoute",
+  "type": "object",
+  "required": [
+    "id",
+    "intent_id",
+    "primary_category",
+    "secondary_categories",
+    "rationale",
+    "next_action"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "intent_id": {
+      "type": "string"
+    },
+    "primary_category": {
+      "type": "string"
+    },
+    "secondary_categories": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rationale": {
+      "type": "string"
+    },
+    "next_action": {
+      "type": "string"
+    }
+  }
+}

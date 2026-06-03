@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProofRecord",
+  "type": "object",
+  "required": [
+    "id",
+    "packet_id",
+    "before_state",
+    "after_state",
+    "evidence",
+    "remaining_unknowns"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "packet_id": {
+      "type": "string"
+    },
+    "before_state": {
+      "type": "string"
+    },
+    "during_work": {
+      "type": "string"
+    },
+    "after_state": {
+      "type": "string"
+    },
+    "measurements": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "observer_notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "remaining_unknowns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

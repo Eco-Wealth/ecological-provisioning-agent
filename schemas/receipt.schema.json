@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Receipt",
+  "type": "object",
+  "required": [
+    "id",
+    "packet_id",
+    "intended",
+    "done",
+    "changed",
+    "evidence",
+    "unknowns",
+    "next_action",
+    "truth_warnings"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "packet_id": {
+      "type": "string"
+    },
+    "intended": {
+      "type": "string"
+    },
+    "done": {
+      "type": "string"
+    },
+    "changed": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "unknowns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "next_action": {
+      "type": "string"
+    },
+    "truth_warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

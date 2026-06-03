@@ -1,0 +1,5 @@
+interface:
+  display_name: "Truth Boundary Reviewer"
+  short_description: "Review text or objects for overclaims, certification claims, and live-action implications."
+  icon: "leaf"
+  primary_color: "#2f6f4e"
