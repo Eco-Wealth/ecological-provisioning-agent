@@ -1,0 +1,971 @@
+{
+  "schema_version": "vealth.standard.v0",
+  "name": "The Vealth Standard",
+  "also_known_as": "the EcoWealth Standard \u2014 same standard; the operator named the family EcoWealth (2026-08-07) and its public name Vealth (2026-08-10)",
+  "subtitle": "A standard for the place already standing.",
+  "version": "v0",
+  "authored": "2026-08-07",
+  "authored_from": "Operator direction 2026-08-06: forge our own standard between Michelin, LBC/ILFI and the SDGs, aimed at renovating what already stands rather than certifying what does not exist yet.",
+  "one_line": "A place holds Standing while the work keeps happening, measured by what changed, carried by the people who did it, and readable in the world's own vocabulary.",
+  "what_it_is_not": [
+    "Not a certification. There is no committee, no application, no fee, and no plaque.",
+    "Not a design target. Nothing here can be earned on paper before the work is done.",
+    "Not a replacement for the Living Building Challenge, the Michelin Guide, or the Sustainable Development Goals. It is the maintenance layer under them, and every condition names exactly which of theirs it serves."
+  ],
+  "why_it_exists": {
+    "problem": "The three standards we run our ladders on are excellent and all three are pointed somewhere else. The Living Building Challenge measures a project on a site. The Michelin Guide judges a kitchen, not a building. The Sustainable Development Goals speak to nations. None of them has a unit for the thing that most needs the work: a building that is already standing, already occupied, already degrading, with nobody measuring it.",
+    "answer": "Make the unit a bounded piece of work with a receipt, and make the status something a place holds only while that work keeps happening.",
+    "objections_answered": {
+      "certification_is_not_the_goal": "held_not_awarded and start_where_it_is. Nothing here rewards a new project. A place enters at whatever state it is in.",
+      "lbc_imperative_17_is_unreachable_downtown": "LBC Universal Access assumes a project on a site with sky around it, and in a dense core that shadow was cast decades ago. The condition everyone_can_get_here re-points the same intent at the street that exists: can a person using a wheelchair, a cane, or a stroller reach this place and use it. That is measurable on any block in Los Angeles or New York today.",
+      "lbc_imperative_18_does_not_reach_the_labour": "LBC Inclusion verifies a contract percentage. It never touches the person. rung_at_the_ground and receipt_is_the_certificate verify the person directly: a named steward, a settled wage, on a record nobody can quietly edit."
+    }
+  },
+  "the_unit": {
+    "name": "Standing",
+    "held_by": "a place",
+    "place_can_be": [
+      "a parcel",
+      "a building",
+      "a unit inside a building",
+      "a block",
+      "a kitchen",
+      "a stretch of creek, shoreline, or street"
+    ],
+    "computed_from": "settled work packets with accepted proof on the EcoWealth board. Nothing else counts toward a standing.",
+    "default_applicability": "All nine conditions apply to a place unless the place records a condition as not applicable with a stated reason. A recorded exemption is public and can be challenged."
+  },
+  "laws": [
+    {
+      "id": "held_not_awarded",
+      "name": "Standing is held, not awarded.",
+      "text": "A standing is a live status, not an achievement. It is re-measured on a cadence and it lapses when the work stops or a condition trends down. The Michelin Guide can take a star back and the Living Building Challenge demands twelve months of real occupied performance. This law puts both of those on maintenance, which is where the degradation actually happens.",
+      "enforced_by": "The lapse rule in the standings table. A place that stops measuring falls to the highest level it still satisfies."
+    },
+    {
+      "id": "receipt_is_the_certificate",
+      "name": "The receipt is the certificate.",
+      "text": "There is no committee, no application, no fee, and no site visit by a body you have to pay. A bounded work packet, evidence before and after, a named steward, a settled wage, and an entry on a record nobody can quietly edit. That is the whole apparatus. If a claim has no receipt behind it, the claim does not exist.",
+      "enforced_by": "Standings compute only from settled packets with accepted proof. Unsettled, unproven, or self-attested work contributes nothing."
+    },
+    {
+      "id": "rung_at_the_ground",
+      "name": "Every condition has a rung at the ground.",
+      "text": "Every one of the nine conditions must be enterable today by a person with no license, no capital, and no specialized equipment. If a condition cannot be entered that way, the condition is written wrong, not the person. This is the working answer to inclusion: not a percentage of a contract, but a ladder with a rung on the floor.",
+      "enforced_by": "Each condition carries a ground_rung that names the tools, the time, and what the person walks away with. A condition without a valid ground rung is not admissible in this standard."
+    },
+    {
+      "id": "start_where_it_is",
+      "name": "Start where it is.",
+      "text": "No clear site, no new build, no budget floor, no minimum condition of entry. A place enters filthy, drafty, cracked, and unmeasured, and that entry is honorable. It is a dirty old world and meeting it as it is is the point.",
+      "enforced_by": "The Unread standing is a real, named, non-failing state. Nearly every place on earth is in it."
+    },
+    {
+      "id": "nobody_is_hurt",
+      "name": "Nobody is hurt earning it.",
+      "text": "A standing built on injured hands is void. Every packet carries its hazard and its control, and every ground rung is one a person can do without specialized protection. Safety work is not a condition of the place. It is the condition on which any of this counts at all.",
+      "enforced_by": "Packets that map to this law are hazard controls, not conditions. They gate the work rather than scoring the place.",
+      "crosswalk": {
+        "sdg": [
+          "8.8 protect labour rights and promote safe and secure working environments"
+        ]
+      }
+    }
+  ],
+  "standings": [
+    {
+      "level": 0,
+      "id": "unread",
+      "name": "Unread",
+      "plain": "Nobody has measured it. This is where nearly every place on earth is, and it is not a failure.",
+      "requires": "nothing",
+      "computable_rule": "no settled measurement packet on any applicable condition"
+    },
+    {
+      "level": 1,
+      "id": "read",
+      "name": "Read",
+      "plain": "The place has been honestly measured and its gaps are named on the record.",
+      "requires": "one settled measurement packet on every applicable condition",
+      "computable_rule": "for every applicable condition: count(settled packets of kind=measure with accepted proof) >= 1"
+    },
+    {
+      "level": 2,
+      "id": "tended",
+      "name": "Tended",
+      "plain": "The first repairs landed, with before and after evidence, and one of them was checked again a season later.",
+      "requires": "Read, plus a settled repair showing an improving delta on at least five conditions, plus at least one re-measure taken 90 or more days after its first measure",
+      "computable_rule": "read AND count(conditions with >=1 settled kind=repair packet carrying an improving delta) >= 5 AND count(conditions with a re-measure >= 90 days after first measure) >= 1"
+    },
+    {
+      "level": 3,
+      "id": "kept",
+      "name": "Kept",
+      "plain": "A maintenance cadence is running. Everything gets looked at twice a year and nothing is sliding backward.",
+      "requires": "every applicable condition measured at least twice in the last twelve months, no condition's latest measure worse than the one before it, and at least one settled repair in the last twelve months",
+      "computable_rule": "for every applicable condition: count(settled measures in trailing 365d) >= 2 AND latest_measure not worse than previous; AND count(settled repairs in trailing 365d) >= 1"
+    },
+    {
+      "level": 4,
+      "id": "whole",
+      "name": "Whole",
+      "plain": "Twelve straight months of measured performance across every applicable condition, nothing trending down, and the place has taught somebody. A person who worked here moved up a rung doing it.",
+      "requires": "Kept held continuously for twelve months across every applicable condition, no condition trending down, and at least one steward whose skill level advanced on packets settled at this place",
+      "computable_rule": "kept held for 12 consecutive months across all applicable conditions AND no condition trending down AND count(distinct stewards with a skill_level advance on packets settled at this place) >= 1"
+    }
+  ],
+  "lapse_rule": "A standing above Read lapses immediately to the highest level still satisfied when a required re-measure is missed or any condition's latest measure is worse than the one before it. Lapsing is normal, is public, and is not a penalty. It is the standard doing its job.",
+  "cadence_policy": {
+    "why": "The lapse rule was prose only until 2026-08-26: every condition stated its cadence in words ('hold') and its failure in words ('fails_when'), and nothing on any rail read a clock. These two numbers are the machine-readable half of the same two sentences, so a lapse is computed rather than asserted.",
+    "remeasure_cadence_days": "How often the condition is due to be looked at again. Read straight off that condition's own 'hold' sentence. Passing it makes the condition DUE, which is a prompt, not a lapse.",
+    "lapse_after_days": "How long the condition may go unmeasured before its coverage lapses. Read straight off that condition's own 'fails_when' sentence, which is deliberately more forgiving than the cadence in several conditions.",
+    "derivation": {
+      "shelter_holds": "hold 'each season' = 90 \u00b7 fails_when 'a season passes with no walk' = 90",
+      "air_is_clean": "hold 'twice a year' = 182 \u00b7 fails_when 'a year passes with no reading' = 365",
+      "water_is_honest": "hold 'twice a year' = 182 \u00b7 fails_when 'six months pass with no read' = 182",
+      "power_is_earned": "hold 'monthly' = 30 \u00b7 fails_when 'two consecutive months are missed', so the last read is three monthly slots old = 90",
+      "nothing_leaves_as_waste": "hold 'twice a year' = 182 \u00b7 fails_when 'six months pass with no weigh' = 182",
+      "the_ground_is_alive": "hold 'twice a year' = 182 \u00b7 fails_when 'a year passes with no count' = 365",
+      "a_person_is_fed_well": "hold 'each season' = 90 \u00b7 fails_when 'a season passes with no record' = 90",
+      "everyone_can_get_here": "hold 'twice a year' = 182 \u00b7 fails_when 'six months pass with no walk' = 182",
+      "the_commons_is_kept": "hold 'monthly' = 30 \u00b7 fails_when 'a month passes with no walk' = 30"
+    },
+    "what_it_does_not_do": "Neither number is a worsening-delta rule. Every condition's 'fails_when' also lapses on a number that got worse, and the receipts do not carry comparable measurements yet, so only the missed-re-measure half of the lapse rule is computed today. The other half stays named and uncomputed rather than approximated.",
+    "unknown_age_never_lapses": "A packet whose proof and settlement carry no timestamp has an unknown age. Unknown age is never treated as a lapse, because a lapse we cannot date is a lapse we cannot prove."
+  },
+  "conditions": [
+    {
+      "id": "shelter_holds",
+      "order": 1,
+      "name": "Shelter holds",
+      "sentence": "Weather stays out and conditioned air stays in.",
+      "why": "The cheapest, least glamorous win in the entire built world. A sealed gap pays back forever and anyone can find one with a lit stick of incense.",
+      "measures": [
+        "count of air leaks found, and of those, how many sealed",
+        "drafts still detectable at door, window, sill and penetration",
+        "envelope defects open versus closed (roof, gutter, glazing, masonry, foundation)"
+      ],
+      "ground_rung": {
+        "title": "Walk the place and find every draft",
+        "who": "anyone, no license",
+        "tools": "a lit incense stick or a damp hand, a phone camera, a pen",
+        "time": "under two hours",
+        "output": "a photographed, counted list of every air leak, and at least one of them sealed"
+      },
+      "instruments": [
+        "damp hand",
+        "incense or smoke pencil",
+        "phone thermal camera",
+        "blower door test at mastery"
+      ],
+      "hold": "re-walked each season",
+      "remeasure_cadence_days": 90,
+      "lapse_after_days": 90,
+      "fails_when": "a season passes with no walk, or the leak count goes up",
+      "crosswalk": {
+        "lbc": [
+          "Energy Petal",
+          "Imperative 07 Energy + Carbon Reduction"
+        ],
+        "michelin": [],
+        "sdg": [
+          "7.3 double the rate of improvement in energy efficiency",
+          "11.1 adequate, safe and affordable housing",
+          "13.1 resilience to climate hazards"
+        ]
+      },
+      "legacy_standard_ids": [
+        "weatherization_readiness",
+        "diy_weatherization_sealing",
+        "cold_climate_home_weatherization",
+        "building_weatherization_installation",
+        "building_weatherization_readiness",
+        "building_envelope_exterior_maintenance",
+        "residential_envelope_maintenance",
+        "residential_envelope_exterior_maintenance",
+        "window_glazing_repair",
+        "masonry_repointing_repair",
+        "basement_water_seal_repair",
+        "historic_pier_beam_foundation_releveling",
+        "rowhouse_stoop_crack_patch_repair",
+        "rowhouse_stoop_step_rebuild_repair",
+        "rowhouse_gutter_downspout_ground_clear_repair",
+        "rowhouse_roofline_gutter_repair",
+        "rowhouse_areaway_waterproof_regrade_repair",
+        "rowhouse_areaway_drain_clear_repair",
+        "winter_access_freeze_protection_maintenance",
+        "ibhs_fortified_home_wind_mitigation",
+        "wildfire_defensible_space_readiness",
+        "home_defensible_space_zone1_maintenance",
+        "lbc_energy_petal",
+        "lbc_full_cert",
+        "lfa_lbc_petal_practice",
+        "lfa_biophilic_design",
+        "lfa_zero_energy",
+        "home_mold_moisture_audit",
+        "build_neighbor_shelter_holds"
+      ]
+    },
+    {
+      "id": "air_is_clean",
+      "order": 2,
+      "name": "The air is clean",
+      "sentence": "You breathe better inside than out.",
+      "why": "People spend most of their lives indoors and almost nobody has ever measured the air they sleep in. A thirty dollar meter turns an assumption into a number.",
+      "measures": [
+        "carbon dioxide in parts per million at peak occupancy in the most used room",
+        "fine particulate indoors compared to outdoors",
+        "visible mold and moisture, found and remediated",
+        "known hazardous materials identified and swapped out"
+      ],
+      "ground_rung": {
+        "title": "Read the air in the room you use most",
+        "who": "anyone, no license",
+        "tools": "a low cost carbon dioxide meter, a pen",
+        "time": "one day of readings",
+        "output": "the peak reading, the time it happened, and what was open or closed when it did"
+      },
+      "instruments": [
+        "low cost CO2 meter",
+        "particulate monitor",
+        "moisture meter",
+        "lab assay for lead, radon or asbestos at mastery"
+      ],
+      "hold": "re-read twice a year and after any renovation",
+      "remeasure_cadence_days": 182,
+      "lapse_after_days": 365,
+      "fails_when": "a year passes with no reading, or the peak reading rises",
+      "crosswalk": {
+        "lbc": [
+          "Health + Happiness Petal",
+          "Materials Petal",
+          "Imperative 09 Healthy Interior Environment",
+          "Imperative 10 Healthy Interior Performance",
+          "Imperative 13 Red List"
+        ],
+        "michelin": [
+          "a kitchen a cook can work a full service in"
+        ],
+        "sdg": [
+          "3.9 reduce deaths and illnesses from hazardous chemicals and air pollution",
+          "11.6 reduce the adverse per capita environmental impact of cities"
+        ]
+      },
+      "legacy_standard_ids": [
+        "indoor_air_quality",
+        "ambient_air_quality",
+        "healthy_home_assessment",
+        "mold_remediation_readiness",
+        "radon_mitigation_readiness",
+        "building_life_safety_detector_service",
+        "building_moisture_source_repair",
+        "building_radon_mitigation_install",
+        "building_dehumidification_service",
+        "building_health_assessment",
+        "building_moisture_readiness_survey",
+        "building_radon_readiness_survey",
+        "building_lead_safe_renovation_survey",
+        "building_healthy_materials_screening",
+        "building_healthy_materials_swap_install",
+        "healthy_materials_swap",
+        "red_list_materials",
+        "lead_safe_renovation",
+        "lead_safe_paint_stabilization_repair",
+        "aging_in_place_retrofit",
+        "epa_landfill_gas_ej_monitoring",
+        "lbc_health_petal",
+        "lbc_materials_petal",
+        "lfa_declare_materials",
+        "lichen_air_quality_bioindication_survey"
+      ]
+    },
+    {
+      "id": "water_is_honest",
+      "order": 3,
+      "name": "The water is honest",
+      "sentence": "It arrives clean, is used carefully, and leaves cleaner than it came.",
+      "why": "Every fixture in a building is a number nobody has written down, and a running toilet outspends a solar panel.",
+      "measures": [
+        "gallons per minute at every fixture",
+        "leaks found and stopped, and the gallons per day they were costing",
+        "drinking water tested against the contaminants that actually occur here",
+        "rain that infiltrates on the parcel versus rain that runs to the drain"
+      ],
+      "ground_rung": {
+        "title": "Bucket and stopwatch every tap in the place",
+        "who": "anyone, no license",
+        "tools": "a marked bucket, a phone stopwatch, a pen",
+        "time": "under an hour",
+        "output": "the gallons per minute of every fixture, and every leak found written down with the drip rate"
+      },
+      "instruments": [
+        "bucket and stopwatch",
+        "water meter read with everything off",
+        "home test kit",
+        "certified lab panel at mastery"
+      ],
+      "hold": "re-measured twice a year",
+      "remeasure_cadence_days": 182,
+      "lapse_after_days": 182,
+      "fails_when": "six months pass with no read, a stopped leak reappears, or a fixture's flow goes up",
+      "crosswalk": {
+        "lbc": [
+          "Water Petal",
+          "Imperative 05 Responsible Water Use",
+          "Imperative 06 Net Positive Water"
+        ],
+        "michelin": [],
+        "sdg": [
+          "6.1 safe and affordable drinking water",
+          "6.3 improve water quality by reducing pollution",
+          "6.4 substantially increase water use efficiency"
+        ]
+      },
+      "legacy_standard_ids": [
+        "water_efficiency",
+        "drinking_water_safety",
+        "point_of_use_water_treatment",
+        "building_point_of_use_water_treatment",
+        "irrigation_efficiency",
+        "civic_water_fixture_service",
+        "pfas_screening",
+        "green_stormwater_infrastructure",
+        "storm_drain_repair_clean",
+        "flood_resilience",
+        "gs_water_benefit_source_protection_mrv",
+        "gs_water_benefit_wash_verification_mrv",
+        "institutional_wash_verification_visit",
+        "cistern_first_flush_diverter_install",
+        "arroyo_check_dam_hand_build",
+        "cdc_vector_borne_disease_prevention",
+        "epa_ms4_stormwater",
+        "lbc_water_petal",
+        "sdg6_clean_water",
+        "sdg_6_clean_water",
+        "acequia_channel_maintenance",
+        "acequia_channel_desembanque",
+        "acequia_compuerta_service",
+        "sponge_city_technical_guide",
+        "home_water_sensory_baseline_audit",
+        "household_lead_screen_certified_lab",
+        "pfas_awareness_certified_testing_route",
+        "private_well_annual_screen",
+        "wellhead_source_protection_audit",
+        "data_center_water_stewardship",
+        "solar_canal_and_water_shade",
+        "water_draw_public_record_receipt",
+        "water_loss_non_revenue_audit",
+        "canal_and_reservoir_evaporation",
+        "public_building_water_fixtures",
+        "build_runoff_kept_out_of_the_drain"
+      ]
+    },
+    {
+      "id": "power_is_earned",
+      "order": 4,
+      "name": "The power is earned",
+      "sentence": "The place uses less than it did, and makes what it can.",
+      "why": "Efficiency first, then generation. A photograph of the meter on the same day each month is a full year of proof that costs nothing.",
+      "measures": [
+        "kilowatt hours this month against the same month last year",
+        "kilowatt hours generated on site",
+        "what the place still burns on site, and what replaced it"
+      ],
+      "ground_rung": {
+        "title": "Photograph the meter on the same day every month",
+        "who": "anyone, no license",
+        "tools": "a phone",
+        "time": "two minutes a month",
+        "output": "a dated series of meter photographs that nobody can argue with"
+      },
+      "instruments": [
+        "phone photograph of the meter",
+        "utility bill history",
+        "plug load monitor",
+        "submetering at mastery"
+      ],
+      "hold": "read monthly, compared year over year",
+      "remeasure_cadence_days": 30,
+      "lapse_after_days": 90,
+      "fails_when": "two consecutive months are missed, or use rises year over year with no stated reason",
+      "crosswalk": {
+        "lbc": [
+          "Energy Petal",
+          "Imperative 07 Energy + Carbon Reduction",
+          "Imperative 08 Net Positive Carbon"
+        ],
+        "michelin": [],
+        "sdg": [
+          "7.1 access to affordable, reliable energy",
+          "7.2 increase the share of renewable energy",
+          "7.3 double the rate of improvement in energy efficiency",
+          "13.2 integrate climate measures into planning"
+        ]
+      },
+      "legacy_standard_ids": [
+        "energy_efficiency",
+        "heat_pump_install",
+        "rooftop_solar_install",
+        "battery_storage_install",
+        "ev_charger_install",
+        "electrification_retrofit_readiness",
+        "data_center_hourly_power_receipt",
+        "solar_array_performance_receipt",
+        "solar_module_soiling_and_cleaning"
+      ]
+    },
+    {
+      "id": "nothing_leaves_as_waste",
+      "order": 5,
+      "name": "Nothing leaves as waste",
+      "sentence": "What comes out of here has a next use.",
+      "why": "This is the one condition the Michelin Green Star already teaches better than anyone. A zero waste kitchen looks at a carrot top and sees stock. The same eye works on a demolition pile.",
+      "measures": [
+        "pounds diverted against pounds landfilled",
+        "the named next use for each stream leaving the place",
+        "material recovered from repair and demolition instead of dumped"
+      ],
+      "ground_rung": {
+        "title": "Weigh one week of what leaves",
+        "who": "anyone, no license",
+        "tools": "a bathroom scale, bags, a pen",
+        "time": "one week, a few minutes a day",
+        "output": "pounds by stream, and a named next use for each pile that has one"
+      },
+      "instruments": [
+        "bathroom scale",
+        "hauler weight tickets",
+        "diversion audit at mastery"
+      ],
+      "hold": "re-weighed twice a year",
+      "remeasure_cadence_days": 182,
+      "lapse_after_days": 182,
+      "fails_when": "the landfilled share rises, or six months pass with no weigh",
+      "crosswalk": {
+        "lbc": [
+          "Materials Petal",
+          "Imperative 16 Net Positive Waste"
+        ],
+        "michelin": [
+          "Green Star, zero waste kitchen practice"
+        ],
+        "sdg": [
+          "12.3 halve food waste",
+          "12.5 substantially reduce waste generation through prevention, reduction, recycling and reuse",
+          "11.6 municipal waste management"
+        ]
+      },
+      "legacy_standard_ids": [
+        "graffiti_removal_cleanup",
+        "alley_bulk_debris_removal",
+        "epa_illegal_dumping_cleanup",
+        "post_fire_debris_removal",
+        "demolition_pre_survey",
+        "epa_recycling_contamination",
+        "epa_food_waste_hierarchy",
+        "epa_hhw_ewaste_guidance",
+        "sdg12_5_waste_management",
+        "sdg_12_responsible_consumption",
+        "michelin_zero_waste",
+        "building_material_reuse_deconstruction",
+        "data_center_energy_reuse",
+        "data_center_circular_hardware",
+        "solar_module_end_of_life_custody",
+        "rainwater_and_greywater_reuse"
+      ]
+    },
+    {
+      "id": "the_ground_is_alive",
+      "order": 6,
+      "name": "The ground is alive",
+      "sentence": "The soil, the water, the canopy and the small lives on this ground and its street are trending up.",
+      "why": "Everything else on this list is about a structure. This one is about the living matrix the structure sits in, including the creek four blocks away that the parcel drains into.",
+      "measures": [
+        "trees standing, tree wells empty, canopy over the parcel and its street",
+        "permeable ground against sealed ground",
+        "soil that takes water, and what is living in it",
+        "species seen, counted the same way each time",
+        "the condition of the nearest living water"
+      ],
+      "ground_rung": {
+        "title": "Count the trees and the empty tree wells on your block",
+        "who": "anyone, no license",
+        "tools": "a phone, a pen",
+        "time": "under an hour",
+        "output": "a photographed count of every tree and every empty well, with its location"
+      },
+      "instruments": [
+        "phone photographs and a tally",
+        "soil infiltration test with a coffee can",
+        "i-Tree canopy protocol",
+        "bioassessment and soil carbon sampling at mastery"
+      ],
+      "hold": "re-counted twice a year, in the same season each time",
+      "remeasure_cadence_days": 182,
+      "lapse_after_days": 365,
+      "fails_when": "canopy or species count falls, permeable ground is lost, or a year passes with no count",
+      "crosswalk": {
+        "lbc": [
+          "Place Petal",
+          "Imperative 01 Ecology of Place",
+          "Imperative 03 Habitat Exchange",
+          "Imperative 11 Access to Nature"
+        ],
+        "michelin": [],
+        "sdg": [
+          "15.1 conserve and restore terrestrial and freshwater ecosystems",
+          "15.3 restore degraded land and soil",
+          "15.5 halt biodiversity loss",
+          "14.1 reduce marine pollution",
+          "14.2 protect coastal ecosystems",
+          "6.6 protect water related ecosystems",
+          "11.7 access to safe, inclusive green spaces",
+          "13.1 resilience",
+          "13.2 climate measures in planning"
+        ]
+      },
+      "legacy_standard_ids": [
+        "urban_canopy",
+        "tree_planting_establishment",
+        "street_tree_pit_restoration",
+        "soil_health",
+        "soil_carbon_baseline",
+        "compost_application",
+        "cover_crop_establishment",
+        "biodiversity_monitoring",
+        "pollinator_habitat_establishment",
+        "vacant_lot_stewardship",
+        "greenway_trail_maintenance",
+        "contaminated_land",
+        "hazard_tree_removal",
+        "urban_heat_island_mitigation",
+        "wildfire_recovery",
+        "rangeland_grazing_management",
+        "watershed_health",
+        "stream_bioassessment",
+        "usgs_streamflow_water_quality_mrv",
+        "urban_creek_riparian_restoration",
+        "wetland_condition",
+        "coastal_habitat",
+        "playa_lake_edge_restoration",
+        "harbor_shoreline_maintenance",
+        "coastal_dune_fence_repair",
+        "duwamish_river_superfund_shoreline_stewardship",
+        "salmon_safe_urban_creek_restoration",
+        "bayou_litter_boom_maintenance",
+        "vcs_vm0033_tidal_wetland_mrv",
+        "vcs_vm0042_soil_carbon_mrv",
+        "vcs_vm0047_arr_carbon_mrv",
+        "nrcs_soil_health",
+        "isa_urban_forestry",
+        "ocean_conservancy_icc_data_card",
+        "lbc_place_petal",
+        "sdg15_life_on_land",
+        "sdg_15_life_on_land",
+        "sdg14_life_below_water",
+        "sdg13_climate",
+        "sdg_restoration_lead",
+        "arbolado_publico_care",
+        "arbolado_publico_census",
+        "river_reach_stewardship_signboard",
+        "greenway_planning_design_guideline",
+        "savory_eov_land_health_monitoring",
+        "garden_soil_test_stewardship",
+        "data_center_campus_habitat",
+        "solar_ground_cover_habitat",
+        "solar_agrivoltaic_grazing",
+        "managed_recharge_and_capture",
+        "build_edge_living_ground"
+      ]
+    },
+    {
+      "id": "a_person_is_fed_well",
+      "order": 7,
+      "name": "A person is fed well here",
+      "sentence": "The place can nourish someone to craft standard, from as close as it can get.",
+      "why": "This is Michelin's entire contribution and it is the one the other two standards have no language for. A building that cannot feed anyone is not finished.",
+      "measures": [
+        "meals made here, and how far each ingredient travelled",
+        "growing ground on or near the parcel that is actually producing",
+        "a kitchen that works: stocked, safe, and able to run a service",
+        "food preserved rather than lost"
+      ],
+      "ground_rung": {
+        "title": "Cook one meal and write down where every ingredient came from",
+        "who": "anyone, no license",
+        "tools": "a kitchen and a pen",
+        "time": "one meal",
+        "output": "the dish, and the provenance of every component including the honest ones that came from a truck"
+      },
+      "instruments": [
+        "a written provenance list",
+        "a scale",
+        "a thermometer and a log for preservation",
+        "seasonal menu records at mastery"
+      ],
+      "hold": "re-recorded each season, because the season is what changes",
+      "remeasure_cadence_days": 90,
+      "lapse_after_days": 90,
+      "fails_when": "the growing ground stops producing, the kitchen stops working, or a season passes with no record",
+      "crosswalk": {
+        "lbc": [
+          "Place Petal",
+          "Imperative 02 Urban Agriculture",
+          "Materials Petal",
+          "Imperative 15 Living Economy Sourcing"
+        ],
+        "michelin": [
+          "quality of the ingredients",
+          "mastery of technique",
+          "harmony of flavours",
+          "the personality of the cook in the cooking",
+          "consistency",
+          "Green Star sourcing ethos"
+        ],
+        "sdg": [
+          "2.4 sustainable and resilient food production",
+          "12.3 halve food waste",
+          "3.4 wellbeing"
+        ]
+      },
+      "legacy_standard_ids": [
+        "edible_garden_cultivation",
+        "food_sustainability",
+        "food_preservation_kitchen",
+        "michelin_ingredient_provenance",
+        "michelin_kitchen_craft",
+        "michelin_garden_to_plate",
+        "michelin_preservation",
+        "michelin_star_craft",
+        "michelin_green_star",
+        "orchard_gleaning_harvest_run",
+        "community_orchard_fruit_tree_pruning",
+        "school_garden_drip_irrigation_install",
+        "permitted_kitchen_expansion_build",
+        "pastured_poultry_welfare_management",
+        "regenerative_cattle_welfare_husbandry",
+        "diversified_livestock_welfare_husbandry",
+        "mushroom_cultivation_contamination_audit",
+        "plant_disease_scouting_referral",
+        "data_center_heat_fed_growing",
+        "solar_fed_public_garden_water",
+        "ward_mealtime_hosting",
+        "medically_tailored_meal_with_company",
+        "regenerative_food_procurement",
+        "community_dinner_hosting",
+        "care_kitchen_service_readiness"
+      ]
+    },
+    {
+      "id": "everyone_can_get_here",
+      "order": 8,
+      "name": "Everyone can get here",
+      "sentence": "A person using a wheelchair, a cane, a stroller, or nothing at all can reach this place and use it.",
+      "why": "This is Living Building Challenge Imperative 17 taken off the empty site and put on the street that already exists. The shadow rule assumes sky around the project. Downtown, that shadow was cast decades ago. The curb ramp on the corner is not hypothetical and it is either at grade or it is not.",
+      "measures": [
+        "curb ramps present and at grade on every corner of the approach",
+        "path width, running slope, cross slope",
+        "trip hazards, counted and closed",
+        "lighting at night, and sightlines",
+        "working handrails wherever there is a step"
+      ],
+      "ground_rung": {
+        "title": "Take a tape and a level down your own block",
+        "who": "anyone, no license",
+        "tools": "a tape measure, a phone level app, a phone camera",
+        "time": "under two hours",
+        "output": "a photographed log of every trip hazard, missing ramp, blocked path and dead light on the block"
+      },
+      "instruments": [
+        "tape measure and phone level",
+        "a smart level",
+        "a night walk with the camera",
+        "a wheelchair or stroller walkthrough with the person who uses one, at mastery"
+      ],
+      "hold": "re-walked twice a year and after any street work",
+      "remeasure_cadence_days": 182,
+      "lapse_after_days": 182,
+      "fails_when": "a new hazard appears and stays, a light stays dead, or six months pass with no walk",
+      "crosswalk": {
+        "lbc": [
+          "Equity Petal",
+          "Imperative 17 Universal Access, re-pointed at the existing street rather than the project site",
+          "Imperative 18 Inclusion, verified per person through the receipt rather than per contract percentage"
+        ],
+        "michelin": [],
+        "sdg": [
+          "11.2 safe, accessible and sustainable transport systems for all",
+          "11.3 inclusive and sustainable urbanization",
+          "11.7 universal access to safe and inclusive public spaces",
+          "10.2 empower and promote inclusion of all",
+          "1.4 access to basic services"
+        ]
+      },
+      "legacy_standard_ids": [
+        "curb_ramp_repair",
+        "sidewalk_repair_permeable",
+        "civic_safety",
+        "playground_surfacing_repair",
+        "public_lighting_install",
+        "vegetation_sightline_clearing",
+        "shade_sail_install_public",
+        "porch_railing_safety_repair",
+        "perimeter_fence_gate_repair",
+        "civic_pavement_marking",
+        "ada_prowag_public_way",
+        "sdg11_cpted_environment",
+        "sdg11_public_space",
+        "ward_mobility_path_walkthrough",
+        "build_perimeter_public_path"
+      ]
+    },
+    {
+      "id": "the_commons_is_kept",
+      "order": 9,
+      "name": "The commons is kept",
+      "sentence": "The shared ground here is sound and clean, nothing broken is left broken, and what was done is legible to the next person.",
+      "why": "The Living Building Challenge calls this Beauty and Education, and the Michelin Guide calls it consistency. Both mean the same thing: a place shows whether anyone is looking after it. Ordinary upkeep of the shared surface is the most visible signal a neighbourhood has, and it is almost entirely unfunded.",
+      "measures": [
+        "open defects against closed defects on the shared surface",
+        "days from a defect being logged to being fixed",
+        "the upkeep cadence, held or missed",
+        "whether the record of what was done here can be read by the next person"
+      ],
+      "ground_rung": {
+        "title": "Walk your block and log every broken, tagged, or dumped thing",
+        "who": "anyone, no license",
+        "tools": "a phone camera, a pen",
+        "time": "under an hour",
+        "output": "a photographed list of every defect on the shared ground, and the smallest one fixed"
+      },
+      "instruments": [
+        "phone camera and a list",
+        "a public defect ledger",
+        "a maintenance calendar that is actually kept"
+      ],
+      "hold": "re-walked monthly, because this one degrades fastest",
+      "remeasure_cadence_days": 30,
+      "lapse_after_days": 30,
+      "fails_when": "the open defect count rises, days to repair grows, or a month passes with no walk",
+      "crosswalk": {
+        "lbc": [
+          "Beauty Petal",
+          "Imperative 19 Beauty + Biophilia",
+          "Imperative 20 Education + Inspiration"
+        ],
+        "michelin": [
+          "consistency between visits and across the menu, which is the same discipline applied to a place instead of a plate"
+        ],
+        "sdg": [
+          "11.3 inclusive and sustainable urbanization",
+          "11.6 reduce the adverse environmental impact of cities",
+          "11.7 safe and inclusive public spaces",
+          "4.7 education for sustainable development"
+        ]
+      },
+      "legacy_standard_ids": [
+        "civic_surface_cleaning",
+        "civic_hard_surface_repair",
+        "civic_asset_install",
+        "civic_small_structure_build",
+        "community_mural_painting",
+        "sdg11_waste_blight",
+        "sdg_11_sustainable_cities",
+        "kab_litter_index_transect",
+        "invasive_plant_mapping",
+        "street_tree_inventory_itree_eco",
+        "urban_tree_visual_health_check",
+        "tree_decay_fungi_observation",
+        "fungal_diversity_survey_documentation",
+        "data_center_community_boundary",
+        "data_center_community_compute",
+        "solar_community_access",
+        "public_landscape_water_demand",
+        "drought_stage_public_notice",
+        "build_haul_route_street_kept"
+      ]
+    },
+    {
+      "id": "the_creatures_are_well",
+      "order": 10,
+      "name": "The creatures are well",
+      "sentence": "The animals who share this place are sound, fed, and free from avoidable pain.",
+      "why": "A limping cow, a hive losing its brood to mites, a dog that quietly stopped jumping onto the couch: every one of these is measurable for weeks or months before anyone calls it an emergency. The person who feeds the animal daily is the one positioned to catch it, and they have never been handed a scorecard.",
+      "applies_when": "the place keeps or hosts animals. Scored only once a creature packet has settled here, so a place with no animals is never held to it. This is the standings' own \"every applicable condition\" wording, implemented for the first time (2026-08-30).",
+      "measures": [
+        "body condition scored on the published scale for the species",
+        "mobility or lameness scored on a walk, the same way every time",
+        "pain and welfare screened against a named protocol rather than a hunch",
+        "colony, hive and flock health counted rather than estimated"
+      ],
+      "ground_rung": {
+        "title": "Body-condition score every animal in your care, on the published scale",
+        "who": "anyone, no license",
+        "tools": "the species' published score card, your hands, a pen",
+        "time": "under an hour for a household or a small herd",
+        "output": "a dated body-condition score for every animal, with the ribs-and-spine notes that produced it"
+      },
+      "instruments": [
+        "published body-condition score cards",
+        "a walk-past mobility or gait score",
+        "a FAMACHA card for small ruminants",
+        "an alcohol or sugar wash for varroa in a hive",
+        "a veterinarian's examination at referral"
+      ],
+      "hold": "re-measured four times a year",
+      "remeasure_cadence_days": 91,
+      "lapse_after_days": 91,
+      "fails_when": "a quarter passes with no score, a score drops and nobody acted, or a referral flag was raised and never followed",
+      "crosswalk": {
+        "lbc": [
+          "Place Petal",
+          "Imperative 03 Habitat Exchange"
+        ],
+        "michelin": [],
+        "sdg": [
+          "2.4 resilient and sustainable agricultural practices",
+          "3.3 end epidemics, including zoonotic disease",
+          "15.5 halt biodiversity loss"
+        ]
+      },
+      "legacy_standard_ids": [
+        "backyard_flock_biosecurity_audit",
+        "broiler_meatbird_gait_score",
+        "canine_feline_body_condition",
+        "canine_feline_dental_home_audit",
+        "canine_mobility_pain_screen",
+        "cattle_locomotion_score",
+        "dairy_cattle_body_condition",
+        "equine_body_condition",
+        "equine_body_condition_hoof_care",
+        "feline_grimace_pain_screen",
+        "five_domains_welfare_check",
+        "laying_hen_feather_cover_audit",
+        "small_ruminant_famacha_anemia",
+        "bumble_bee_watch_photo_survey",
+        "hive_inspection_brood_health",
+        "monarch_larva_milkweed_monitoring",
+        "pollinator_habitat_forage_audit",
+        "varroa_mite_wash_monitoring",
+        "canine_cognitive_dysfunction_owner_screen",
+        "fecal_egg_count_monitoring",
+        "dairy_cattle_heat_stress_thi_audit",
+        "beef_cattle_body_condition",
+        "bovine_respiratory_disease_chute_score",
+        "sow_body_condition_caliper_score",
+        "camelid_body_condition",
+        "rabbit_body_condition_score",
+        "small_ruminant_body_condition",
+        "donkey_body_condition_score",
+        "catfish_dissolved_oxygen_monitoring",
+        "trout_dissolved_oxygen_monitoring",
+        "poultry_mortality_egg_production_surveillance"
+      ]
+    }
+  ],
+  "law_bound": [
+    {
+      "law": "nobody_is_hurt",
+      "note": "Hazard controls, not conditions of a place. They gate how work is done. They score nothing and they are required by everything.",
+      "ids": [
+        "construction_site_safety",
+        "trenching_excavation_safety",
+        "silica_dust_exposure",
+        "confined_space_entry_screen",
+        "lockout_tagout_observation",
+        "crane_rigging_spotter_survey",
+        "site_safety_walk_international",
+        "heat_illness_prevention",
+        "niosh_lifting_equation",
+        "occupational_heat_stress",
+        "chst_hazard_control",
+        "chst_emergency_readiness",
+        "chst_safety_program",
+        "chst_safety_leadership",
+        "sts_crew_supervision"
+      ]
+    },
+    {
+      "law": "receipt_is_the_certificate",
+      "note": "Work that makes the record true rather than changing a place. Reading an authoritative indicator at its source, checking a citation actually says what it is cited for, keeping a public record reachable, resolving a species name against the taxonomic backbone, rolling up measurement into a quantification. None of it moves a condition. All of it is why a condition's number can be believed.",
+      "ids": [
+        "authoritative_indicator_reading",
+        "public_standard_citation_integrity",
+        "public_record_persistence",
+        "open_data_place_metadata",
+        "method_standard_conformance",
+        "gbif_taxonomic_backbone",
+        "mrv_dataset_rollup",
+        "mrv_carbon_quantification",
+        "mrv_sourced_rollup",
+        "mrv_sourced_carbon_quantification",
+        "digital_provisioning_practice",
+        "golden_botanic_hydrologic_archetype"
+      ]
+    },
+    {
+      "law": "rung_at_the_ground",
+      "note": "Work that puts the rung within reach of a person who could not otherwise take it. Translating a packet into the language the worker actually reads is not a nicety here, it is the law being enforced.",
+      "ids": [
+        "worker_language_access",
+        "agent_commons_onboarding"
+      ]
+    },
+    {
+      "law": "start_where_it_is",
+      "note": "Intake. Somebody walks a block that nobody has ever measured and writes down what is wrong with it. This scores no condition because at intake there is not yet a condition to score. It is how a place stops being Unread, and it is the single most common piece of work in the whole library.",
+      "ids": []
+    }
+  ],
+  "cross_cutting_ids": [
+    {
+      "id": "institutional_community_need_intake",
+      "note": "The institutional twin of sdg_community_needs, carrying the same honest-bucket rule. Only the intake work_type was remapped here (2026-08-14), because only intake had civic-venue definitions reading a household-voiced method; the food, waste and commons work_types stay on sdg_community_needs where their own conditions already hold them. Every work_type must be listed. There is deliberately no default.",
+      "by_work_type": {
+        "community_need_intake": "law:start_where_it_is",
+        "little_free_pantry_box_build": "condition:a_person_is_fed_well"
+      }
+    },
+    {
+      "id": "sdg_community_needs",
+      "note": "An honest bucket rather than a subject. These packets share one standard id but do different things: most are intake, and the rest are dumping, litter, food access and compost work that belong to real conditions. Resolved by work_type rather than forced into one home, because forcing it would put a food pantry build under waste management and make a place's standing a lie. Every work_type must be listed. There is deliberately no default.",
+      "by_work_type": {
+        "community_need_intake": "law:start_where_it_is",
+        "illegal_dumping_report_survey": "condition:the_commons_is_kept",
+        "illegal_dumping_removal": "condition:nothing_leaves_as_waste",
+        "litter_transect_survey": "condition:the_commons_is_kept",
+        "debris_removal_lot_cleanup": "condition:nothing_leaves_as_waste",
+        "congregation_compost_bin_build": "condition:nothing_leaves_as_waste",
+        "community_garden_bed_build": "condition:a_person_is_fed_well",
+        "little_free_pantry_box_build": "condition:a_person_is_fed_well",
+        "emergency_food_box_pack_delivery": "condition:a_person_is_fed_well",
+        "community_fridge_setup": "condition:a_person_is_fed_well",
+        "community_fridge_stock_clean": "condition:a_person_is_fed_well",
+        "healthy_corner_store_produce_delivery_restock": "condition:a_person_is_fed_well"
+      }
+    }
+  ],
+  "out_of_scope_v0": {
+    "note": "Named honestly rather than force-fitted. The Vealth Standard is a standard for a place. A person's body is not a property of a place, and those standards belong to the health protocol; a Person track is v1 territory and it is not written yet, so nothing here pretends to cover it. The animals of a place ARE a property of it, which is why 'the creatures are well' was added as the tenth condition (2026-08-30) rather than pushed out of scope alongside the human libraries. 2026-09-04 crosswalk (the care-and-hospitality frontier's item 17): of the frontier's five named axes (workers well, food real, nights quiet, families hosted, isolated visited), only two are properties of the PLACE rather than of a person's body or experience — hazard controls on how lifting and heat exposure are managed (niosh_lifting_equation, occupational_heat_stress -> law:nobody_is_hurt, same class as heat_illness_prevention) and the place's own capacity to feed someone real food (ward_mealtime_hosting, medically_tailored_meal_with_company, regenerative_food_procurement, community_dinner_hosting -> condition:a_person_is_fed_well, the same home michelin_ingredient_provenance already holds). Quiet nights (ward_quiet_hours_stewardship), families hosted (caregiver_respite_visit), the isolated visited (companion_visit_social_connection, grief_companionship_first_90_days, hospital_discharge_welcome_home, ward_patient_sitter_companion, welcome_wayfinding_discharge_escort, welcome/wayfinding), a worker's own sleep health and household sleep setup (shift_work_recovery_sleep, shift_worker_sleep_sanctuary), and ward cleanliness (environmental_hygiene_verification) stay correctly out of scope: each one scores a person's experience or a worker's own body/home, not the building, and no default bucket was invented to force them in. This is the standard's own scope law holding, not a gap left by this increment. 2026-09-05 addition (the regenerative-motion course, unit 9, the protocol's next workers): two more health-care standards join the declared place properties, on the same test and for the same reason. ward_mobility_path_walkthrough measures a corridor's clear width, a handrail's continuity, a floor transition and a light level at the floor, every one of which belongs to the building, so it is homed at condition:everyone_can_get_here beside the curb ramps, trip hazards and dead lights already there; it assesses no person's fall risk, which stays a clinical judgment the facility's own staff make. care_kitchen_service_readiness measures whether the facility's own kitchen can run the diets already ordered, which is the capacity condition:a_person_is_fed_well already names in its own measures ('a kitchen that works: stocked, safe, and able to run a service'), so it lands there beside the four food standards homed on 2026-09-04. Both are hands-on care labor rather than clinical measurement, so neither belongs in the method-coverage lane exemption: each carries a full method in the health sidecar and reaches the board's own registry through programs:merge-methods. Nothing else moved, and the rest of the care lane stays out of scope on the same test that kept it there.",
+    "sources": [
+      "data/work-definitions/health-work-library-v1.json"
+    ],
+    "homed_place_properties": [
+      "niosh_lifting_equation",
+      "occupational_heat_stress",
+      "ward_mealtime_hosting",
+      "medically_tailored_meal_with_company",
+      "regenerative_food_procurement",
+      "community_dinner_hosting",
+      "ward_mobility_path_walkthrough",
+      "care_kitchen_service_readiness"
+    ],
+    "match_rule": "any standard id present in the health work library and in no condition list above; the ids in homed_place_properties are the declared exceptions (properties of the PLACE, argued in the note), each with exactly one home, and check:science-kingdoms-scope refuses any other homed health standard"
+  },
+  "unmapped_policy": {
+    "rule": "Every standard id used by a shipped work library must map to exactly one condition, to the nobody_is_hurt law, or to the declared out_of_scope_v0 set. An unmapped id is a build failure, not a warning.",
+    "why": "A standard that quietly tolerates work it cannot classify is a standard with a hole in it. New work either lands in a condition or forces the standard to be extended on purpose.",
+    "enforced_by": "npm run standard:coverage"
+  },
+  "generosity_note": "This standard takes from three excellent instruments and points them at a target none of them was built for. The Living Building Challenge is the reason measured performance over real occupied time is non negotiable here. The Michelin Guide is the reason a standing can be lost and the reason craft has its own condition. The Sustainable Development Goals are the reason every condition carries targets a stranger in another country can already read. Nothing here is a criticism of any of them. They point at the building that does not exist yet. This one points at the building you are sitting in."
+}

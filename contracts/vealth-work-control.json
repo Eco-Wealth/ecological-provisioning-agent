@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "vealth-work-discovery/v0",
+  "generated_at": "2026-09-13",
+  "name": "Vealth Work Control Plane",
+  "mode": "read_only",
+  "purpose": "A machine-readable entry point for agents and institutions to discover bounded work and understand the authority, proof, receipt, and delegation rules before any action is proposed.",
+  "discovery_endpoints": [
+    {
+      "id": "open_work_index",
+      "method": "GET",
+      "url": "https://vealth.net/labor/work/advanced-search?status=OPEN&limit=20",
+      "returns": "Live open work-packet summaries with method, proof rule, location, skill level, and payment or credit condition.",
+      "auth_required": "none",
+      "side_effects": "none",
+      "authority_effect": "does_not_issue_or_enlarge_authority"
+    },
+    {
+      "id": "work_packet_read",
+      "method": "GET",
+      "url": "https://vealth.net/labor/work/{workId}",
+      "returns": "One machine-readable work packet; the human presentation is /work/{workId}, not this endpoint.",
+      "auth_required": "none",
+      "side_effects": "none",
+      "authority_effect": "does_not_issue_or_enlarge_authority"
+    },
+    {
+      "id": "mcp_tool_discovery",
+      "method": "GET",
+      "url": "https://vealth.net/mcp",
+      "returns": "The MCP connection description; call tools/list on the same endpoint for the live tool registry.",
+      "auth_required": "none",
+      "side_effects": "none",
+      "authority_effect": "does_not_issue_or_enlarge_authority"
+    }
+  ],
+  "work_contract": {
+    "sequence": ["NEED", "DECOMPOSE", "WORK_PACKET", "AUTHORITY", "GRANT", "EXECUTE", "PROVE", "VERIFY", "SETTLE", "RECEIPT"],
+    "packet_schema": {
+      "id": "vealth-work-packet-standard",
+      "version": "0.1.0",
+      "url": "https://vealth.net/data/programs/work-packet-standard-v0.json",
+      "status": "reference"
+    },
+    "grant_schema": {
+      "id": "vealth-work-grant/v0",
+      "version": "v0",
+      "url": "https://vealth.net/vealth/_schemas/vealth-work-grant-v0.schema.json",
+      "status": "public_schema"
+    },
+    "proof_schema": {
+      "id": "construction-retrofit-proof-v1",
+      "version": "1.0.0",
+      "url": "https://vealth.net/vealth/fixtures/construction-proof-receipt.example.json",
+      "status": "example_fixture"
+    },
+    "receipt_schema": {
+      "id": "field-l1-graduation-receipt",
+      "version": "1",
+      "url": "https://vealth.net/vealth/_schemas/field-l1-receipt.schema.json",
+      "status": "public_schema"
+    }
+  },
+  "authority_model": [
+    {
+      "id": "intent",
+      "grant_field": "authority.intent",
+      "levels": ["none", "define", "delegate"],
+      "meaning": "Authority to define the desired outcome or delegate a narrower work envelope."
+    },
+    {
+      "id": "protocol",
+      "grant_field": "authority.protocol",
+      "levels": ["none", "read", "write"],
+      "meaning": "Authority to read or mutate Vealth protocol state; API reachability is not write authority."
+    },
+    {
+      "id": "economic",
+      "grant_field": "authority.economic",
+      "levels": ["none", "commit", "release"],
+      "meaning": "Authority to commit or release money; x402 payment buys access, not economic authority."
+    },
+    {
+      "id": "world",
+      "grant_field": "authority.world",
+      "levels": ["none", "observe", "modify"],
+      "meaning": "Authority to observe or modify a named real resource, site, system, person, or property."
+    },
+    {
+      "id": "truth",
+      "grant_field": "authority.truth",
+      "levels": ["none", "submit", "verify"],
+      "meaning": "Authority to submit evidence or independently verify proof and close a work packet."
+    }
+  ],
+  "risk_tiers": [
+    {
+      "id": "observation",
+      "description": "Read-only or observation work that does not modify the named resource.",
+      "status": "reference_only",
+      "minimum_gate": "Named resource scope, access permission, method, proof fields, and a human gate where the domain requires it."
+    },
+    {
+      "id": "digital_maintenance",
+      "description": "Defensive repository or system maintenance bounded to an explicitly authorized asset.",
+      "status": "not_bound_by_discovery",
+      "minimum_gate": "Repository owner authority, environment scope, change boundary, rollback or review path, and separate proof review."
+    },
+    {
+      "id": "physical_execution",
+      "description": "Physical construction, retrofit, cleaning, food, water, tree, or ecosystem work.",
+      "status": "not_bound_by_discovery",
+      "minimum_gate": "Owner or operator access, competent or licensed roles where required, safety stop rules, field proof, and human verification."
+    },
+    {
+      "id": "high_consequence",
+      "description": "Work involving regulated, safety-critical, clinical, financial, legal, or irreversible effects.",
+      "status": "not_bound_by_discovery",
+      "minimum_gate": "Explicit institutional authority and operator-approved domain-specific review; discovery never substitutes for that authority."
+    }
+  ],
+  "adapters": [
+    {
+      "id": "mcp",
+      "status": "available_for_discovery",
+      "authority_rule": "MCP exposes tools; a tool name or reachability never enlarges the caller's WorkGrant authority.",
+      "endpoint": "https://vealth.net/mcp"
+    },
+    {
+      "id": "a2a",
+      "status": "planned_not_exposed",
+      "authority_rule": "An agent-to-agent message may propose work but cannot issue a Vealth grant or bypass the canonical validator.",
+      "endpoint": "https://vealth.net/.well-known/agent.json"
+    },
+    {
+      "id": "x402",
+      "status": "payment_only",
+      "authority_rule": "x402 payment authenticates a paid API call; it does not grant protocol write, economic, world, truth, or publication authority.",
+      "endpoint": "https://vealth.net/.well-known/x402"
+    }
+  ],
+  "delegation": {
+    "status": "disabled",
+    "rule": "A child grant may only narrow a validated parent; it may never add action, scope, time, budget, velocity, authority, publication, or payment power.",
+    "validator": "apps/api/src/domain/work/work-grant.ts",
+    "live_subgrant_creation": false
+  },
+  "mandate": {
+    "status": "record_only",
+    "rule": "A StewardshipMandate records why a principal may provision a class of work. It is a record, not authority: it issues no grant, dispatches nobody, releases no payment, and never widens a grant it names.",
+    "validator": "apps/api/src/domain/work/stewardship-mandate.ts",
+    "live_mandate_issuance": false,
+    "schema": {
+      "id": "vealth-stewardship-mandate/v0",
+      "version": "v0",
+      "url": "https://vealth.net/vealth/_schemas/vealth-stewardship-mandate-v0.schema.json",
+      "status": "public_schema"
+    },
+    "examples": [
+      {
+        "id": "stewardship-mandate-construction-observation",
+        "version": "1",
+        "url": "https://vealth.net/vealth/fixtures/stewardship-mandate-construction-observation.example.json",
+        "status": "example_fixture"
+      },
+      {
+        "id": "stewardship-mandate-construction-observation-child",
+        "version": "1",
+        "url": "https://vealth.net/vealth/fixtures/stewardship-mandate-construction-observation-child.example.json",
+        "status": "example_fixture"
+      }
+    ],
+    "lookup": {
+      "for_grant": "Read the mandate whose grants[] names the grant id; when it does not appear, follow the grant's delegation_parent chain and read the mandate that names an ancestor.",
+      "for_work_packet": "Read the grants bound to the packet's work id, then resolve each of those grant ids the same way; the packet sits under the first mandate that resolves.",
+      "when_absent": "null"
+    }
+  },
+  "boundaries": {
+    "manifest_authority": "public_read_only",
+    "protocol_write_authority": "none",
+    "economic_authority": "none",
+    "world_authority": "none",
+    "verification_authority": "none",
+    "publication_authority": "none",
+    "not_claimed": [
+      "This manifest does not issue a WorkGrant or authorize a caller to act.",
+      "This manifest does not issue a StewardshipMandate, and a recorded mandate is never itself authority to act.",
+      "This manifest does not enable live subgrant creation or swarm delegation.",
+      "This manifest does not dispatch workers or select contractors.",
+      "This manifest does not move money, settle wages, or mint any asset.",
+      "This manifest does not verify physical proof or declare an ecological outcome.",
+      "This manifest does not replace permits, licenses, competent persons, or institutional authority.",
+      "This manifest does not make a payment, identity, endpoint, or model confidence into authority."
+    ]
+  },
+  "related_manifests": {
+    "agent": "https://vealth.net/.well-known/agent.json",
+    "agents": "https://vealth.net/.well-known/agents.json",
+    "agent_card": "https://vealth.net/.well-known/agent-card.json",
+    "mcp": "https://vealth.net/.well-known/mcp.json"
+  }
+}
