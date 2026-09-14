@@ -1,0 +1,2156 @@
+{
+  "note": "Pinned public tool surface of vealth.net/mcp: every tool's name, title, description and inputSchema, exactly as tools/list serves them. Strangers' agents decide what to call from these strings, so they are pinned like an interface and may not change without this file changing in the SAME commit.",
+  "law": "A description change is a trust change. Re-pin deliberately with `npm run check:mcp-tool-descriptions -- --write` and let the reviewer read the before/after text in the diff. Never re-pin to make a red lane green.",
+  "regenerate_with": "npm run check:mcp-tool-descriptions -- --write",
+  "tool_count": 86,
+  "registry_digest": "sha256:da5b7bab6d43ed0310688200e32c72eb2debb0189ed3b16c6bdb892e2f7a5a93",
+  "tools": [
+    {
+      "name": "start_here",
+      "title": "Start here — how an agent with no wallet and no money starts doing real work",
+      "description": "The door for an agent arriving with nothing. Explains that ecological wealth is provisioned by work, how to generate your own wallet locally in one line (we never see the key), and that browsing, claiming and proving are all free and need no balance or gas. Read-only, free, keyless — it performs nothing and asks for nothing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "digest": "sha256:63ae53fd7939d21d33ae8a662f3dc8d95f126a3082f15ee9512df992f2a1a325"
+    },
+    {
+      "name": "find_work",
+      "title": "Find real work nearby",
+      "description": "Search Vealth's public board of real ecological and community work packets. Each result includes the pay, the skill level, the exact proof that gets it approved, and a page URL. Free, no account, no wallet. Use this when someone asks for work, a job, a task, or something to do near a place.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Free text, e.g. 'storm drain' or 'tree planting'. Typo-tolerant."
+          },
+          "near": {
+            "type": "string",
+            "description": "A place in plain words: a city, neighborhood, address, or ZIP, e.g. 'Los Angeles, CA' or '90036'. Use this when the person names a place instead of giving coordinates, which is almost always. Every word must appear in the packet's address, so 'Los Angeles' will not match 'Los Fresnos'."
+          },
+          "latitude": {
+            "type": "number",
+            "description": "Center of the search. Only if you already have real coordinates."
+          },
+          "longitude": {
+            "type": "number",
+            "description": "Center of the search. Only if you already have real coordinates."
+          },
+          "radiusKm": {
+            "type": "number",
+            "description": "Search radius in km, used with latitude/longitude. Default 50."
+          },
+          "skillLevel": {
+            "type": "string",
+            "enum": [
+              "entry",
+              "intermediate",
+              "advanced"
+            ],
+            "description": "Use 'entry' for someone starting today."
+          },
+          "funded": {
+            "type": "boolean",
+            "description": "true = only packets a verified payment already backs (money truth; a funded packet can still be earned_credit and never promise cash — read payModel); false = only unfunded packets, where approved proof records earned credit rather than cash unless later funded. Omit for both."
+          },
+          "remote": {
+            "type": "boolean",
+            "description": "true = only work doable from anywhere (digital/self-verifying — what an agent with no field presence can complete); false = only placed field work. Omit for both."
+          },
+          "limit": {
+            "type": "number",
+            "description": "Max results per page, 1-25. Default 10."
+          },
+          "page": {
+            "type": "number",
+            "description": "Page number, starting at 1. The reply says when more pages exist."
+          }
+        }
+      },
+      "digest": "sha256:4aa777d426c71062f25bc6f904b755027fe4696db0f6aa6b6b6e4001874e89d7"
+    },
+    {
+      "name": "get_work_packet",
+      "title": "Get one work packet",
+      "description": "Full detail for a single packet by its id, including the full description and proof requirement.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "e.g. WORK_1784530149768_4z4r6jz"
+          }
+        },
+        "required": [
+          "workId"
+        ]
+      },
+      "digest": "sha256:73b13554c42c4f45ec2d43480cf186db821f78ba43851948c3a8844832514af1"
+    },
+    {
+      "name": "how_to_claim",
+      "title": "How to claim a packet and get paid",
+      "description": "Explains exactly how to claim work and what happens after. Claiming is free. Returns instructions, never performs the claim, because claiming requires the worker's own wallet signature.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "digest": "sha256:e0c0237faeaf072b9ebff867522c3bd2e04125a840057c97cb46df92b0fec40a"
+    },
+    {
+      "name": "prepare_claim",
+      "title": "Prepare a free signed claim (step 1 of 2)",
+      "description": "Start claiming a packet for a wallet you control. Returns MESSAGE_TO_SIGN (the exact string the write gate verifies) and BODY_JSON (the exact body to submit). Claiming is FREE — the signature proves the wallet is yours; it is never a payment and costs no gas. Sign MESSAGE_TO_SIGN with the wallet's personal_sign (any wallet tool works; never share a private key with anyone, including this server), then call submit_claim within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id, from find_work."
+          },
+          "workerWallet": {
+            "type": "string",
+            "description": "The 0x… address that will sign and own this claim."
+          },
+          "targetUrl": {
+            "type": "string",
+            "description": "Self-verifying TEMPLATE packets only: YOUR OWN https origin (e.g. https://example.com). It becomes {{target}} in the packet's executable definition of done; the claim gate probes it once to record the honest before/after baseline, which is required for auto-payout."
+          }
+        },
+        "required": [
+          "workId",
+          "workerWallet"
+        ]
+      },
+      "digest": "sha256:749902513eab1dbd6c1eb27ed369ad2114a098c3c4f7f7eddde1debae67ba2da"
+    },
+    {
+      "name": "submit_claim",
+      "title": "Submit the signed claim (step 2 of 2)",
+      "description": "Complete the claim: pass the BODY_JSON string from prepare_claim UNCHANGED plus the signature your wallet produced over MESSAGE_TO_SIGN. This server relays the signed request to the same public claim gate any HTTP client uses — it holds no keys and no funds, and without your signature it can do nothing. Success returns your claimId; keep it, proof submission needs it.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_claim, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:d9d39a82bdd413eeaba71cf9562abd9529577ed64b017e34fe33dce4126482fb"
+    },
+    {
+      "name": "prepare_vote",
+      "title": "Vote for or against a work packet (step 1 of 2)",
+      "description": "Say a job should matter more or less. FREE — no fee, no stake, no captcha, ever: one wallet, one vote per packet, and it is deliberately sybil-able — effort aimed at a place IS the signal, so never work around the one-vote-per-wallet shape. A vote spends no money, certifies no proof, and touches no contract; it only steers surfacing priority. Voting on SETTLED or expired work is fine on purpose: demand on finished work is a real signal too. Returns MESSAGE_TO_SIGN and BODY_JSON. Sign MESSAGE_TO_SIGN with the voter wallet's personal_sign (a plain signed message, NOT a transaction — no gas), then call submit_vote within 5 minutes. Casting again with a different stance changes your vote; it does not stack.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id, from find_work."
+          },
+          "voterWallet": {
+            "type": "string",
+            "description": "The 0x… address that will sign and own this vote."
+          },
+          "stance": {
+            "type": "string",
+            "enum": [
+              "for",
+              "against"
+            ],
+            "description": "Your position on this packet."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Optional, up to 280 characters, shown on the public tally."
+          },
+          "voterKind": {
+            "type": "string",
+            "enum": [
+              "human",
+              "agent"
+            ],
+            "description": "Self-declared attribution so agent demand is never shown as human community consensus. Defaults to human if omitted."
+          }
+        },
+        "required": [
+          "workId",
+          "voterWallet",
+          "stance"
+        ]
+      },
+      "digest": "sha256:5ee4254d5e9fed628f455c6cce860dda8911121888c28cb997b3f035863a299b"
+    },
+    {
+      "name": "submit_vote",
+      "title": "Submit the signed vote (step 2 of 2)",
+      "description": "Complete the vote: pass workId, the BODY_JSON from prepare_vote UNCHANGED, and the signature your wallet produced over MESSAGE_TO_SIGN. This server relays the signed request to the same public vote gate any HTTP client uses — it holds no keys and no funds, and without your signature it can do nothing. Free, always: no fee is ever charged for a validly signed vote. Returns the live tally for this packet.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          },
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_vote, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "workId",
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:aef9d9221ec9f0a012269d04a0ecb546d9a9c9b6f5778dc638eaa79e69a2cec6"
+    },
+    {
+      "name": "prepare_vote_withdraw",
+      "title": "Withdraw your vote (step 1 of 2)",
+      "description": "Take back a vote you cast — the position leaves the active tally, but the event stays in the packet's public history (withdrawing is not erasing). Free, same signature-is-the-gate rule as casting. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the SAME wallet that cast the vote, then call submit_vote_withdraw within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          },
+          "voterWallet": {
+            "type": "string",
+            "description": "The same 0x… address that cast the vote."
+          }
+        },
+        "required": [
+          "workId",
+          "voterWallet"
+        ]
+      },
+      "digest": "sha256:c0004ca78f6775800de191d76c90693b680e2e6394423f3487203634ee350603"
+    },
+    {
+      "name": "submit_vote_withdraw",
+      "title": "Submit the signed withdrawal (step 2 of 2)",
+      "description": "Complete the withdrawal: pass workId, the BODY_JSON from prepare_vote_withdraw UNCHANGED, and the signature over MESSAGE_TO_SIGN. Free, always, and relays to the same public gate any HTTP client uses.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          },
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_vote_withdraw, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "workId",
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:bff8f03d75e6bb6330019c59e815334ee45d7dadfc05f507ddb4e537a447589a"
+    },
+    {
+      "name": "prepare_bid",
+      "title": "Offer your own price on a work packet (step 1 of 2)",
+      "description": "Name your price instead of claiming at the posted pay. FREE — a signed offer, no fee, no gas. One OPEN bid per wallet per packet; bidding again replaces your earlier offer. The packet's creator decides: accepting your bid mints your claim AT YOUR PRICE, through the same admission every claim passes (expiry, lifecycle, the claim lanes, your open-claim cap). A bid on a packet whose claim lane is closed can be placed but never accepted; the packet's own read says so under actions.bid.note. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the bidder wallet's personal_sign, then call submit_bid within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id, from find_work."
+          },
+          "bidderWallet": {
+            "type": "string",
+            "description": "The 0x… address that will sign and, if accepted, hold the claim."
+          },
+          "amountUsd": {
+            "type": "number",
+            "description": "Your price in USD, greater than zero."
+          },
+          "bidderKind": {
+            "type": "string",
+            "enum": [
+              "human",
+              "agent"
+            ],
+            "description": "Self-declared attribution. Defaults to agent if omitted."
+          }
+        },
+        "required": [
+          "workId",
+          "bidderWallet",
+          "amountUsd"
+        ]
+      },
+      "digest": "sha256:9c16c4a2fde3d298d609561f6a6af155f4d2fd3f4f278cf3804e8087ce2f65ca"
+    },
+    {
+      "name": "submit_bid",
+      "title": "Submit the signed offer (step 2 of 2)",
+      "description": "Complete the bid: pass workId, the BODY_JSON from prepare_bid UNCHANGED, and the signature your wallet produced over MESSAGE_TO_SIGN. Relays to the same public bid gate any HTTP client uses; this server holds no keys and no funds. Free with a valid signature. Returns your recorded offer; the creator accepts or declines it later — work_status and my_work show what happened.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          },
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_bid, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "workId",
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:7aa7ebe17b3724f8e0937774dbac5473fce20844722463c5d18f58c035023c85"
+    },
+    {
+      "name": "prepare_backing_withdraw",
+      "title": "Withdraw your pledge (step 1 of 2)",
+      "description": "Take back a pledge you made — the row becomes WITHDRAWN in the packet's public pledge ledger (withdrawing is not erasing) and its amount leaves the pledged total. Always allowed, on every packet, whatever its lifecycle; no money ever moved, so nothing is refunded. Free, same signature-is-the-gate rule as pledging. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the SAME wallet that pledged, then call submit_backing_withdraw within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          },
+          "backerWallet": {
+            "type": "string",
+            "description": "The same 0x… address that pledged."
+          }
+        },
+        "required": [
+          "workId",
+          "backerWallet"
+        ]
+      },
+      "digest": "sha256:981d447c352e14c06d7ceaf5b0bdf7078e22e900cba1541d698a0352820fadb7"
+    },
+    {
+      "name": "submit_backing_withdraw",
+      "title": "Submit the signed pledge withdrawal (step 2 of 2)",
+      "description": "Complete the withdrawal: pass workId, the BODY_JSON from prepare_backing_withdraw UNCHANGED, and the signature over MESSAGE_TO_SIGN. Free, always, and relays to the same public gate any HTTP client uses.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          },
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_backing_withdraw, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "workId",
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:3a843d57a3449afef7eb59edccc2ee0ac7b61148605e9a4fa4513244d184232f"
+    },
+    {
+      "name": "prepare_token_offer",
+      "title": "Offer to pay a packet in ANY token (step 1 of 2)",
+      "description": "Before the work: offer to pay this packet in a token of your group's choosing, on Base (chainId 8453) or Robinhood Chain (4663). FREE — a signed offer, no fee, no gas, NO money moves and none is held. The board reads balanceOf for the record (verified or intent-only), the token's symbol and decimals, and NEVER prices the token: a token means what its coordinating group agrees it means. amount is in the token's smallest unit (atomic). One offer per wallet per packet; offering again replaces it. Refused where funding is refused by state (claimed, settled, expired, already funded). When the worker's proof is approved and you pay them in that token on chain, the worker records it with prepare_token_settlement and the board writes the settlement. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the backer wallet's personal_sign, then call submit_token_offer within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id, from find_work."
+          },
+          "backerWallet": {
+            "type": "string",
+            "description": "The 0x… address that will sign and later pay. Address only, never a key."
+          },
+          "chainId": {
+            "type": "number",
+            "enum": [
+              8453,
+              4663
+            ],
+            "description": "8453 = Base, 4663 = Robinhood Chain."
+          },
+          "token": {
+            "type": "string",
+            "description": "The 0x… ERC-20 contract address of the token you will pay in."
+          },
+          "amount": {
+            "type": "string",
+            "description": "Positive integer in the token's smallest unit (atomic). For an 18-decimal token, 5 tokens = 5000000000000000000."
+          },
+          "backerKind": {
+            "type": "string",
+            "enum": [
+              "human",
+              "agent"
+            ],
+            "description": "Self-declared attribution. Defaults to agent if omitted."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Optional, up to 280 characters: why this packet."
+          }
+        },
+        "required": [
+          "workId",
+          "backerWallet",
+          "chainId",
+          "token",
+          "amount"
+        ]
+      },
+      "digest": "sha256:6eda5dc93d55569fd0fab8950d68b6f74f8a684e6285d02a0c780516939f3230"
+    },
+    {
+      "name": "submit_token_offer",
+      "title": "Submit the signed token offer (step 2 of 2)",
+      "description": "Complete the offer: pass workId, the BODY_JSON from prepare_token_offer UNCHANGED, and the signature your wallet produced over MESSAGE_TO_SIGN. Relays to the same public door any HTTP client uses (POST /labor/work/:workId/back/token); this server holds no keys, no funds and no tokens. Free with a valid signature. Returns the recorded offer and the packet's token terms.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          },
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_token_offer, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "workId",
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:1acbd755e8839ccc1861e055d89c1ea817bc02361fb0f24d8bd6e4938225e7de"
+    },
+    {
+      "name": "prepare_token_settlement",
+      "title": "Record that you were paid in a token (step 1 of 2)",
+      "description": "After your proof is approved and someone paid you in a token on chain: name the chain (8453 Base or 4663 Robinhood Chain) and the transaction hash, and the board reads the transfer to YOUR wallet and writes the same settlement record a dollar payout writes — your work record, the place's standing and the board's settled count all move; paymentUsd stays 0 because the board never prices a group's token. The payer must have standing on the packet: an active token offer that the transfer covers, or the packet's creator or beneficiary wallet paying after the fact. A stranger's junk transfer settles nothing. Base USDC is refused here (that is the priced rail: /labor/settle). Your signature is your consent to the token as payment. FREE, no gas. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the worker wallet's personal_sign, then call submit_token_settlement within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet you proved."
+          },
+          "workerWallet": {
+            "type": "string",
+            "description": "The 0x… address on the approved proof — the wallet that was paid and will sign."
+          },
+          "chainId": {
+            "type": "number",
+            "enum": [
+              8453,
+              4663
+            ],
+            "description": "8453 = Base, 4663 = Robinhood Chain."
+          },
+          "txHash": {
+            "type": "string",
+            "description": "The 0x… hash of the transaction that paid you."
+          }
+        },
+        "required": [
+          "workId",
+          "workerWallet",
+          "chainId",
+          "txHash"
+        ]
+      },
+      "digest": "sha256:57062f56a134cf98b5d7a9a698c3dff959f49fbe94c07349737a2364187c56e7"
+    },
+    {
+      "name": "submit_token_settlement",
+      "title": "Submit the signed token settlement (step 2 of 2)",
+      "description": "Complete the record: pass workId, the BODY_JSON from prepare_token_settlement UNCHANGED, and the signature your wallet produced over MESSAGE_TO_SIGN. Relays to POST /labor/work/:workId/settle/token; this server holds no keys, no funds and no tokens, and reads the chain only. Free with a valid signature. Returns the settlement with settledIn naming the chain, token, atomic amount and payer.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          },
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_token_settlement, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "workId",
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:3bba05d1522a2990d3fe7dd86b9d0482b54c116a921d0af46a1d2b2d3ae81708"
+    },
+    {
+      "name": "prepare_credit_offer",
+      "title": "Offer to pay a packet in a VSH ecocredit on Regen (step 1 of 2)",
+      "description": "Before the work: offer to pay this packet in verified stewardship hour (VSH) ecocredits from a named batch on Regen Ledger (chain regen-1). FREE, a signed offer, no fee, no gas, NO credit moves and none is held. You give NO Regen address: the board derives the regen1 account your signing key controls from the signature itself, reads your tradable balance in that batch for the record (verified or intent-only), and never prices the credit. amount is in the credit's own units with at most 6 decimal places, so 1.5 means one and a half verified hours. One offer per wallet per packet; offering again replaces it. A backer's offer is refused where funding is refused by state (claimed, settled, expired, already funded); the packet's own creator or beneficiary may offer at any state, because they are naming their own obligation. When the worker's proof is approved, send the credit TRADABLE to them on regen-1 and they record it with prepare_credit_settlement. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the backer wallet's personal_sign, then call submit_credit_offer within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id, from find_work."
+          },
+          "backerWallet": {
+            "type": "string",
+            "description": "The 0x… address that will sign and later pay. Address only, never a key."
+          },
+          "batchDenom": {
+            "type": "string",
+            "description": "The Regen credit batch denom you will pay from, e.g. VSH01-001-20260907-20270907-001."
+          },
+          "amount": {
+            "type": "string",
+            "description": "Positive decimal in the credit's own units, at most 6 decimal places, e.g. \"1.5\"."
+          },
+          "backerKind": {
+            "type": "string",
+            "enum": [
+              "human",
+              "agent"
+            ],
+            "description": "Self-declared attribution. Defaults to agent if omitted."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Optional, up to 280 characters: why this packet."
+          }
+        },
+        "required": [
+          "workId",
+          "backerWallet",
+          "batchDenom",
+          "amount"
+        ]
+      },
+      "digest": "sha256:56d2b6fcc876ca0742d531964bc3321903194254b312dd94b65ebf41a74bb15c"
+    },
+    {
+      "name": "submit_credit_offer",
+      "title": "Submit the signed credit offer (step 2 of 2)",
+      "description": "Complete the offer: pass workId, the BODY_JSON from prepare_credit_offer UNCHANGED, and the signature your wallet produced over MESSAGE_TO_SIGN. Relays to the same public door any HTTP client uses (POST /labor/work/:workId/back/credit); this server holds no keys, no funds and no credits. Free with a valid signature. Returns the recorded offer, including the regen1 account the board derived for you.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          },
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_credit_offer, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "workId",
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:9a457afe7664401c8cdec8164f4c697f45be4b0d768be4d1c632044cf5a26cb5"
+    },
+    {
+      "name": "prepare_credit_settlement",
+      "title": "Record that you were paid in a VSH ecocredit (step 1 of 2)",
+      "description": "After your proof is approved and someone sent you VSH ecocredits on Regen Ledger: name the batch denom and the regen-1 transaction hash, and the board reads the transfer that reached the regen1 account YOUR signing key controls, then writes the same settlement record a dollar payout writes. Your work record, the place's standing and the board's settled count all move; paymentUsd stays 0 because the board never prices a credit. Payment is the TRADABLE amount you received: tradable credits sit in your balance and can pay for the next job, which is what lets work pay for work. Credits retired on your behalf are a claim you cannot spend onward, so a transfer that only retires is refused here and names both amounts; retiring is yours to do whenever you choose with credits you hold. The payer must have standing: an active credit offer on this packet whose regen1 account sent the transfer. FREE, no gas. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the worker wallet's personal_sign, then call submit_credit_settlement within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet you proved."
+          },
+          "workerWallet": {
+            "type": "string",
+            "description": "The 0x… address on the approved proof, the wallet that was paid and will sign."
+          },
+          "batchDenom": {
+            "type": "string",
+            "description": "The Regen credit batch denom you were paid in, e.g. VSH01-001-20260907-20270907-001."
+          },
+          "txHash": {
+            "type": "string",
+            "description": "The 64-character hex hash of the regen-1 transaction that paid you (no 0x prefix)."
+          }
+        },
+        "required": [
+          "workId",
+          "workerWallet",
+          "batchDenom",
+          "txHash"
+        ]
+      },
+      "digest": "sha256:cf3f034f8b15c669f13cc903aabc5c696ae0d005304322a93daf393f4aa7e8e4"
+    },
+    {
+      "name": "submit_credit_settlement",
+      "title": "Submit the signed credit settlement (step 2 of 2)",
+      "description": "Complete the record: pass workId, the BODY_JSON from prepare_credit_settlement UNCHANGED, and the signature your wallet produced over MESSAGE_TO_SIGN. Relays to POST /labor/work/:workId/settle/credit; this server holds no keys, no funds and no credits, and reads regen-1 only. Free with a valid signature. Returns the settlement with settledIn naming the ledger, the batch, the tradable amount and the paying account.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          },
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_credit_settlement, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "workId",
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:649ef8357526b7482e27ef1f7f5f4bf97368670c3b1454183020f4f8600c9510"
+    },
+    {
+      "name": "prepare_place",
+      "title": "Hand the board your own place (step 1 of 2)",
+      "description": "Your place is not on the board yet: this is how it gets there. FREE, a signed statement, no fee, no gas, no money moves and nothing is held. You give the pin where you are standing, the radius of the place, plain words for its name, the name of the local person who will acknowledge the handover, the SHA-256 hash of one photo you took at the spot, and a short list of what you can DO there, which is the half that makes a match possible. SEND THE HASH, NEVER THE PHOTO: this board takes a hash and never a file. You give NO Regen address either, because the board derives the Regen account your signing key controls from the signature itself. What happens next is NOT automatic: the house reads the intake and decides whether to post hours-counting work at your place, because the flag that makes a packet count hours is server-owned and a stranger's own post can never carry it. Nothing here is a job, a claim or a promise of pay. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with that wallet's personal_sign, then call submit_place within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workerWallet": {
+            "type": "string",
+            "description": "The 0x… address that signs. Address only, never a private key."
+          },
+          "lat": {
+            "type": "number",
+            "description": "Latitude of the exact spot, as your phone reads it. Not a city centre."
+          },
+          "lng": {
+            "type": "number",
+            "description": "Longitude of the exact spot, as your phone reads it."
+          },
+          "radiusKm": {
+            "type": "number",
+            "description": "How far the place reaches, in km, from 0.1 to 3. A place someone can walk, not a region."
+          },
+          "placeName": {
+            "type": "string",
+            "description": "Plain words a person would recognise, e.g. 'the north boundary of the community forest'. Up to 120 characters."
+          },
+          "stewardName": {
+            "type": "string",
+            "description": "The local person who will acknowledge that the work was handed back. A NAME ONLY: this record is public, so never a phone number, an address or an email. Up to 80 characters."
+          },
+          "sitePhotoSha256": {
+            "type": "string",
+            "description": "The 64-character hex SHA-256 of one photo taken at the spot. The hash only. Keep the photo yourself; it is what proves the hash later."
+          },
+          "offers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional, and the half that makes a match possible: 1 to 5 short plain-word lines saying what you can DO at this place, at most 80 characters each, e.g. [\"trail clearing, hand tools\", \"can bring two people\"]. A human reads them beside the work the house is about to post. Descriptive only: they gate nothing and price nothing."
+          },
+          "note": {
+            "type": "string",
+            "description": "Optional, up to 300 characters: anything the house should know about the place."
+          }
+        },
+        "required": [
+          "workerWallet",
+          "lat",
+          "lng",
+          "radiusKm",
+          "placeName",
+          "stewardName",
+          "sitePhotoSha256"
+        ]
+      },
+      "digest": "sha256:0f14c79016166fc0e4011d05ede15d2b651e2af5184e567ca7438d9e71ab9f1f"
+    },
+    {
+      "name": "submit_place",
+      "title": "Submit the signed place intake (step 2 of 2)",
+      "description": "Complete the handover: pass the BODY_JSON from prepare_place UNCHANGED and the signature your wallet produced over MESSAGE_TO_SIGN. Relays to the same public door any HTTP client uses (POST /labor/place/intake); this server holds no keys and no funds. Free with a valid signature. Returns the recorded intake with its id and the Regen account the board derived for you. It is recorded, not accepted: watch it with place_status.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_place, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:de01ad1d16070c3899a1eca5625ecf15cead3da98aa454fdf6e992cfff446a0f"
+    },
+    {
+      "name": "place_status",
+      "title": "Where your place stands",
+      "description": "Read an intake you handed over: pending, posted, or rejected with the reason. Free, keyless, no wallet needed. Pass intakeId for one, or wallet to list every place that wallet handed over. While it says pending there is nothing to claim yet and no packet exists; when it says posted it names the workId of the packet at your place, and that packet is claimable like any other. Vealth sends no email, so this call is how the person stays with their own place.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intakeId": {
+            "type": "string",
+            "description": "The intake id submit_place returned."
+          },
+          "wallet": {
+            "type": "string",
+            "description": "Optional instead of intakeId: the 0x… address that handed places over."
+          }
+        }
+      },
+      "digest": "sha256:d20f3fd95118f2b43e0a52e8ca061052922dacee827a96789eb1cc55f3df0d1a"
+    },
+    {
+      "name": "hour_card",
+      "title": "The hour card for a packet",
+      "description": "The ONE document to read to a person before they start: what the place is and the circle every GPS fix must land inside, what to bring and what the safety notes say, the method steps in order, the proof to hand in as a checklist, what the land gets, what the worker gets and whether the pay is funded or only proposed, exactly what the record will hold about them, and the tool calls in order. Free, keyless, no wallet needed. The packet's own words are carried verbatim and never shortened. Read it to them in order rather than summarising it: the order is the order the hour runs in.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id, from find_work or place_status."
+          }
+        },
+        "required": [
+          "workId"
+        ]
+      },
+      "digest": "sha256:8ac398574756095848e08ec3422f93e1f488a59fc0e0e243bb85dab030953d2c"
+    },
+    {
+      "name": "my_hours",
+      "title": "A person's balance in hours",
+      "description": "The time-bank statement for one wallet: hours claimed, hours a human accepted, hours that reached a settlement, VSH credit that reached them as payment for their own work, VSH credit they spent through the credit door to pay somebody else's work, and what this board's record says they hold. Free, keyless, no wallet connection needed, just the address. IT IS A BOARD-SIDE STATEMENT, NOT A CHAIN BALANCE: every figure comes from this board's own settlement records, and the reply says so. A credit sent outside a settlement door, a credit the holder retired, or a credit spent somewhere that is not us will not appear. Read Regen Ledger for the real balance. Use this whenever the person asks how they are doing, what they have earned, or what they can spend.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workerWallet": {
+            "type": "string",
+            "description": "The 0x… address to read. Address only, never a private key."
+          }
+        },
+        "required": [
+          "workerWallet"
+        ]
+      },
+      "digest": "sha256:bb668c2a65f29e8662abcb5d3d5a9464f0e41bee66d7d7ea7c788639517fa935"
+    },
+    {
+      "name": "prepare_accept_hours",
+      "title": "Accept the hours somebody worked (step 1 of 2)",
+      "description": "You were named on a work packet as the person who accepts its hours: this is how you do that. FREE and KEYLESS, a signed judgment, no fee, no gas. NOBODY PAYS ANYBODY HERE: accepting hours releases no wage, records no settlement and mints nothing, it writes onto the record that those hours were worked and stops. THE HOUSE CANNOT ACCEPT ITS OWN HOURS, which is the whole reason this door exists: a house wallet is refused here, and so is the packet's own worker, because nobody grades their own exam. The signature is YOUR OWN, from the wallet the packet named, and nobody else's signature will open it. The worker states the hours; you decide the accepted figure, and a figure above their own claim needs allowAboveClaim. Read the proof first with get_work_packet. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with that wallet's personal_sign, then call submit_accept_hours within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id whose hours you are accepting."
+          },
+          "acceptor": {
+            "type": "string",
+            "description": "Your 0x address, the one this packet named as its acceptor. Address only, never a private key."
+          },
+          "hoursAccepted": {
+            "type": "number",
+            "description": "The hours you actually stand behind, greater than zero and at most 168. Not the hours claimed unless you agree with them."
+          },
+          "allowAboveClaim": {
+            "type": "boolean",
+            "description": "Only when you mean to credit MORE hours than the worker asked for. Default false, and a higher figure is refused without it."
+          },
+          "note": {
+            "type": "string",
+            "description": "Optional, up to 300 characters: one plain sentence saying what you checked."
+          }
+        },
+        "required": [
+          "workId",
+          "acceptor",
+          "hoursAccepted"
+        ]
+      },
+      "digest": "sha256:756b1a3f11b518524eaa72ab673cb55ed2b0c66679480efe354e06cfee3c05e9"
+    },
+    {
+      "name": "submit_accept_hours",
+      "title": "Submit the signed acceptance (step 2 of 2)",
+      "description": "Complete the acceptance: pass the BODY_JSON from prepare_accept_hours UNCHANGED and the signature your wallet produced over MESSAGE_TO_SIGN. Relays to the same public door any HTTP client uses (POST /labor/work/:workId/accept-hours); this server holds no keys and no funds. FREE and KEYLESS with a valid signature, and the signature is YOUR OWN, from the wallet the packet named. NOBODY IS PAID by this call: no wage is released, no settlement is recorded and nothing is minted. Returns the hours the worker claimed, the hours you accepted, and who the record now says accepted them. THE HOUSE CANNOT ACCEPT ITS OWN HOURS, so the house cannot make this call for you.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id, the same one prepare_accept_hours was given."
+          },
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_accept_hours, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "workId",
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:6d59e2831abf623c604970f3e34b09e3f0b6a66bfa5ec6074f3f0879f4519a52"
+    },
+    {
+      "name": "prepare_post_work",
+      "title": "Post your own work packet (step 1 of 2)",
+      "description": "Put work YOU define on the public board — your place, your problem, your terms. Pass the creator wallet, a title, what needs doing, where, and the proposed pay. Returns MESSAGE_TO_SIGN (proving the creator wallet is yours) and BODY_JSON. Posting is a board WRITE: it costs $0.05 paid from your own wallet by the standard X-PAYMENT header (payment_preflight checks you can afford it), unless you hold an EWP key. The pay you propose stays PROPOSED until someone funds it — approved proof on an unfunded packet earns provable credit rather than cash, and the packet says which before anyone claims. Sign MESSAGE_TO_SIGN with the creator wallet's personal_sign, then call submit_post_work within 5 minutes. The board carries only work with a home in the Vealth Standard and a documented method: a post that names neither is refused before any charge, and the refusal lists the nearest documented standards; pass one back as `standard`.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "creatorWallet": {
+            "type": "string",
+            "description": "The 0x… address posting this work. It signs, and it owns the posting."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short honest title, e.g. 'Monthly care and growth check, planted neem tree'."
+          },
+          "description": {
+            "type": "string",
+            "description": "What needs doing, concretely — a stranger (or the poster themselves) should be able to do it from this text alone."
+          },
+          "location": {
+            "type": "string",
+            "description": "Where the work is: address or place name. Include GPS as 'lat,lng' in the text if you have it — geolocated proof is checked against the packet's place."
+          },
+          "proposedPayUsd": {
+            "type": "number",
+            "description": "Proposed pay in USD. Proposed, not promised: unfunded packets settle as provable credit."
+          },
+          "workType": {
+            "type": "number",
+            "description": "0 = water, 1 = soil/land/planting, 2 = building/structure. Trees are 1."
+          },
+          "proofRule": {
+            "type": "string",
+            "description": "What proof completes the work, e.g. 'GPS pin + photo of the tree next to a measuring stick + watering confirmation'."
+          },
+          "expiresInDays": {
+            "type": "number",
+            "description": "Days the packet stays open. Default 30."
+          },
+          "standard": {
+            "type": "string",
+            "description": "Optional. The documented standard this work serves (a snake_case id such as 'tree_planting_establishment'); when a refusal lists suggestedStandards, pass one of them here. Omit it and the board lands the title on a documented standard itself when the title is that work's name."
+          },
+          "workTypeLabel": {
+            "type": "string",
+            "description": "Optional. A documented work type (snake_case) when you know the board's own name for the work."
+          }
+        },
+        "required": [
+          "creatorWallet",
+          "title",
+          "description",
+          "location",
+          "proposedPayUsd"
+        ]
+      },
+      "digest": "sha256:f120bd5567798b88dfe2ba82d9ed9c3ff3271c89aae02436a927e7d0e976e7d6"
+    },
+    {
+      "name": "submit_post_work",
+      "title": "Submit the signed posting (step 2 of 2)",
+      "description": "Complete the posting: pass BODY_JSON from prepare_post_work UNCHANGED, the creator wallet's signature over MESSAGE_TO_SIGN, and (unless you hold an EWP key) xPayment — the standard X-PAYMENT header value your own wallet produced for the $0.05 write fee. If you send no payment, the answer is the live 402 challenge with exact price and pay-to; pay it from your own wallet and retry with a fresh prepare. This server relays to the same public gate any HTTP client uses — it holds no keys and no funds. Success returns your packet's id and public page; claiming it (even yourself) is free.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_post_work, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN, from the creator wallet."
+          },
+          "xPayment": {
+            "type": "string",
+            "description": "Optional: the X-PAYMENT header value (EIP-3009 USDC on Base, from YOUR wallet) settling the $0.05 write fee. Omit if you hold an EWP key."
+          }
+        },
+        "required": [
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:9929aad363677307b67a973f51431296603bbf5774b1c79ea37a36f00298a520"
+    },
+    {
+      "name": "prepare_proof",
+      "title": "Prepare signed proof of finished work (step 1 of 2)",
+      "description": "You did the work — start handing in proof. Pass the packet's workId, your claimId (from submit_claim), your wallet, and proof items matching the packet's own proof line (photos with GPS for field work; documents/text for digital work). On an hours-eligible job, state the hours you actually worked as hoursClaimed, and whatever the job asks to be counted as counts: you state them, and the human who accepts decides the accepted figure. Returns MESSAGE_TO_SIGN and BODY_JSON. Submitting proof is FREE when signed — a worker is never charged at the moment they have earned the right to be asked for nothing. Sign, then call submit_proof within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          },
+          "claimId": {
+            "type": "string",
+            "description": "Returned by submit_claim."
+          },
+          "workerWallet": {
+            "type": "string",
+            "description": "The same 0x… address that claimed."
+          },
+          "proofs": {
+            "type": "array",
+            "description": "1-20 proof items, e.g. {\"type\":\"photo\",\"uri\":\"https://…\",\"capturedAt\":\"<ISO>\",\"lat\":…,\"lng\":…}. The packet's proof line (get_work_packet) says exactly what it needs.",
+            "items": {
+              "type": "object"
+            }
+          },
+          "gps": {
+            "type": "object",
+            "description": "For geolocated field work: {lat, lng} captured ON SITE — the gate refuses geolocated proof without it.",
+            "properties": {
+              "lat": {
+                "type": "number"
+              },
+              "lng": {
+                "type": "number"
+              }
+            }
+          },
+          "hoursClaimed": {
+            "type": "number",
+            "description": "On an hours-eligible job, the hours you ACTUALLY worked, breaks out — a positive number, at most 168, to 6 decimal places. You state it; the human who accepts decides the accepted figure. Required on such a packet (the completion gate refuses a proof without it), optional everywhere else."
+          },
+          "counts": {
+            "type": "object",
+            "description": "Optional: what the job asked to be counted, in the packet's own units, as plain numbers — {\"metres_cleared\": 120, \"blockages_removed\": 4, \"check_dams_built\": 3}. Lower_snake_case names, at most 40 of them. Recorded with the proof; it decides nothing on its own."
+          }
+        },
+        "required": [
+          "workId",
+          "claimId",
+          "workerWallet",
+          "proofs"
+        ]
+      },
+      "digest": "sha256:118c94665cba5244ed485672958cdc35e037b8ec1b8b17ee140cd9d6b082a1a0"
+    },
+    {
+      "name": "submit_proof",
+      "title": "Submit the signed proof (step 2 of 2)",
+      "description": "Relay the signed proof to the public completion gate: pass workId, the BODY_JSON from prepare_proof UNCHANGED, and the signature over MESSAGE_TO_SIGN. Approval follows (the creator, or self-verification where the packet supports it); on a funded packet, approval releases the wage into settlement; on an unfunded packet, approval RECORDS earned credit — never a settlement by itself. work_status shows where it stands.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          },
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_proof, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "workId",
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:9f9abc46f0f3c87541d22f80b0cb1eaafeaa937fd41068d59140e34d4549f2ef"
+    },
+    {
+      "name": "work_status",
+      "title": "Where a packet stands right now",
+      "description": "Live lifecycle state of one packet — OPEN, CLAIMED, PROOF_SUBMITTED, APPROVED, PROOF_REJECTED, SETTLED or EXPIRED — plus its honest pay status (funded vs proposed). Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          }
+        },
+        "required": [
+          "workId"
+        ]
+      },
+      "digest": "sha256:ea9ec6a803f16f5115be5546ea0fc11dad71c018867b97255f8412587c5516b5"
+    },
+    {
+      "name": "my_work",
+      "title": "What happened with my work",
+      "description": "One question, the whole picture for ONE wallet: every packet it claimed and where each one stands, what is waiting on the person (proof not handed in, proof rejected and the reason given), what settled and its public receipt, and what is newly open nearby that fits the kind of work they have already done. Use this whenever someone asks how their work is going, whether they got paid, whether anyone reviewed their proof, or what to pick up next. Vealth sends no email and no notifications, so this tool is how a person stays with the process. Free, keyless, read-only, and it records nothing about the person: it cannot know when they last looked, so pass `since` if you know.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "The 0x… address that claimed the work. The ADDRESS only, never a private key."
+          },
+          "near": {
+            "type": "string",
+            "description": "Optional place in plain words for the what-to-pick-up-next list, e.g. 'Los Angeles, CA'."
+          },
+          "since": {
+            "type": "string",
+            "description": "Optional ISO timestamp of when this person last checked, e.g. '2026-08-01T00:00:00Z'. Used only to mark what changed since then. Nothing about anyone is stored here, so without it everything is listed."
+          }
+        },
+        "required": [
+          "wallet"
+        ]
+      },
+      "digest": "sha256:8f21dad3fcf051a771baafcae979a5e27ce7e331b4e99145bc6f65d96a009638"
+    },
+    {
+      "name": "my_votes",
+      "title": "What one wallet has voted on and backed",
+      "description": "One wallet's whole demand history: every packet it voted for or against, and every packet it pledged to back — both free, signed acts that move no money. Use this when someone asks what they voted for, whether their vote is still active, or what they have pledged. A pledge here is a signed statement of intent only: pledged is not funded, nothing moves and nothing is held until a real payment settles through the separate funding door (prepare_funding). Free, keyless, read-only, and it records nothing about the caller.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "The 0x… address that voted or pledged. The ADDRESS only, never a private key."
+          }
+        },
+        "required": [
+          "wallet"
+        ]
+      },
+      "digest": "sha256:a1ca2e5dcd7a407fd2ce3038c960e6d2435d33ef433821a49641c9b31326c10b"
+    },
+    {
+      "name": "estimate_footprint",
+      "title": "Turn this AI session into real provisioned ecological work",
+      "description": "The anchor tool. Give a rough token or call count for your AI session and get an order-of-magnitude CO2e estimate PLUS the real, verifiable ecological work you can provision to answer it on Vealth. Vealth does NOT sell paper offsets — it provisions maintenance of the commons: you fund a bounded work packet keyless from your own wallet; when the retirement lane is running an approved proof queues a carbon retirement with an on-chain retirement certificate (that lane is paused by operator order since 2026-08-04). Call find_work next to pick the work. The estimate is orientation only, never a precise carbon claim, and this server never takes payment or holds a wallet.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tokens": {
+            "type": "number",
+            "description": "Approx total tokens this session (input + output)."
+          },
+          "calls": {
+            "type": "number",
+            "description": "Or approx number of model calls, if you have no token count."
+          }
+        }
+      },
+      "digest": "sha256:069545a2e78ed179fa52218cd97ace5666b727dee4cfade531600436118f255f"
+    },
+    {
+      "name": "provision_work",
+      "title": "Provision a bounded packet of real ecological work",
+      "description": "Turn a place + problem (or a board packet id) into provisioned work: a bounded packet with scope, standards-registered method, proof requirement, tCO2e estimate, and the keyless funding path YOU pay from your own wallet. This tool returns the packet and the path; it never spends, never holds funds, never signs. When the retirement lane is running, approved proof queues a carbon retirement and an on-chain certificate — provision, not offset; that lane is paused by operator order since 2026-08-04.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "Provision a specific open board packet by id (from find_work)."
+          },
+          "query": {
+            "type": "string",
+            "description": "Or free text for the problem, e.g. 'storm drain' or 'tree planting'."
+          },
+          "latitude": {
+            "type": "number",
+            "description": "Center of the search, with query."
+          },
+          "longitude": {
+            "type": "number",
+            "description": "Center of the search, with query."
+          },
+          "radiusKm": {
+            "type": "number",
+            "description": "Search radius in km. Default 50."
+          }
+        }
+      },
+      "digest": "sha256:9b6490cf6289437ed799448ac876918e116bdfda41cff49c9f34c76a050a6f65"
+    },
+    {
+      "name": "retire_and_certify",
+      "title": "Retire carbon on-chain and get the certificate",
+      "description": "How to retire a given tCO2e amount for real, on-chain, via the Klima rail — paid keyless from the caller's own wallet, returning a confirmed retire transaction as the certificate. Returns instructions and the exact door; this server never performs the retirement and never holds a wallet. The retirement is real; any footprint number behind it stays orientation, never a precise carbon claim.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "amount_tco2e": {
+            "type": "number",
+            "description": "Tonnes of CO2e to retire, e.g. 0.005."
+          },
+          "beneficiary_name": {
+            "type": "string",
+            "description": "Optional name to record on the retirement."
+          },
+          "retirement_message": {
+            "type": "string",
+            "description": "Optional message to record on the retirement."
+          }
+        },
+        "required": [
+          "amount_tco2e"
+        ]
+      },
+      "digest": "sha256:b8ac6aca9416f34cf77734ca2154a7275ae01e524adf9cf05a78f697217fd38c"
+    },
+    {
+      "name": "verify_work",
+      "title": "Verify a work claim into a signed certificate",
+      "description": "Check a proof URI is safely machine-checkable, then get the exact path to Vealth's paid verification door: a SIGNED, re-checkable certificate anyone can reproduce — no oracle, no judge. Digital claims only; physical proof (photo + GPS + signature) is honestly routed to human review, never faked. This tool validates and instructs; the caller pays the door from their own wallet.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "proofUri": {
+            "type": "string",
+            "description": "https URL of the LIVE proof to verify. No auth, no query parameters."
+          },
+          "workId": {
+            "type": "string",
+            "description": "Optional board packet id, to check its specific proof requirement."
+          },
+          "standard": {
+            "type": "string",
+            "description": "Optional standard key the claim is made against."
+          },
+          "definitionId": {
+            "type": "string",
+            "description": "Optional self-verifying definition id, if known."
+          }
+        },
+        "required": [
+          "proofUri"
+        ]
+      },
+      "digest": "sha256:6fd78115036db7c94045e66338c483b2ec4379dc7370b46d105e66a13e244683"
+    },
+    {
+      "name": "anchor_proof",
+      "title": "Timestamp a file onchain so you can prove you had it first",
+      "description": "Anchor the SHA-256 of any file onchain, free. Use it the moment you produce something whose PRIORITY matters: a security finding before you disclose it, research before you share it, a draft before you send it out. You send only the hash, never the file, so nothing you make is disclosed to anyone. It lands in the next weekly Base batch and the Ethereum root, and from then on anyone can prove those exact bytes existed by that time. Free to submit, free to verify, no account, no wallet, no payment.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "description": "SHA-256 of your file, 64 lowercase hex characters. Get it with: shasum -a 256 <file>"
+          },
+          "label": {
+            "type": "string",
+            "description": "Optional short public label for your own reference. Never include anything secret."
+          }
+        },
+        "required": [
+          "sha256"
+        ]
+      },
+      "digest": "sha256:b2fa73d801b081cb550834a8734dcdb69d8a71689c81887898daa0812340f526"
+    },
+    {
+      "name": "verify_anchor",
+      "title": "Check whether a file was anchored, and when",
+      "description": "Given the SHA-256 of a file, say whether it is anchored, when, and return the merkle proof plus the transaction so the caller can check it independently without trusting Vealth. Use it to confirm someone held a document when they claim they did, or to confirm your own submission landed. Free and keyless.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "description": "SHA-256 of the file, 64 lowercase hex characters."
+          }
+        },
+        "required": [
+          "sha256"
+        ]
+      },
+      "digest": "sha256:0ea90937ebb291d6f9cf67de60e11d5b851839b0f7b9f68ab6541340ff1e3830"
+    },
+    {
+      "name": "crypto_tokens",
+      "title": "Canonical token registry",
+      "description": "The canonical on-chain address for every token we operate, read from the registry the rails themselves use. Ask this BEFORE using any token address. ECOWEALTH (the token) and EWP (the work protocol) are different things on different chains and confusing them has already broken a live session. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "Optional: return just this symbol, e.g. ECOWEALTH."
+          }
+        }
+      },
+      "digest": "sha256:ea4184fe577aaedfcbb0c4a99adb28aa9ad22e6984d3dda86ff436a96008099b"
+    },
+    {
+      "name": "crypto_wallets",
+      "title": "Our wallets and their live balances",
+      "description": "The three wallets we operate, each with its role and its live Base balances read at this moment. Use this instead of assuming which wallet does what, and never quote a balance from a document. Read-only: this tool cannot sign, send, or move anything.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "includeBalances": {
+            "type": "boolean",
+            "description": "Set false to skip live chain reads and return roles only. Default true."
+          }
+        }
+      },
+      "digest": "sha256:2d4201e29cc4d34f370d6bf27770b4d4b9d4e1ef01d1453fad5d7655e3832600"
+    },
+    {
+      "name": "crypto_route_set",
+      "title": "The permitted conversion routes",
+      "description": "The only asset conversions our rails may perform, plus the standing laws that govern them (gas pricing, the per-transaction fee cap, EARTH's one-way token physics). An edge not listed here is absent on purpose. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "digest": "sha256:744ac9d25bc121e4789f1ed803d60d7d091a7b75d4555e4d63bead18cda5f91b"
+    },
+    {
+      "name": "crypto_lanes",
+      "title": "Which money rails are running",
+      "description": "Whether each recurring-spend lane is running or stopped, and why, read from the file the code itself obeys. A lane marked stopped is stopped by decision, not broken. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "digest": "sha256:003d8b6ca2edc6049cb8812096879c49c6390d44deb20cb099f5c2dc0a51b69a"
+    },
+    {
+      "name": "net_subscription_quote",
+      "title": "Sovereign net worth as a service — your user's own token program",
+      "description": "The token program we proved on NET, run for your user: $1/month mints their OWN 1,000-fixed-supply asset (~999 to their wallet, no owner functions), creates a real burned-LP market for it, and standing-buys it monthly while they hold ~99% of the supply; $2/month adds a dollar for the service. This tool returns the tiers, the doors, whether sales are open, how to pay (standard x402 from their own wallet — we never take custody of their supply), and the honesty block: the market is thin, its price is their own buying, never external demand, and no profit is promised. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "digest": "sha256:8c17e3cd39cebca87db555c7844bc77e4b47e6437227d3dc7f93449368757ae6"
+    },
+    {
+      "name": "net_subscription_status",
+      "title": "A wallet's program subscription: months paid and program state",
+      "description": "Given a subscriber wallet, returns its paid months, each window's program budget, the asset naming on record, and fulfillment state. Everything the program does for the wallet — the mint, the burned market seed, every standing buy — is independently checkable on Base. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "The subscriber wallet (0x…), the same wallet that paid."
+          }
+        },
+        "required": [
+          "wallet"
+        ]
+      },
+      "digest": "sha256:a550b55f0b85965e3688b5279cbb1f0feee9b58052f3982db1d0035737bcbafb"
+    },
+    {
+      "name": "regen_provisioning_subscription_quote",
+      "title": "Fund work at a place you name: the plan, and why it is not live yet",
+      "description": "The regenerative provisioning subscription, BUILT AND OFF. Someone picks an amount from $1 to $1,000 and a period (day or month) and names a place; this tool returns the plan: exactly which OPEN, unfunded, claimable packets at that place the money would back, in the board's own order, at the board's own prices, never over the amount, with the remainder carried, plus the place's Standing link and every reason it is not live. Call it with no arguments for the product and the ladder. NOTHING CHARGES: there is no payment path on any of these routes, no store and no scheduler, and the lane refuses on its own kill file and its own lane state. Free, keyless, read-only. This funds work at a place you name. It buys no token. It promises no return. Standing is earned by the work, never by the payment. Cancel any time; what was funded stays funded.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "description": "Whole dollars, 1 to 1000. Omit for the product and the ladder only."
+          },
+          "period": {
+            "type": "string",
+            "description": "\"day\" or \"month\"."
+          },
+          "place": {
+            "description": "A place label string, or an object { lat, lng, radiusKm } naming a coordinate cluster."
+          },
+          "wallet": {
+            "type": "string",
+            "description": "The subscriber's OWN 0x address, used for receipts and for reading Standing. Never custody."
+          },
+          "holdEcowealthOptIn": {
+            "type": "boolean",
+            "description": "Record that the subscriber wants to hold ECOWEALTH in their own wallet. A preference only: we never hold, price, or issue a token."
+          }
+        }
+      },
+      "digest": "sha256:71d7512c91767716b7a6e7ee6360d70b1e97c4bfd604eb597963877727db4aa0"
+    },
+    {
+      "name": "regen_provisioning_subscription_status",
+      "title": "A wallet's provisioning subscription: there is none, and why",
+      "description": "Given a wallet, returns its regenerative provisioning subscription state. There is no subscription store and nothing has ever been charged, so this answers \"no subscription\" honestly rather than inventing an empty record, and it names every reason the lane is not live. Standing belongs to a PLACE and is read free at GET /labor/standing?place=. Free, keyless, read-only. This funds work at a place you name. It buys no token. It promises no return. Standing is earned by the work, never by the payment. Cancel any time; what was funded stays funded.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "The wallet to look up (0x…). The read is public and proves nothing about who you are."
+          }
+        },
+        "required": [
+          "wallet"
+        ]
+      },
+      "digest": "sha256:1f02903a3d4c828970856ec65fde7ec89df72527180732f670c61c25abe62602"
+    },
+    {
+      "name": "operator_decisions",
+      "title": "The operator decision ledger — standing law, with its enforcement",
+      "description": "Every standing operator decision that governs these rails — what was decided, the operator's words, and the machine-checkable enforcement (lane state, kill switches, env vars, CI tests) that makes it real. Ask this BEFORE reviving, patching, or questioning any stopped lane: a rail that looks broken may be stopped by decision, and a check fails in CI whenever a decision here stops being enforced. Free, keyless, read-only, no chain reads.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Optional: return just this decision id, e.g. no-sell-walls."
+          }
+        }
+      },
+      "digest": "sha256:3da24d90ed02c42ad52cc19a540bd0b5a51c8397cad2a81007e386031e8205ec"
+    },
+    {
+      "name": "crypto_lp_positions",
+      "title": "Our liquidity positions",
+      "description": "Every pool we provide liquidity to, with reserves and our share read live from chain. Also carries the pool-pricing trap: raw balance ratios give spot price only for constant-product pools, never for concentrated-liquidity pools. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "digest": "sha256:d986fee61cddd8b9e076e46574209cf3adedec21443e24a4c7e0174dfeccebe1"
+    },
+    {
+      "name": "hydrex_position",
+      "title": "A Hydrex veHYDX position: locks, voting power, and who owns it right now",
+      "description": "Everything about a veHYDX voting-escrow position on Base, read live: each NFT's current owner (resolved with ownerOf at call time, never assumed), its voting power, its locked HYDX, and whether it can ever be unlocked. Also reports oHYDX, the separate OPTION token, with its live exercise economics — oHYDX and veHYDX are different things and this tool keeps them apart on purpose. Works for any Hydrex holder: pass an address, or omit it to read the position this server operates. Free, keyless, read-only — it cannot sign or move anything.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Optional: a wallet to inspect. Omit to read our own position, whose owner is resolved live rather than hardcoded."
+          },
+          "tokenIds": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Optional: specific veHYDX token IDs. Omit to discover them, or to use our known IDs."
+          }
+        }
+      },
+      "digest": "sha256:daf3b4964fbad417034646e9da7b5b23f59a8d5409a07b1e67dac210df09ce7d"
+    },
+    {
+      "name": "hydrex_votes",
+      "title": "What a Hydrex position is voting for, and the honest denominator to judge it by",
+      "description": "A wallet's current gauge-vote allocation read from VoterV5 on chain, plus where the weekly epoch stands and the live emission rate. Carries the two traps that make naive readings wrong by orders of magnitude: the live system weight is a mid-epoch partial that inflates any share-% computed from it, and a gauge's live weight can read exactly zero while a full vote sits on chain. Share percentages here use the last COMPLETED epoch. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Optional: the voting wallet. Omit to follow our own position to whichever wallet currently holds it."
+          }
+        }
+      },
+      "digest": "sha256:3d669d9ef79b15fd7f19390c88ada0d6499ce08e675ac085bc23f926983182df"
+    },
+    {
+      "name": "hydrex_claimable",
+      "title": "What a Hydrex voter can claim right now, and from which contract",
+      "description": "The money answer: for every gauge a wallet votes for, the fee contract and the bribe contract, every reward token each one tracks, and exactly how much is claimable per veNFT — all resolved from chain, so a zero here is a real zero rather than a degraded API. Returns the claim calldata SHAPES for a caller to build their own transaction; it builds and signs nothing itself. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Optional: the voting wallet. Omit to follow our own position."
+          },
+          "tokenIds": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Optional: veHYDX token IDs to check earnings for. Rewards are tracked per NFT."
+          }
+        }
+      },
+      "digest": "sha256:d3d48b34b7d47723eb3013291e11899c429ffbfab19eff76984deeba718d6bf4"
+    },
+    {
+      "name": "hydrex_vault",
+      "title": "A Hydrex ICHI vault position, including whether it is actually earning",
+      "description": "An ICHI single-sided vault position on Hydrex: shares held, share of the vault, the token composition of that slice, and — the part that matters — whether those shares are STAKED in the emissions gauge. Depositing and staking are two separate steps, and unstaked shares earn none of the advertised farming APR. Advertised APRs are returned but labelled display-only. Defaults to the kVCM/USDC vault. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Optional: the holder to inspect. Omit to follow our own position."
+          },
+          "vault": {
+            "type": "string",
+            "description": "Optional: an ICHI vault address. Defaults to the kVCM/USDC single-sided vault."
+          }
+        }
+      },
+      "digest": "sha256:600f44e9282826126642b1ca448856afee0735124d5b32d2a05802029e41e52e"
+    },
+    {
+      "name": "hydrex_reality",
+      "title": "Hydrex measured income versus advertised projection, side by side",
+      "description": "Call this before repeating any Hydrex APR or yield projection. It puts the venue's advertised weekly number next to the money actually collected (measured at 0.089% of the projection), and computes live from the venue's own per-gauge data why the ceiling is structural: total fees and bribes the whole venue distributes, against the fraction of system votes a position actually holds. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "digest": "sha256:b880e2badbefc931583732aabcbf0744045e619558881cf6aa6147f087ef71de"
+    },
+    {
+      "name": "board_stats",
+      "title": "Live board statistics",
+      "description": "Live counts from the Vealth work board, read at this moment — total and open work, claims, settlements, proposed value, and the sector breakdown. Pass a location to also count work nearby. Never cached; the public mirror is https://vealth.net/labor/stats. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "description": "Optional: also count open work near this point."
+          },
+          "longitude": {
+            "type": "number",
+            "description": "Optional: also count open work near this point."
+          },
+          "radiusKm": {
+            "type": "number",
+            "description": "Nearby radius in km. Default 50."
+          }
+        }
+      },
+      "digest": "sha256:461320d0ae2d9a91481562669c820f4559fabe6fe905597907797f7ee7582145"
+    },
+    {
+      "name": "place_standing",
+      "title": "A place's Standing under the Vealth Standard",
+      "description": "The Vealth Standard's live reading for one place — Standing (Unread or Read today) recomputed this moment from settled packets with accepted proof, per condition. Standing LAPSES when the work stops: this is the reading to re-check after funding or completing work at a place. Unread is an honest beginning, not a failure. Public mirror: https://vealth.net/labor/standing?place=… Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "place": {
+            "type": "string",
+            "description": "The place to read, e.g. a city, address fragment, or venue name."
+          }
+        },
+        "required": [
+          "place"
+        ]
+      },
+      "digest": "sha256:82e6318d4524ab6e00bedeb8279bb0ecd94424a00f0257ddc188a3579371638b"
+    },
+    {
+      "name": "worker_titles",
+      "title": "The titles and credentials one wallet declares, with status and evidence",
+      "description": "The Vealth titles register for one wallet: every title the worker declared on their own signature (CHST, OSHA 30, CPR, a guard card, anything), each with a status derived from the worker's OWN declared dates (current, expired, unknown_expiry), a verify pointer to the ISSUER'S record (we carry the link, we never fetch it), board evidence in that title's scope (on-chain-confirmed settlements and reviews the wallet accepted), and the declaration's anchor hash. Self-declared and shown as such; nothing here gates a claim. Public mirror: https://vealth.net/labor/worker/<wallet>/titles. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "The worker's wallet address (0x…)."
+          }
+        },
+        "required": [
+          "wallet"
+        ]
+      },
+      "digest": "sha256:f1f4bb1d1f9cd30ab66aebcae4ee995f053103a2f94d19514ef2ca39ac286788"
+    },
+    {
+      "name": "compare_titles",
+      "title": "Lay a wallet's titles beside a job's requirements, six words, human decides",
+      "description": "Machine comparison, human decision. Give a wallet and the requirements of a job or project; each requirement comes back as exactly one of six words: verified_match (declared, current, and on-chain-confirmed board work in scope), verified_mismatch (the record contradicts the requirement), supported (declared, nothing contradicts it, no board work yet), unknown (the record does not say), expired (declared expiry passed), human_judgment_required (a human reads it: years of experience, free text). The reply never says qualified and never decides; it carries a receipt hash the decider can anchor for free. Public mirror: https://vealth.net/labor/worker/<wallet>/compare?require=CHST,STS. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "The worker's wallet address (0x…)."
+          },
+          "require": {
+            "type": "string",
+            "description": "Requirements: a comma list of titles (comma = each required, | = any of, e.g. \"CHST,STS|STSC\"), or a JSON array of {kind:\"title\",anyOf:[…],issuer?,mustBeCurrent?} / {kind:\"years_experience\",years,area?} / {kind:\"text\",text}."
+          }
+        },
+        "required": [
+          "wallet",
+          "require"
+        ]
+      },
+      "digest": "sha256:b5a5aa2f2a2cfa2c715c488f6d9dbf73b12c736519d09bc5eb8bbc7ce318fdbb"
+    },
+    {
+      "name": "funding_quote",
+      "title": "Can this packet be funded, and what would it cost",
+      "description": "For a BUYER, not a worker: ask whether one board packet can be funded right now, and what funding it costs NOW. The quote is the packet's OUTSTANDING obligation — the board's posted wage minus verified contributions already recorded — read from the board, never from anything you send, so no caller can fund a $700 packet for $1 and no caller is quoted a stale full wage after others chipped in. Partial funding: when the host has chip-ins armed, any open packet also takes contributions from $0.01 up to what it still needs (contributeUsd on prepare_funding); an EXPLICIT amount above the remaining is recorded as a premium reserved for the worker — no default or omitted amount ever creates a premium. A refusal comes back in the board's own words (already funded, fully covered, claimed, settled, expired, no wage). Read-only: this quotes, it charges nothing and marks nothing funded. Call prepare_funding next to actually pay.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "Optional packet id. Omit to quote the first open packet that still needs funding."
+          }
+        }
+      },
+      "digest": "sha256:aa509d6c0e63f4892f2de94399d82fa0640bcf3ccbf5bfea56e1bc81589a5213"
+    },
+    {
+      "name": "prepare_funding",
+      "title": "Get everything needed to actually pay for a packet",
+      "description": "Step 2 for a buyer: returns the live payment requirements for funding a packet — the onchain door's own x402 challenge (accepts[], exact amount, asset, chain, pay-to address) read from that door at this moment, and, when a card rail is mounted on this host, its hosted checkout URL. To chip in a slice instead of the whole remaining amount, pass the typed contributeUsd input and it is forwarded to the real door verbatim; omit it to pay everything the packet still needs (the canonical remaining amount, never a stale posted wage, and never an implicit premium). The door remains the authority on floors, ceilings and the exact challenge — this tool never calculates a charge itself. You pay from YOUR own wallet or card; this server holds no funds and no keys, takes no payment, and marks nothing funded. A packet becomes funded only when a payment actually settles and is verified. Not ready to pay, or want to signal backing without money moving yet? prepare_backing is the FREE sibling door — a signed pledge, no payment required.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id, from find_work."
+          },
+          "funderWallet": {
+            "type": "string",
+            "description": "The 0x… address that will pay onchain. Needed for the onchain door's live challenge; the card path does not use it."
+          },
+          "contributeUsd": {
+            "type": "number",
+            "description": "Optional EXPLICIT contribution in USD. Omit to fund the canonical remaining amount. Forwarded to the live door verbatim; the door enforces its own floor, ceiling and remaining-amount truth. An explicit amount above the remaining is a deliberate worker premium."
+          }
+        },
+        "required": [
+          "workId"
+        ]
+      },
+      "digest": "sha256:9b9d3a0d1e33fae99ac1e3bb8358ae33808909628072bad681bc9846f6cacfc4"
+    },
+    {
+      "name": "prepare_backing",
+      "title": "Pledge to back a packet — free, no payment (step 1 of 2)",
+      "description": "The FREE fund door: a signed, non-custodial statement that you will put $X behind this packet. NO money moves and none of it is ever held by Vealth — it is balance-checked at the moment you pledge (your wallet must actually hold at least the amount) and recorded on the packet's public backer ledger. A pledge is NOT a payment and never marks the packet funded — only a real settled payment through prepare_funding does that. Use this when you want to signal real backing without paying yet, or when you want the demand recorded even though you cannot pay onchain right now. A pledge cannot exceed the packet's own posted wage. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the backer wallet's personal_sign (a plain signed message, NOT a transaction — no gas, no fee), then call submit_backing within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id, from find_work."
+          },
+          "backerWallet": {
+            "type": "string",
+            "description": "The 0x… address that will sign and own this pledge. Must hold at least amountUsd for it to verify."
+          },
+          "amountUsd": {
+            "type": "number",
+            "description": "How much you pledge to back this packet with, in USD. Cannot exceed the packet's posted wage."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Optional, up to 280 characters, shown on the public backer ledger."
+          },
+          "backerKind": {
+            "type": "string",
+            "enum": [
+              "human",
+              "agent"
+            ],
+            "description": "Self-declared attribution, same as voterKind. Defaults to human if omitted."
+          }
+        },
+        "required": [
+          "workId",
+          "backerWallet",
+          "amountUsd"
+        ]
+      },
+      "digest": "sha256:98ab1f519666b86166add8c76c24e9024cde04acab7cfdb58314ffe8bdfd273c"
+    },
+    {
+      "name": "submit_backing",
+      "title": "Submit the signed pledge (step 2 of 2)",
+      "description": "Complete the pledge: pass workId, the BODY_JSON from prepare_backing UNCHANGED, and the signature your wallet produced over MESSAGE_TO_SIGN. This server relays the signed request to the same public pledge gate any HTTP client uses — it holds no keys and no funds, and without your signature it can do nothing. Free, always: no fee is ever charged for a validly signed pledge. Returns whether your wallet's balance verified against the pledged amount, and the packet's current backer ledger.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          },
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_backing, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "workId",
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:dea9d1899499aa1f6a72aa1554625637e00f24462469070d539b5e43f42b7c0e"
+    },
+    {
+      "name": "prepare_evidence_surface",
+      "title": "Reserve a board-hosted evidence surface — free (step 1 of 2)",
+      "description": "The door for an agent with NOTHING but a wallet: funded remote template packets need {{target}} = an https origin the worker controls, and this reserves one ON THE BOARD, free. You get a targetUrl (https://vealth.net/labor/evidence/<recordId>) that belongs to your wallet by signature. Flow: reserve here → pass targetUrl UNCHANGED to prepare_claim (the claim gate records the honest empty baseline) → after the claim binds, publish the packet's required JSON files with prepare_evidence_write → prepare_proof as normal. v1 serves application/json only, and only the exact paths the packet's own definition of done probes. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the worker wallet's personal_sign, then call submit_evidence_surface within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The funded remote template packet id, from find_work."
+          },
+          "workerWallet": {
+            "type": "string",
+            "description": "The 0x… address that will claim and complete this packet. Never a private key."
+          }
+        },
+        "required": [
+          "workId",
+          "workerWallet"
+        ]
+      },
+      "digest": "sha256:c16504651cb829ecbee753dbc4e6da1c9129b02b9df6118ca3929f7357753e62"
+    },
+    {
+      "name": "submit_evidence_surface",
+      "title": "Submit the signed reservation (step 2 of 2)",
+      "description": "Complete the reservation: pass the BODY_JSON from prepare_evidence_surface UNCHANGED and the signature your wallet produced over MESSAGE_TO_SIGN. Free, always. Returns the targetUrl to pass to prepare_claim. Re-submitting for the same packet returns the surface you already hold.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_evidence_surface, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:f02d866888db3e117973bd5299a2d29d2b32dc9f46ed9bd8c7b2a8f95b820bc2"
+    },
+    {
+      "name": "prepare_evidence_write",
+      "title": "Publish the packet's files to your evidence surface — free (step 1 of 2)",
+      "description": "After your claim binds the surface, publish the JSON files the packet's definition of done probes — e.g. its /.well-known/… path. Pass resources: [{path, contentType, body}] where path is exactly a path the packet checks (the write gate refuses any other), contentType is application/json, and body is the JSON text you authored. Atomic: readers see the old set or the new set, never half. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the SAME wallet that claimed, then call submit_evidence_write within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          },
+          "claimId": {
+            "type": "string",
+            "description": "Your claim id, from submit_claim."
+          },
+          "recordId": {
+            "type": "string",
+            "description": "The 24-hex record id, from submit_evidence_surface."
+          },
+          "workerWallet": {
+            "type": "string",
+            "description": "The 0x… wallet that claimed."
+          },
+          "resources": {
+            "type": "array",
+            "description": "1-8 files: {path: \"/.well-known/…\", contentType: \"application/json\", body: \"<json text>\"}. Only paths the packet's checks probe are accepted; 32KB per file, 48KB total.",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "workId",
+          "claimId",
+          "recordId",
+          "workerWallet",
+          "resources"
+        ]
+      },
+      "digest": "sha256:a0c1429740e9ca2ff3480549471bfc873289c507f051f52ba8e5a07da1f16d15"
+    },
+    {
+      "name": "submit_evidence_write",
+      "title": "Submit the signed publish (step 2 of 2)",
+      "description": "Complete the publish: pass the BODY_JSON from prepare_evidence_write UNCHANGED and the signature over MESSAGE_TO_SIGN. Free when signed. On success the files are live at your targetUrl and the next step is prepare_proof — the verifier probes them passively like any public machine surface.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_evidence_write, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:cbc679861bb75d9627ca958d0641caa22f25e8a5bc8594c18a45a80fe473f7ea"
+    },
+    {
+      "name": "payment_options",
+      "title": "What everything here costs, before you pay for anything",
+      "description": "The whole price list for this server's paid doors, in dollars, cheapest first. Use it to budget BEFORE committing to a call — without it the only way to learn a price is to call a door and read the 402 it answers with. Prices are read from the live door manifest, never a hand-kept table, so a door that changes price cannot leave a stale number quoted here; the door's own 402 challenge remains the final price truth. Free, keyless, read-only. There is no balance to top up: you pay each call from your own wallet at the moment you call.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "maxUsd": {
+            "type": "number",
+            "description": "Optional ceiling — show only doors costing this much or less."
+          }
+        }
+      },
+      "digest": "sha256:a74c15ff80b1a54260409e4464e059b81dd1cb9cfa8a6525b5d2a47b7cccc3c2"
+    },
+    {
+      "name": "account_statement",
+      "title": "What this wallet has already paid, itemized",
+      "description": "One wallet's complete payment history with this server: every settled call, what it cost, which door it bought, and the on-chain hash that proves it — plus totals and a per-door breakdown. Use it when someone asks what they have spent here, whether a call was charged twice, or for an expense record. Each line settled from the caller's own wallet on a public chain, so every hash is independently verifiable without trusting this server. Free, keyless, read-only, and it stores nothing about anyone.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "The 0x… address that paid. The ADDRESS only, never a private key."
+          },
+          "limit": {
+            "type": "number",
+            "description": "Optional cap on payments returned (newest first)."
+          }
+        },
+        "required": [
+          "wallet"
+        ]
+      },
+      "digest": "sha256:ee63a25420604d18763c1eb033d6ae5c3a6be21f2c2ef7bd1db464aab08a48eb"
+    },
+    {
+      "name": "payment_preflight",
+      "title": "Can this wallet afford this call right now",
+      "description": "Reads a wallet's live USDC balance on Base and answers whether it covers one named door (or a given amount), with the exact shortfall if not and how many calls at that price the balance covers. Use it before a paid call so an agent never burns a turn discovering it is short. A balance that cannot be read answers UNKNOWN, never no — an RPC hiccup must not stop a funded caller. Read-only: it checks a public balance, holds nothing, and charges nothing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "The 0x… address that would pay. The ADDRESS only, never a private key."
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "A door name from payment_options, e.g. 'work-packet'. Prices the check from the live list."
+          },
+          "amountUsd": {
+            "type": "number",
+            "description": "Check against a plain dollar amount instead of a named door."
+          }
+        },
+        "required": [
+          "wallet"
+        ]
+      },
+      "digest": "sha256:c351145aaedb9ec4df7b734bd9a21bcdafe220f80eaeff4f8373700866128e51"
+    },
+    {
+      "name": "regen_forum_feed",
+      "title": "What's new on Vealth's Regen governance forum",
+      "description": "Poll-friendly activity log of new threads and replies on Vealth's self-hosted Regen Network governance forum — built because Regen's own forum sits behind an unpaid hosting bill. Each event carries the author's regen1 address and the bonded REGEN stake behind it, captured at post time, so an argument about a vote sits next to its weight. Pass the returned next_cursor back as `since` to page forward without re-listing what you already read. Free, keyless, read-only — posting needs a Regen wallet signature this tool never asks for; get the exact recipe from GET /regen/forum/signing-spec.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "type": "string",
+            "description": "Optional: only events tied to this Regen governance proposal number, e.g. '71'."
+          },
+          "author": {
+            "type": "string",
+            "description": "Optional: only events from this regen1… address."
+          },
+          "since": {
+            "type": "string",
+            "description": "Optional: a cursor a PRIOR call to this tool returned (next_cursor). Not a timestamp — pass it back verbatim to page forward."
+          },
+          "limit": {
+            "type": "number",
+            "description": "Max events, 1-200. Default 50."
+          }
+        }
+      },
+      "digest": "sha256:db736603f4a9402b87c54afb537974753680bff2bbca5b709291509720e73f07"
+    },
+    {
+      "name": "regen_governance_status",
+      "title": "Regen Network governance: what's open, and how one proposal stands",
+      "description": "Live-mirrored Regen Network (regen-1) governance: bonded stake, active validator count, and every proposal — decoded, with phase (deposit/voting/resolved) and tally. Omit proposalId for an overview of what is open right now; pass one to get that proposal's full deposit/voting/tally detail. Read from a periodically regenerated mirror straight off the public ledger and registry, not asserted on Vealth's own authority — the response states exactly when it was generated. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "type": "string",
+            "description": "Optional: one proposal number, e.g. '71'. Omit for the overview of everything open."
+          }
+        }
+      },
+      "digest": "sha256:019765da743abb2fc740dd109f2d65d48d04b1fd204bf2ccb6fdd75553d65c6d"
+    },
+    {
+      "name": "regen_address_lookup",
+      "title": "What a Regen address holds right now",
+      "description": "Live balance, bonded stake, unclaimed staking rewards, and REGEN locked in open governance deposits for any regen1… address — read directly from Regen's own public LCD API (the same one Vealth's browser explorer hits; no Vealth backend caches or alters it). Any figure that cannot be read answers so honestly rather than defaulting to zero, and the total is withheld until every figure is known. Free, keyless, read-only — this never asks for a private key, only the address.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "A regen1… bech32 address (not a 0x… Base address — Regen is a separate Cosmos chain)."
+          }
+        },
+        "required": [
+          "address"
+        ]
+      },
+      "digest": "sha256:fc95668ed09537ff498eb70a95f1773cc8fc91569174c9d747c325dd4d76cdfe"
+    },
+    {
+      "name": "regen_burn_tracker",
+      "title": "Regen Compute's real on-chain REGEN burn, verified",
+      "description": "Regen Compute (compute.regen.network, run by Regen Network Development PBC — unaffiliated with Vealth) burns 5% of net subscriber revenue as REGEN via MsgBurnRegen. This tool returns every burn transaction found on-chain by querying the public Regen LCD network-wide (no sender filter, so the single-wallet claim is itself verified, not assumed), the running total, cadence, and a reconciliation against the $REGEN Tokenomics DAO's own claimed weekly range. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "description": "Max recent burns to list, newest first. Default 10."
+          }
+        }
+      },
+      "digest": "sha256:55bc4cd05793e7a8b15ac6f21d16e77fbb6eab93a95cb38eb3d79038e5fa15d7"
+    },
+    {
+      "name": "regen_token_volume",
+      "title": "REGEN token trading volume, across every exchange it trades on",
+      "description": "How much of the $REGEN token itself changes hands — NOT Regen ecocredit retirement volume, a completely different market (use regen_burn_tracker or the commons page for that). Returns live price, 24h volume, market cap, a 7-day trend read off real daily history, a per-exchange/DEX breakdown of where that volume actually happens, and the peak/most-recent complete month from a year of monthly history (the human page at /regen/volume.html has a full daily/monthly chart toggle). Sourced from CoinGecko's own aggregation. Free, keyless, read-only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "digest": "sha256:1965e8fab508983d35dc54cef8ec3658158ec8c56a4d92f1fac8ce98403ef77a"
+    },
+    {
+      "name": "labor_unit",
+      "title": "What one hour of human work is worth, in dollars",
+      "description": "THE LABOR UNIT: one number, in US dollars per hour, for what an hour of ordinary human work is worth on this planet, and the yardstick every job on this board is priced against. It is derived from published global earnings aggregates (ILOSTAT mean monthly earnings of employees in US dollars, weighted by each country's employee count, divided by world average weekly hours actually worked), and every input comes back with its publisher, its source URL and its date so you can redo the arithmetic yourself rather than trust this server. Use it to judge whether a packet's pay is fair before claiming it, or to price work you are about to post. Dollars are the measure. REGEN is only the settlement asset: REGEN per accepted hour is the dollar figure divided by the live REGEN price, and it can never exceed the rate Regen governance proposal 77 states, because the proposal's own text binds the payout. When a figure is not published it comes back null and renders as a dash; nothing is ever guessed in its place. Free, keyless, read-only, moves no money.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "digest": "sha256:8a0d0d0597cd8da1c8ceaa68e4240060bf8ba2b0a4b645e7241cc29a532352d3"
+    },
+    {
+      "name": "credential_quote",
+      "title": "What a credential certificate would contain right now, and what it costs",
+      "description": "Price and preview a Vealth credential certificate BEFORE paying for one. Give a wallet for a work-record certificate (its settled packets, accepted proofs and banked credit) or a place for a standing certificate under The Vealth Standard. Returns the live price, exactly what the document would contain right now, and whether issuance would be REFUSED and why — a wallet with no settled work and no banked credit is refused for free, before any payment, because an empty certificate is unsellable. Payment buys the sealed, anchored artifact, never the achievement: every fact inside is already public and free to read at its own endpoint. Issuing is HTTP (POST /certificate/worker/<wallet> or POST /certificate/place); reading and verifying an issued certificate are free forever. This tool is free, keyless, read-only, and moves no money.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "0x wallet address, for a work-record certificate."
+          },
+          "place": {
+            "type": "string",
+            "description": "A city, address fragment, or venue name, for a place standing certificate."
+          }
+        }
+      },
+      "digest": "sha256:da5c9176ab307a21ea9d0450ae644f406ca4cbd49ce2517a6441f6cdcbf5cb49"
+    },
+    {
+      "name": "gmx_get_positions",
+      "title": "List open GMX perpetual positions",
+      "description": "Read all open perpetual positions for a wallet on GMX v2 (Arbitrum). Read-only, no signing needed, free.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "0x… Arbitrum wallet address to check."
+          }
+        },
+        "required": [
+          "wallet"
+        ]
+      },
+      "digest": "sha256:6294d34441f3d040a82469a9b984ad62ff906ad182342ce3a328fe1d3aff7404"
+    },
+    {
+      "name": "gmx_get_orders",
+      "title": "List open GMX pending orders",
+      "description": "Read all pending orders (limit, stop-loss, etc.) for a wallet on GMX v2 (Arbitrum). Read-only, no signing needed, free.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "0x… Arbitrum wallet address to check."
+          }
+        },
+        "required": [
+          "wallet"
+        ]
+      },
+      "digest": "sha256:cf428316bee1d39a871e70ad10f724671be162a6b99a1556490f3de7bf0dbe18"
+    },
+    {
+      "name": "gmx_get_prices",
+      "title": "Get current GMX market prices",
+      "description": "Fetch current mark prices for all tradeable assets on GMX v2 (Arbitrum). Read-only, no signing needed, free.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "digest": "sha256:7b9b544a25a34982c0774921f0f89a0de0a3077537d0233d638d5b1ad48a04e2"
+    },
+    {
+      "name": "prepare_gmx_order",
+      "title": "Prepare a GMX market-order transaction (non-custodial)",
+      "description": "Build an unsigned on-chain transaction to open a new perpetual position on GMX v2 (Arbitrum). Returns transaction fields ready for the caller to sign with their own wallet. This is NOT a message to sign — it is a full Ethereum transaction. Requires the caller to have approved the GMX Router for USDC collateral spending (a separate one-time approve() call).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "0x… Arbitrum wallet address (the order receiver — your wallet)."
+          },
+          "asset": {
+            "type": "string",
+            "description": "Asset symbol (e.g. 'WIF', 'ETH', 'BTC', 'SOL')."
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "long",
+              "short"
+            ],
+            "description": "Position direction."
+          },
+          "collateralUsd": {
+            "type": "number",
+            "description": "Collateral amount in USD (must be > 0 and ≤ $5)."
+          },
+          "leverage": {
+            "type": "number",
+            "description": "Leverage multiplier (1x to 10x)."
+          },
+          "workPacketId": {
+            "type": "string",
+            "description": "Optional. A vealth.net EWP work packet id (from find_work) to pledge this trade's UI fee toward. Moves no money now — records intent only. Funding still requires a separate, later, confirmed payment, exactly like any other funder."
+          }
+        },
+        "required": [
+          "wallet",
+          "asset",
+          "side",
+          "collateralUsd",
+          "leverage"
+        ]
+      },
+      "digest": "sha256:4975a5e012f9aa0b05d40a0007f5f0ab059670386fb4fac4ddfa464213a90064"
+    },
+    {
+      "name": "submit_gmx_order",
+      "title": "Submit a signed GMX order transaction",
+      "description": "Relay a signed Ethereum transaction to the Arbitrum network. The transaction must have been pre-signed by the caller using prepare_gmx_order output. This endpoint does NOT sign — it only broadcasts an already-signed transaction.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "signedRawTransaction": {
+            "type": "string",
+            "description": "0x-prefixed raw signed transaction hex (e.g., from ethers.Wallet.signTransaction() or ethers.Signer.sendTransaction().wait())."
+          }
+        },
+        "required": [
+          "signedRawTransaction"
+        ]
+      },
+      "digest": "sha256:d3dbf877bfa79be41c65063ba0674a2ce68e874cb4ad5f29bf18ca83bc3c7f80"
+    },
+    {
+      "name": "prepare_bridge",
+      "title": "Prepare a REGEN bridge transaction (non-custodial)",
+      "description": "Move REGEN between the Regen chain, Osmosis, Arbitrum and Base in ONE transaction the caller signs with their own wallet. Returns a live quote and the exact unsigned transaction; Skip Go's relayers carry every hop after the broadcast: no confirm step, nothing held by this server, free. Five routes: regen→arbitrum, regen→base and base→regen (axlREGEN through Axelar), plus regen→osmosis and osmosis→regen (a plain ICS-20 transfer over regen-1 channel-1 and osmosis-1 channel-8). This tool prepares that ICS-20 leg itself: zero toll, amount out equals amount in, one signed message, timeouts derived live by Skip, and no minimum send; on those two legs destination may be omitted, and the sender's own account re-encoded under the destination prefix is used (same key, same 20 bytes, no new wallet). Skip does now return a one-transaction route from Osmosis to Base, but it is a CosmWasm contract call rather than a plain ICS-20 transfer, and this tool prepares only ICS-20 transfers and Axelar sends, so it is not offered here; from Osmosis, route home first (osmosis→regen), then regen→base or regen→arbitrum from the regen1 address. Base USDC to REGEN and the reverse take two signed transactions and are not offered here either. Outbound sends from the Regen chain to Arbitrum or Base pay Axelar's flat per-transfer toll, which Axelar prices in dollars (about $0.19 to $0.23 measured across 2026-09-05 to 2026-09-08) and so floats in REGEN terms: measured between 94 and 175 REGEN across those days, on a transfer of any size, moving with both the REGEN price and the shape of the route Skip picks. It is quoted LIVE at call time and returned as quote.toll_regen. The response is authoritative; the figures in this text are approximate and there is no stable number to publish. On those Axelar routes send at least twelve times the live toll in one transfer (returned as quote.min_send_regen, which is null on the Osmosis legs because they have no minimum) and batch rather than dribble; a smaller send is refused with the live toll named. base→regen carries no REGEN toll: the prepared EVM transaction carries a small native ETH value instead, Axelar's fee as Skip quotes it (about $0.11 measured 2026-09-08, returned as sign_this.value and refused above $0.50), after one exact ERC-20 approval. Measured landing times with one key, every landing read from the destination chain on 2026-09-08: regen→osmosis under a minute, regen→base about 66 seconds, base→regen about 30 minutes because Axelar waits on Base finality before it approves an EVM to Cosmos call. After the broadcast, call bridge_status with the source chain and the transaction hash to follow it; a round trip through Base and back loses money at every size this tool prepares (the flat toll never crosses the small price spread), so move REGEN to where it is needed, never to trade the gap.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "from_chain": {
+            "type": "string",
+            "enum": [
+              "regen",
+              "base",
+              "arbitrum",
+              "osmosis"
+            ],
+            "description": "Chain the REGEN is on now."
+          },
+          "to_chain": {
+            "type": "string",
+            "enum": [
+              "regen",
+              "base",
+              "arbitrum",
+              "osmosis"
+            ],
+            "description": "Chain the REGEN should end up on."
+          },
+          "amount": {
+            "type": "string",
+            "description": "Amount in whole REGEN (e.g. \"5000\"). Same 6-decimal unit on every chain."
+          },
+          "sender": {
+            "type": "string",
+            "description": "The caller's OWN address on from_chain (regen1… for regen, osmo1… for osmosis, 0x… for base and arbitrum): the wallet that will sign."
+          },
+          "destination": {
+            "type": "string",
+            "description": "The caller's OWN address on to_chain that receives the funds. Required on the Arbitrum and Base routes, where no address can be derived from the sender's. Optional on regen→osmosis and osmosis→regen: when omitted, the sender's own account re-encoded under the destination prefix is used (same key, same 20 bytes, no new wallet)."
+          }
+        },
+        "required": [
+          "from_chain",
+          "to_chain",
+          "amount",
+          "sender"
+        ]
+      },
+      "digest": "sha256:83f8e547d92cdb53746323ab1e3040b35a05c201a92e00d5fdf0fd388b96545c"
+    },
+    {
+      "name": "bridge_status",
+      "title": "Follow a REGEN bridge transaction (keyless)",
+      "description": "Where a REGEN bridge transaction stands, from the hash the caller broadcast after prepare_bridge. Keyless, no wallet, nothing signed: this tool registers the hash with Skip Go's tracker (a status read before that registration is blank forever) and reads Skip's state, and for a transaction leaving Base or Arbitrum it also reads Axelar's own record, so a transfer waiting on Base finality shows as sent rather than as nothing. Returns landed true or false, the source states verbatim, one plain sentence saying what is happening, the measured landing time for that direction (regen→osmosis under a minute, regen→base about 66 seconds, base→regen about 30 minutes, all measured 2026-09-08 with one key) and how long to wait before asking again. Landed is only ever true when Skip reports STATE_COMPLETED_SUCCESS or Axelar reports the call executed; this tool never infers a landing from time passed.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "regen",
+              "base",
+              "arbitrum",
+              "osmosis"
+            ],
+            "description": "The chain the transaction was broadcast on (the from_chain given to prepare_bridge)."
+          },
+          "tx_hash": {
+            "type": "string",
+            "description": "The broadcast transaction hash: 0x plus 64 hex characters on base and arbitrum, 64 hex characters on regen and osmosis."
+          }
+        },
+        "required": [
+          "chain",
+          "tx_hash"
+        ]
+      },
+      "digest": "sha256:1cf7c37069e77998fd9f2008e073729b1397317fedaf1d649b5a7ea41ac2bd87"
+    }
+  ]
+}
