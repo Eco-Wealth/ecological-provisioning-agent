@@ -56,6 +56,12 @@ apps/demo-operator/index.html
 
 The demo is static and does not call live services.
 
+## Agent execution continuity
+
+Long-running agent work should survive model, device, transport, and compute interruptions without making the user the synchronization or DevOps layer.
+
+The portable runtime model is documented in [docs/agent-execution-continuity.md](docs/agent-execution-continuity.md). It separates durable task truth from replaceable execution attempts, defines typed blockers and `needs_user`, requires idempotent commands, preserves authority across failover, and treats unnecessary operator intervention as a reliability problem.
+
 ## Truth boundary
 
 The system may draft, structure, route, cite, validate, and propose.
