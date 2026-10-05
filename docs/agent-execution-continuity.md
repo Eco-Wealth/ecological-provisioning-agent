@@ -12,30 +12,9 @@ A model going offline, a laptop sleeping, a transport disconnecting, or a quota 
 
 ## Why this exists
 
-Agent products increasingly span:
-
-- chat clients;
-- local desktop executors;
-- cloud workers;
-- mobile controllers;
-- CLIs;
-- repositories;
-- tool servers;
-- external APIs;
-- finite compute budgets.
+Agent products increasingly span chat clients, local desktop executors, cloud workers, mobile controllers, CLIs, repositories, tool servers, external APIs, and finite compute budgets.
 
 When each surface maintains its own implicit state machine, users become the synchronization layer.
-
-That creates a poor failure pattern:
-
-```text
-agent finds a problem
--> reports it
--> user switches surface
--> user restarts/retries
--> user reconciles stale state
--> user decides whether the task is still alive
-```
 
 A better system absorbs ordinary runtime complexity and escalates only when human authority, money, credentials, irreversible action, or genuine judgment is required.
 
@@ -58,137 +37,37 @@ Event
 
 The durable outcome the user wants.
 
-```json
-{
-  "objective_id": "obj_...",
-  "title": "...",
-  "intent": "...",
-  "status": "active|paused|completed|cancelled"
-}
-```
-
 ### Task
 
 A bounded unit of work under an objective.
 
-```json
-{
-  "task_id": "task_...",
-  "objective_id": "obj_...",
-  "state": "planned|queued|executing|waiting|blocked|needs_approval|completed|verified|cancelled",
-  "blocker": null
-}
-```
-
 ### ExecutionAttempt
 
-One executor trying to perform the task.
-
-```json
-{
-  "execution_id": "exec_...",
-  "task_id": "task_...",
-  "executor": {
-    "kind": "agent|human|hybrid|robot",
-    "provider": "openai|anthropic|local|other",
-    "model": "optional",
-    "location": "local|cloud|field|other"
-  },
-  "state": "queued|executing|waiting|blocked|completed|abandoned",
-  "blocker": null,
-  "needs_user": false,
-  "artifacts": []
-}
-```
-
-The task must survive replacement of the execution attempt.
+One executor trying to perform the task. The task must survive replacement of the execution attempt.
 
 ### ExecutionLease
 
-A task may be assigned to one executor without making that executor the owner of the task.
-
-```json
-{
-  "execution_id": "exec_...",
-  "executor_id": "host_...",
-  "lease_state": "assigned|running|lost|released",
-  "heartbeat_at": "...",
-  "lease_expires_at": "..."
-}
-```
+An executor may hold a temporary lease without owning task identity.
 
 ### ResourceBudget
 
-Finite compute or other runtime resources should be explicit dependencies.
-
-```json
-{
-  "resource_id": "model_allowance",
-  "scope": "account",
-  "state": "available|low|exhausted",
-  "blocking_tasks": ["task_..."],
-  "remediation": [
-    {
-      "type": "reset",
-      "available": true,
-      "requires_confirmation": true
-    }
-  ]
-}
-```
+Finite compute or other runtime resources are explicit task dependencies rather than hidden client state.
 
 ### Approval
 
-Use one lifecycle for consequential transitions.
-
-```json
-{
-  "approval_id": "appr_...",
-  "task_id": "task_...",
-  "action": "consume_finite_resource",
-  "state": "pending|approved|denied|expired|consumed",
-  "risk_class": "resource|external_action|financial|deployment|identity"
-}
-```
+Consequential transitions use a durable approval lifecycle.
 
 ### Artifact
 
-Artifacts should attach directly to the task:
-
-- file;
-- patch;
-- commit;
-- pull request;
-- test result;
-- report;
-- screenshot;
-- receipt;
-- approval record.
-
-A reference to an artifact does not expand what it proves.
+Files, patches, commits, pull requests, tests, reports, screenshots, receipts, and approval records attach directly to the task without expanding what they prove.
 
 ### Event
 
-The runtime should be reconstructible from append-only events.
-
-```jsonl
-{"seq":1,"type":"task.created","task_id":"task_1"}
-{"seq":2,"type":"execution.assigned","execution_id":"exec_1","executor_id":"host_1"}
-{"seq":3,"type":"execution.started","execution_id":"exec_1"}
-{"seq":4,"type":"artifact.recorded","kind":"pull_request","ref":"#123"}
-{"seq":5,"type":"resource.exhausted","resource":"model_allowance"}
-{"seq":6,"type":"execution.blocked","reason":"compute_exhausted","needs_user":true}
-{"seq":7,"type":"approval.available","action":"consume_finite_resource"}
-{"seq":8,"type":"approval.approved","client":"mobile"}
-{"seq":9,"type":"resource.restored","resource":"model_allowance"}
-{"seq":10,"type":"execution.resumed","execution_id":"exec_1"}
-```
+The runtime is reconstructible from append-only events.
 
 ## Core invariants
 
-### 1. Execution failure is not work failure
-
-Keep these distinct:
+### Execution failure is not work failure
 
 ```text
 executor blocked != task failed
@@ -198,15 +77,13 @@ artifact exists != artifact verified
 payment exists != settlement
 ```
 
-### 2. Executor availability is not authority
+### Executor availability is not authority
 
-A provider becoming available does not grant permission to use it.
-
-A provider becoming unavailable does not automatically revoke the task.
+A provider becoming available does not grant permission to use it. A provider becoming unavailable does not automatically revoke the task.
 
 Any replacement executor must satisfy the same authority, privacy, cost, and capability constraints.
 
-### 3. The user is not the default recovery mechanism
+### The user is not the default recovery mechanism
 
 Safe recovery order:
 
@@ -224,29 +101,11 @@ Safe recovery order:
 
 A system problem does not automatically become a user task.
 
-### 4. "Needs user" is explicit
+### "Needs user" is explicit
 
-Every blocker should answer this directly.
+Every blocker should answer whether human intervention is genuinely required and why.
 
-```json
-{
-  "needs_user": false,
-  "reason": null
-}
-```
-
-or:
-
-```json
-{
-  "needs_user": true,
-  "reason": "approval_required",
-  "action": "consume_finite_resource",
-  "why_only_user_can_do_this": "explicit consent required"
-}
-```
-
-### 5. Blockers are typed
+### Blockers are typed
 
 Examples:
 
@@ -268,61 +127,23 @@ user_paused
 
 A typed blocker should map to a typed next action.
 
-### 6. Commands are idempotent
+### Commands are idempotent
 
-Send, stop, resume, retry, and approve should have durable IDs and idempotency keys.
-
-```json
-{
-  "command_id": "cmd_...",
-  "task_id": "task_...",
-  "type": "resume",
-  "idempotency_key": "...",
-  "accepted_at": "..."
-}
-```
+Send, stop, resume, retry, and approve should have durable command IDs and idempotency keys.
 
 Retries must not duplicate work, spending, approvals, or external actions.
 
-### 7. Context is portable
+### Context is portable
 
 Do not require the entire historical chat to continue execution.
 
-Use a typed context capsule:
-
-```json
-{
-  "task_id": "task_...",
-  "goal": "...",
-  "constraints": [],
-  "verified_facts": [],
-  "completed_steps": [],
-  "artifacts": [],
-  "blockers": [],
-  "pending_approvals": [],
-  "state_version": 1
-}
-```
+Use a typed context capsule carrying the goal, constraints, verified facts, completed steps, artifacts, blockers, approvals, and state version.
 
 Conversation history remains provenance, not the only operational memory.
 
-### 8. Authority does not widen on recovery
+### Authority does not widen on recovery
 
-A recovery policy can authorize safe operational actions without authorizing new consequences.
-
-```json
-{
-  "retry_transient": true,
-  "refresh_stale_state": true,
-  "reconnect_transport": true,
-  "rerun_idempotent_checks": true,
-  "switch_equivalent_executor": true,
-  "use_paid_compute": false,
-  "deploy": false,
-  "external_actions": false,
-  "move_money": false
-}
-```
+Recovery policy can authorize safe operational actions without authorizing new consequences.
 
 ## Provider portability
 
@@ -336,37 +157,17 @@ executor A unavailable
 -> continue same task_id
 ```
 
-The replacement executor should inherit:
-
-- goal;
-- constraints;
-- verified facts;
-- artifacts;
-- completed steps;
-- blockers;
-- pending approvals.
-
-It should not inherit hidden privilege.
+The replacement executor inherits no hidden privilege.
 
 ## Coordination performance
 
-Measure at least three different kinds of latency:
+Measure separately:
 
-### Interaction latency
+- interaction latency: user command -> durable acknowledgement;
+- coordination latency: accepted intent -> eligible executor starts useful work;
+- execution latency: executor start -> bounded output/artifact.
 
-User command -> durable acknowledgement.
-
-### Coordination latency
-
-Accepted intent -> eligible executor starts useful work.
-
-### Execution latency
-
-Executor start -> bounded output/artifact.
-
-A long-running task can feel reliable if interaction and coordination are fast and state is legible.
-
-A short task can feel broken if the user cannot tell whether it started.
+A long-running task can feel reliable if interaction and coordination are fast and state is legible. A short task can feel broken if the user cannot tell whether it started.
 
 ## Operator-friction metrics
 
