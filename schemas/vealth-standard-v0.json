@@ -197,6 +197,7 @@
         "ibhs_fortified_home_wind_mitigation",
         "wildfire_defensible_space_readiness",
         "home_defensible_space_zone1_maintenance",
+        "defensible_space_vegetation_stewardship",
         "lbc_energy_petal",
         "lbc_full_cert",
         "lfa_lbc_petal_practice",
@@ -349,8 +350,12 @@
         "home_water_sensory_baseline_audit",
         "household_lead_screen_certified_lab",
         "pfas_awareness_certified_testing_route",
+        "consumer_confidence_report_literacy",
+        "rainwater_harvest_stewardship_audit",
         "private_well_annual_screen",
+        "arsenic_private_well_certified_testing",
         "wellhead_source_protection_audit",
+        "septic_system_stewardship_audit",
         "data_center_water_stewardship",
         "solar_canal_and_water_shade",
         "water_draw_public_record_receipt",
@@ -558,6 +563,7 @@
         "vcs_vm0047_arr_carbon_mrv",
         "nrcs_soil_health",
         "isa_urban_forestry",
+        "mulch_irrigation_stewardship_audit",
         "ocean_conservancy_icc_data_card",
         "lbc_place_petal",
         "sdg15_life_on_land",
@@ -571,11 +577,13 @@
         "greenway_planning_design_guideline",
         "savory_eov_land_health_monitoring",
         "garden_soil_test_stewardship",
+        "garden_sanitation_crop_rotation_audit",
         "data_center_campus_habitat",
         "solar_ground_cover_habitat",
         "solar_agrivoltaic_grazing",
         "managed_recharge_and_capture",
-        "build_edge_living_ground"
+        "build_edge_living_ground",
+        "sudden_oak_death_monitoring"
       ]
     },
     {
@@ -653,7 +661,9 @@
         "medically_tailored_meal_with_company",
         "regenerative_food_procurement",
         "community_dinner_hosting",
-        "care_kitchen_service_readiness"
+        "care_kitchen_service_readiness",
+        "jobsite_recovery_shift_end_meal",
+        "jobsite_recovery_station_close_and_leftovers"
       ]
     },
     {
@@ -776,6 +786,7 @@
         "street_tree_inventory_itree_eco",
         "urban_tree_visual_health_check",
         "tree_decay_fungi_observation",
+        "fairy_ring_landscape_fungi_observation",
         "fungal_diversity_survey_documentation",
         "data_center_community_boundary",
         "data_center_community_compute",
@@ -842,8 +853,15 @@
         "five_domains_welfare_check",
         "laying_hen_feather_cover_audit",
         "small_ruminant_famacha_anemia",
+        "dairy_small_ruminant_scc_mastitis_screen",
         "bumble_bee_watch_photo_survey",
+        "native_bee_nesting_habitat_monitoring",
+        "household_insect_decline_pressure_audit",
         "hive_inspection_brood_health",
+        "bat_white_nose_syndrome_observation_referral",
+        "overwintering_loss_tracking",
+        "small_hive_beetle_wax_moth_monitoring",
+        "nosema_disease_sampling_referral",
         "monarch_larva_milkweed_monitoring",
         "pollinator_habitat_forage_audit",
         "varroa_mite_wash_monitoring",
@@ -882,7 +900,10 @@
         "chst_emergency_readiness",
         "chst_safety_program",
         "chst_safety_leadership",
-        "sts_crew_supervision"
+        "sts_crew_supervision",
+        "jobsite_recovery_station_set_up",
+        "jobsite_recovery_rest_and_rehydration",
+        "jobsite_heat_prevention_log"
       ]
     },
     {
@@ -891,6 +912,7 @@
       "ids": [
         "authoritative_indicator_reading",
         "public_standard_citation_integrity",
+        "mycorrhizal_claims_evidence_literacy_audit",
         "public_record_persistence",
         "open_data_place_metadata",
         "method_standard_conformance",
@@ -900,7 +922,8 @@
         "mrv_sourced_rollup",
         "mrv_sourced_carbon_quantification",
         "digital_provisioning_practice",
-        "golden_botanic_hydrologic_archetype"
+        "golden_botanic_hydrologic_archetype",
+        "jobsite_recovery_weekly_roll_up"
       ]
     },
     {
