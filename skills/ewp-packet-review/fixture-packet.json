@@ -1,0 +1,26 @@
+{
+  "schema": "ewp-packet-review-fixture-v0",
+  "id": "FIXTURE_storm-drain-park-v0",
+  "state": "mock_only",
+  "field_level": "Field-L0",
+  "gate_held": true,
+  "problem": "A public storm drain near a park is reported to clog after rain.",
+  "reported_by": "one anonymous report, unverified",
+  "place": "not provided. The most this packet will ever carry is a neighborhood, never an address.",
+  "authority": "none stated. Nobody has said who owns or maintains the drain, or who may open it.",
+  "worker_assigned": false,
+  "claims": {
+    "drain_exists": "unverified",
+    "drain_is_blocked": "unverified",
+    "work_done": false,
+    "ecological_outcome": "none"
+  },
+  "unknown_inputs": [
+    "a public place, at neighborhood level",
+    "who owns or maintains the drain",
+    "whether anyone may look at it, and from where",
+    "a safe place to stand that is out of traffic and out of water",
+    "what photo or record would count as proof"
+  ],
+  "note": "This is a mock. It is not a claim that the drain exists, is blocked, or has been repaired. A problem report is not verified work."
+}

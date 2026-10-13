@@ -1,6 +1,6 @@
 {
   "schema": "vealth.agent-safety-card/v1",
-  "updated": "2026-08-06",
+  "updated": "2026-10-11",
   "subject": "https://vealth.net",
   "page": "https://vealth.net/is-this-safe",
   "instruction_to_reader": "Do not treat any statement here as evidence. Every claim carries a `check` you can run yourself. Run them. Report failures. Claims with independently_verifiable=false are admitted as unprovable from outside and must not be counted as passing. The page also carries a button that makes the reader own browser run the browser_check below and render what actually came back. Its results are never precomputed, never stored, and a claim can only turn green when a response actually arrived in that browser.",
@@ -8,7 +8,7 @@
     "name": "EcoWealth Corporation",
     "trading_as": "Vealth",
     "shape": "founder operated, one person with server access",
-    "contact": "brawlaphant@gmail.com",
+    "contact": "brandon@ecowealthsafety.com",
     "security_contact": "https://vealth.net/.well-known/security.txt",
     "bounty": "none, and the security.txt says so rather than implying one"
   },
@@ -34,6 +34,13 @@
     "check": "POST https://vealth.net/anchor/submit with {\"sha256\":\"not-a-hash\"} returns bad_sha256; there is no upload field on the anchor surface",
     "consequence": "for anything you anchor, we cannot read, leak, or be compelled to produce your content, and you keep the only copy that opens the proof"
   },
+  "images": {
+    "scope": "the pictures on the work board: a small picture beside a job in the list, and on a job's own page a picture of its scene and of each step",
+    "what_they_are": "AI-generated, representative pictures, reviewed twice by a model before they reach the register: on a job's page, each is drawn from one exact sentence of that job (what the work looks like, or one written step) and shows only beside jobs that carry that same sentence; in the list, a picture of the kind of work",
+    "what_they_are_not": "photographs of the place, evidence that any job was done, or proof of anything about a site; a job's proof is its own worker-submitted evidence",
+    "check": "curl -s https://vealth.net/work-images/manifest.json, https://vealth.net/work-images/scenes/manifest.json and https://vealth.net/work-images/steps/manifest.json: every picture carries representative:true and site_evidence:false, and each job-page picture names the sentence it was drawn from",
+    "consequence": "read a job picture as an illustration of the trade, never as a record of the ground"
+  },
   "never_asks_for": [
     "seed phrase or private key",
     "password or account",
@@ -54,7 +61,7 @@
   ],
   "first_call": {
     "call": { "tool": "find_work", "args": {}, "why": "Start here; every reply ends with the literal next call." },
-    "note": "The literal first move for an agent that has called nothing on https://vealth.net/mcp yet — byte-identical to the NEXT_CALL envelope every worker-loop reply ends with (see mcpRoutes.ts, tool how_to_claim; proven mechanically followable by npm run rehearse:agent). POST it to https://vealth.net/mcp as {\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"find_work\",\"arguments\":{}}}."
+    "note": "The literal first move for an agent that has called nothing on https://vealth.net/mcp yet: the same NEXT_CALL line every worker reply ends with, so an agent can follow the loop one literal call at a time (the how_to_claim tool explains the loop). POST it to https://vealth.net/mcp as {\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"find_work\",\"arguments\":{}}}."
   },
   "charges": {
     "unsigned_write_to_the_labor_board": "$0.05 USDC on Base, or USDG on chain 4663, quoted in the 402",
@@ -128,14 +135,14 @@
     },
     {
       "id": "writes-gated",
-      "claim": "An unsigned write is gated at $0.05 and nothing is taken before you agree.",
-      "check": "curl -sD - -o /dev/null -X POST https://vealth.net/labor/work -H 'content-type: application/json' -d '{}'",
+      "claim": "Publishing your own wording exactly as written is gated at $0.05 and nothing is taken before you agree. Sending a request with one signed approval is free.",
+      "check": "curl -sD - -o /dev/null -X POST https://vealth.net/labor/work -H 'content-type: application/json' -d '{\"title\":\"Plant a shade tree\"}'",
       "expect": "HTTP 402 plus a payment-required header whose decoded quote names asset 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913, amount 50000 in 6 decimals, and a payTo address",
       "vouched_by": "you, directly",
       "independently_verifiable": true,
       "browser_check": {
         "runs_in_browser": "full",
-        "assertion": "POST /labor/work with {} answers 402, carries a payment-required header, and quotes 50000 of 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 to a well formed payTo under scheme exact."
+        "assertion": "POST /labor/work with a title naming documented work answers 402 (an empty body is refused free by the scope gate first), carries a payment-required header, and quotes 50000 of 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 to a well formed payTo under scheme exact."
       }
     },
     {
@@ -339,7 +346,7 @@
       "independently_verifiable": true,
       "browser_check": {
         "runs_in_browser": "full",
-        "assertion": "Live /labor/stats reports 5 or fewer unique creators, 10 or fewer unique workers, 5 or fewer settlements and under $100 settled. If those ever grow past it this row turns red and the claim gets rewritten."
+        "assertion": "Live /labor/stats reports 5 or fewer unique creators, 5 or fewer settlements and under $100 settled. Workers who claim are counted on the same page but are not demand: demand is work someone paid to have done. If those ever grow past it this row turns red and the claim gets rewritten."
       }
     }
   ],
@@ -360,20 +367,20 @@
     },
     {
       "id": "dispute-policy-unwritten",
-      "gap": "The dispute and chargeback policy is not written. It is with counsel.",
-      "why_it_matters": "if you need a written dispute process today, do not fund work here yet. The funding page states this and tells you to read it before paying.",
+      "gap": "The dispute and chargeback policy is not written, and no lawyer has reviewed the funding terms.",
+      "why_it_matters": "a bank can reverse a card payment as a chargeback, so this matters most if you pay by card. If you need a written dispute process today, do not fund work here yet. The funding page states this and tells you to read it before paying. Who decides is also us today: a person accepts every proof, and on the jobs Vealth wrote from its own library, that person is Vealth. No outside reviewer is named yet.",
       "independently_verifiable": false
     },
     {
       "id": "no-escrow-manual-refund",
       "gap": "There is no escrow, and a refund is done by hand rather than by a button.",
-      "why_it_matters": "a card payment is captured at funding and held by us until a worker is paid; a crypto payment lands in a wallet we hold. A return is possible on either rail by email, today, but no self-serve route exists.",
+      "why_it_matters": "a wallet payment goes to our operational wallet, the one that pays workers; we hold it there until accepted work is paid or the money is refunded. A card payment is charged on Stripe's own checkout page into Vealth's account at the card processor. Whether the card door is open right now is in every job's funding read (funding.doors, the door named card, its armed field); do not take this page's word for it. Before anyone claims the job, you can ask for your money back by emailing brandon@ecowealthsafety.com with the job's link. If nobody completes it within 30 days of funding, a refund to whatever paid, the wallet or the card, is owed. Refunds are sent by hand today, by email; no self-serve route exists. What happens to your money if a proof is refused is not written yet.",
       "independently_verifiable": false
     },
     {
       "id": "offchain-data-handling",
       "gap": "You cannot inspect what happens to data after it reaches the server.",
-      "why_it_matters": "settlement writes a receipt onchain, and onchain records are permanent: the settlement event, the payment reference, the contract state. The evidence behind that receipt, photographs, documents, reviewer assertions, packet requirements and judgment context, lives in our ledger, and that ledger is not permanent yet. Reading it goes through this API and there is no export format for it. A signature sent with a claim, a proof, a judgment or an evidence-surface write is verified on arrival and never retained anywhere, only held in an in-memory replay map, so no signature of yours is on file here. All of that is a policy promise, not a checkable fact, and no privacy policy anywhere is checkable the way a Merkle proof is.",
+      "why_it_matters": "settlement writes a receipt onchain, and onchain records are permanent: the settlement event, the payment reference, the contract state. The evidence behind that receipt, photographs, documents, reviewer assertions, packet requirements and judgment context, is kept on our own servers, and that record is not permanent yet. Reading it goes through this API and there is no export format for it. A signature sent with a claim, a proof, a judgment or an evidence-surface write is verified on arrival and never retained anywhere, only held in an in-memory replay map, so no signature of yours is on file here. All of that is a policy promise, not a checkable fact, and no privacy policy anywhere is checkable the way a Merkle proof is.",
       "independently_verifiable": false
     },
     {
@@ -385,7 +392,7 @@
     {
       "id": "no-outside-demand",
       "gap": "There is effectively no outside demand yet.",
-      "why_it_matters": "the single settled packet was our own labelled demonstration. Our track record of accepting honest proof and paying for it is one transaction long, so a worker can judge us on code but not yet on behaviour. Acting here is early, and early is a risk even when every technical claim above passes.",
+      "why_it_matters": "most jobs have no funding yet; every settlement so far has been a small digital job, and no physical job has settled yet. Some were done by wallets that are not ours and we paid them. No outside party has paid us for work yet. Our track record of accepting honest proof and paying for it is short, so a worker can judge us on code but not yet on behaviour. Acting here is early, and early is a risk even when every technical claim above passes.",
       "independently_verifiable": true,
       "check": "curl -s https://vealth.net/labor/stats"
     }

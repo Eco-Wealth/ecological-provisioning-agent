@@ -2,18 +2,31 @@
   "note": "Pinned public tool surface of vealth.net/mcp: every tool's name, title, description and inputSchema, exactly as tools/list serves them. Strangers' agents decide what to call from these strings, so they are pinned like an interface and may not change without this file changing in the SAME commit.",
   "law": "A description change is a trust change. Re-pin deliberately with `npm run check:mcp-tool-descriptions -- --write` and let the reviewer read the before/after text in the diff. Never re-pin to make a red lane green.",
   "regenerate_with": "npm run check:mcp-tool-descriptions -- --write",
-  "tool_count": 86,
-  "registry_digest": "sha256:da5b7bab6d43ed0310688200e32c72eb2debb0189ed3b16c6bdb892e2f7a5a93",
+  "tool_count": 106,
+  "registry_digest": "sha256:0f0fcfe26fbb30c4e3300d8cb45a2432750d14b0d2ed65b494ce1c89cd06c1b2",
   "tools": [
     {
       "name": "start_here",
       "title": "Start here — how an agent with no wallet and no money starts doing real work",
-      "description": "The door for an agent arriving with nothing. Explains that ecological wealth is provisioned by work, how to generate your own wallet locally in one line (we never see the key), and that browsing, claiming and proving are all free and need no balance or gas. Read-only, free, keyless — it performs nothing and asks for nothing.",
+      "description": "The door for an agent arriving with nothing. Leads with the front-door set: the few posted packets of physical work an ordinary person can take today (no licence, no special equipment, no supervisor), checked against the live board. Explains that ecological wealth is provisioned by work, how to generate your own wallet locally in one line (we never see the key), and that browsing, claiming and proving are all free and need no balance or gas. Read-only, free, keyless — it performs nothing and asks for nothing. Pass the person's place (near, or latitude and longitude) and the set is sorted nearest first; when none of it is near that place, it says so and points to find_work there.",
       "inputSchema": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "near": {
+            "type": "string",
+            "description": "Optional. The person's place in plain words, e.g. 'Echo Park, Los Angeles' or '90026'."
+          },
+          "latitude": {
+            "type": "number",
+            "description": "Optional. Only if you already have the person's real coordinates."
+          },
+          "longitude": {
+            "type": "number",
+            "description": "Optional. Only if you already have the person's real coordinates."
+          }
+        }
       },
-      "digest": "sha256:63ae53fd7939d21d33ae8a662f3dc8d95f126a3082f15ee9512df992f2a1a325"
+      "digest": "sha256:f7b5bac83cede6354056a79138eb8d726b5b8a1d6c41593e1a6ce5ece6697ce9"
     },
     {
       "name": "find_work",
@@ -28,7 +41,7 @@
           },
           "near": {
             "type": "string",
-            "description": "A place in plain words: a city, neighborhood, address, or ZIP, e.g. 'Los Angeles, CA' or '90036'. Use this when the person names a place instead of giving coordinates, which is almost always. Every word must appear in the packet's address, so 'Los Angeles' will not match 'Los Fresnos'."
+            "description": "A place in plain words: a city, neighborhood, address, or ZIP, e.g. 'Los Angeles, CA' or '90036'. Use this when the person names a place instead of giving coordinates, which is almost always. The board finds the place from the open jobs whose address names every word (so 'Los Angeles' never matches 'Los Fresnos'), then returns the jobs around it, nearest first."
           },
           "latitude": {
             "type": "number",
@@ -59,6 +72,10 @@
             "type": "boolean",
             "description": "true = only work doable from anywhere (digital/self-verifying — what an agent with no field presence can complete); false = only placed field work. Omit for both."
           },
+          "flag": {
+            "type": "string",
+            "description": "One posting flag, exact match, e.g. vsh_eligible — the packets that carry Regen Network proposal 77's terms (accepted hours pay REGEN, never a USD conversion). Omit for every flag."
+          },
           "limit": {
             "type": "number",
             "description": "Max results per page, 1-25. Default 10."
@@ -69,7 +86,7 @@
           }
         }
       },
-      "digest": "sha256:4aa777d426c71062f25bc6f904b755027fe4696db0f6aa6b6b6e4001874e89d7"
+      "digest": "sha256:2b7c8f97be7190fadae5031dedbda0230c49dda7d870367d63fcf02e1db8189d"
     },
     {
       "name": "get_work_packet",
@@ -117,6 +134,32 @@
           "targetUrl": {
             "type": "string",
             "description": "Self-verifying TEMPLATE packets only: YOUR OWN https origin (e.g. https://example.com). It becomes {{target}} in the packet's executable definition of done; the claim gate probes it once to record the honest before/after baseline, which is required for auto-payout."
+          },
+          "attestAtLeast18": {
+            "type": "boolean",
+            "description": "Physical claims only. Set true ONLY after the human caller explicitly affirms: I am at least 18 years old. prepare_claim will refuse to create a signable claim when this statement is required and has not been affirmed."
+          },
+          "attestSafetyRead": {
+            "type": "boolean",
+            "description": "Hazard-bearing physical claims only. Set true ONLY after the human caller has actually read and affirms the exact packet safety / stop-work text that prepare_claim surfaces. Never infer or auto-fill this affirmation."
+          },
+          "crew": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ref"
+              ]
+            },
+            "description": "Optional, for a MANAGER claiming for a crew: the people who will do the work, 1 to 25 of {\"ref\":\"amina\",\"label\":\"Amina\"}. A ref is your own handle for the person (2 to 40 lowercase letters, digits or hyphens), a label an optional short name to call out; never an identity (no legal name, phone or email). This wallet stays the worker of record: it signs, hands in the proof and is paid. The crew rides inside the signed body; a bad crew is refused before any message to sign."
           }
         },
         "required": [
@@ -124,7 +167,7 @@
           "workerWallet"
         ]
       },
-      "digest": "sha256:749902513eab1dbd6c1eb27ed369ad2114a098c3c4f7f7eddde1debae67ba2da"
+      "digest": "sha256:6b11b4025b7b0d939076a9aaaea38b42b56a76666b2be3f54b45128ea8d819cc"
     },
     {
       "name": "submit_claim",
@@ -772,20 +815,28 @@
     {
       "name": "hour_card",
       "title": "The hour card for a packet",
-      "description": "The ONE document to read to a person before they start: what the place is and the circle every GPS fix must land inside, what to bring and what the safety notes say, the method steps in order, the proof to hand in as a checklist, what the land gets, what the worker gets and whether the pay is funded or only proposed, exactly what the record will hold about them, and the tool calls in order. Free, keyless, no wallet needed. The packet's own words are carried verbatim and never shortened. Read it to them in order rather than summarising it: the order is the order the hour runs in.",
+      "description": "The ONE document to read to a person before they start: what the place is and the circle every GPS fix must land inside, what to bring and what the safety notes say, the method steps in order, the proof to hand in as a checklist, what the land gets, what the worker gets and whether the pay is funded or only proposed, exactly what the record will hold about them, and the tool calls in order. Free, keyless, no wallet needed. The packet's own words are carried verbatim and never shortened. Read it to them in order rather than summarising it: the order is the order the hour runs in. Optionally in Swahili (lang: \"sw\"): the board's own sentences translate from a fixed dictionary, and the packet's own words translate only where a translation exists for that packet, tagged \"(Kiingereza)\" and counted in `coverage` where it does not; a safety-critical line always carries its English source on its own line too.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "workId": {
             "type": "string",
             "description": "The packet id, from find_work or place_status."
+          },
+          "lang": {
+            "type": "string",
+            "enum": [
+              "en",
+              "sw"
+            ],
+            "description": "Optional, defaults to \"en\". \"sw\" reads the card in Swahili."
           }
         },
         "required": [
           "workId"
         ]
       },
-      "digest": "sha256:8ac398574756095848e08ec3422f93e1f488a59fc0e0e243bb85dab030953d2c"
+      "digest": "sha256:e7901782e14223df16bd04865dcae75e04cae1f435abaea23f4586d584fea2c7"
     },
     {
       "name": "my_hours",
@@ -804,6 +855,158 @@
         ]
       },
       "digest": "sha256:bb668c2a65f29e8662abcb5d3d5a9464f0e41bee66d7d7ea7c788639517fa935"
+    },
+    {
+      "name": "my_money",
+      "title": "A person's whole money picture, in one read",
+      "description": "Everything one wallet was paid, is owed as a receipt, is only offered, and can do next, in a single free keyless read: dollars that settled, every OTHER token that settled and in what amount, open work receipts, token offers still standing on packets they took (each with the token's own risk label), their hours, what the Regen #77 payout ledger recorded for them, and exactly three doors. IT IS A BOARD-SIDE RECORD, NOT A CHAIN BALANCE: every figure is what this board itself recorded, no chain is read here, and a wallet's real holdings are whatever the chain says. A CREDIT IS NEVER MONEY: it is a receipt for work, not a token, not spendable, and nothing can be bought with it. The board prices no token, so a token amount carries no dollar value. There is no cash-out: what was paid sits in the person's own wallet, and turning it into money they can spend where they live happens on a rail they choose, which this board never names. Use this whenever the person asks what they have, what they are owed, or what to do next with it.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workerWallet": {
+            "type": "string",
+            "description": "The 0x… address to read. Address only, never a private key."
+          },
+          "lang": {
+            "type": "string",
+            "enum": [
+              "en",
+              "sw"
+            ],
+            "description": "The language of the FRAME: the block labels, the door sentences and the honesty lines. Numbers, wallets, token symbols and packet ids never change. 'sw' is authored Kiswahili. Default 'en'."
+          }
+        },
+        "required": [
+          "workerWallet"
+        ]
+      },
+      "digest": "sha256:08f952f2df3966932f8db0b69839e7431d3bde6631ef311d4b5dae3227fd586c"
+    },
+    {
+      "name": "day_card",
+      "title": "Today's timed list for one place and one person",
+      "description": "Answers \"what do I do here today\": for one place and one wallet (or a named crew), today's list of work in order, in blocks of 30 minutes, within the hours the person says they have. It is compiled from what already exists: the place's Standing and which of its conditions are due to be measured again by their own cadence, the open claimable packets at that place, and any packet the wallet already holds and has not proven. A due condition's measurement packet comes first, then what the wallet holds, then the rest by size. A due condition with no packet to serve it is named as a gap, never invented, and a place with nothing open gets an honest empty card. Free, keyless, read-only. IT ORDERS EXISTING WORK AND NEVER POSTS, ASSIGNS OR PAYS: it schedules no one, a packet is never split, and the person still reads the hour card and claims for themselves. Sizes are the top of each packet's own stated time, or an assumed hour where it states none; no travel is counted. A crew card splits whole packets across the named members by hours and is a suggestion the manager may change.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "place": {
+            "type": "string",
+            "description": "The place: an address or venue as the board spells it, a place id, or \"lat,lng\" for the 0.35 km cluster around a point."
+          },
+          "wallet": {
+            "type": "string",
+            "description": "The 0x address the card is for (the manager, for a crew). Address only, never a private key."
+          },
+          "hours": {
+            "type": "number",
+            "description": "Hours the person has today, from 0.5 to 16. Defaults to 8."
+          },
+          "crew": {
+            "type": "string",
+            "description": "Optional managed crew as a comma list of member handles, each optionally with its own hours, e.g. \"amina:6,joseph:4\". Handles are lowercase letters, digits and hyphens."
+          }
+        },
+        "required": [
+          "place",
+          "wallet"
+        ]
+      },
+      "digest": "sha256:b5b4d150a5d6d740d5b19e86c2046d14eff03451f5333aefc4463fd6e6bf1472"
+    },
+    {
+      "name": "prepare_request",
+      "title": "Ask for real work at a place (prepare signed request)",
+      "description": "Prepare an attributable request for an existing work packet, a canonical definition, or a specific objective. Unlike posting a new packet, this asks the existing /labor/request bridge to resolve the need to one governed packet or an explicit blocker. Your own wallet signs the exact MESSAGE_TO_SIGN locally; never provide a private key. Set requesterKind=agent only when an agent is the genuine requester; do not relabel a human request as agent demand. Optional lat/lng must come explicitly from an entitled caller, never inferred from device or host location. A request does NOT fund a job, hire anyone, grant site access, or certify an ecological outcome. It is free when the signed waiver lane is enabled. Check the real gate's response.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "requesterWallet": {
+            "type": "string",
+            "description": "0x address the requester controls and will sign with. Never submit a private key."
+          },
+          "requesterKind": {
+            "type": "string",
+            "enum": [
+              "wallet",
+              "org",
+              "agent",
+              "beneficiary",
+              "place_steward"
+            ],
+            "description": "Who actually requests the work. Use agent only for true agent-originated demand."
+          },
+          "workId": {
+            "type": "string",
+            "description": "Request an existing posted packet by its workId. Mutually exclusive with definitionId and objective."
+          },
+          "definitionId": {
+            "type": "string",
+            "description": "Request existing documented work that may not have a posting yet. Mutually exclusive with workId and objective."
+          },
+          "objective": {
+            "type": "string",
+            "description": "Describe the needed outcome in 5-300 characters. Mutually exclusive with workId and definitionId."
+          },
+          "lat": {
+            "type": "number",
+            "description": "Optional real latitude from the requester, never inferred; give with lng to locate the objective."
+          },
+          "lng": {
+            "type": "number",
+            "description": "Optional real longitude from the requester, never inferred; give with lat."
+          },
+          "note": {
+            "type": "string",
+            "description": "Optional public context, at most 280 characters. No secrets, names or contact details."
+          }
+        },
+        "required": [
+          "requesterWallet",
+          "requesterKind"
+        ]
+      },
+      "digest": "sha256:e9fb11c1172f06fd385a26e2fa21802fd3fae5a744e5d93b1c595e81556f509b"
+    },
+    {
+      "name": "submit_request",
+      "title": "Submit the request signed by its own requester",
+      "description": "Relay BODY_JSON from prepare_request, unchanged, with the caller's personal_sign signature over MESSAGE_TO_SIGN to the existing /labor/request gate. Never hold or sign a key or send payment. The gate validates wallet ownership and either records a demand request, resolves it to an existing or newly posted governed packet, or returns a blocker. A request is not a purchase order, funding commitment, employment agreement, permission to work, or verified outcome. If a relay times out, first read existing requests for that wallet rather than blindly submitting again.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON from prepare_request, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The caller's 0x personal_sign signature over MESSAGE_TO_SIGN. Never the key."
+          }
+        },
+        "required": [
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:fcc1199870debb06b8f7dbcbd33bb54c4e6e523c9a328d74ecf9a04e6c9fcdac"
+    },
+    {
+      "name": "request_status",
+      "title": "Read the recorded need, its bridge result and what to do next",
+      "description": "Read one public signed request by its id from the existing /labor/requests door, including the request's current resolution and existing next-action projection. This is a read, not a new request, a funding event or proof of completion. If a work packet has been linked, use funding_quote to read whether it is actually fundable. A missing, blocked or still-open request is not a promise of service.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "description": "The request.id returned by submit_request (e.g. REQ_...). Public read, no signature required."
+          }
+        },
+        "required": [
+          "requestId"
+        ]
+      },
+      "digest": "sha256:4714669aeeb846fe8effb8c5a61e06d12c204d3d6169fab633a02ae7290af12d"
     },
     {
       "name": "prepare_accept_hours",
@@ -870,9 +1073,169 @@
       "digest": "sha256:6d59e2831abf623c604970f3e34b09e3f0b6a66bfa5ec6074f3f0879f4519a52"
     },
     {
+      "name": "prepare_outcome_bid",
+      "title": "Bid one price for one rung at one place (step 1 of 2)",
+      "description": "Offer ONE price to move ONE condition of ONE place up ONE rung of the Vealth Standard (Unread, Read, Tended, Kept, Whole), over open packets at that place that serve that condition (find_work near the place; place_standing gives each condition's rung). Name every packet with its share of the price; the shares must add up exactly. Name how you expect to be paid: usdc (the board's USDC rail on Base), token (your group's ERC-20 on Base 8453 or Robinhood Chain 4663) or work_credit. FREE: a signed offer, no fee, no gas, NO money moves and none is held. The packets' creator decides; accepting holds the packets for you and each is then claimed at its share through the same admission every claim passes. A person accepts every proof; whether the rung was reached is read from the Standing, never from you. Every problem is named before you sign. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the bidder wallet's personal_sign, then call submit_outcome_bid within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "bidderWallet": {
+            "type": "string",
+            "description": "The 0x address that will sign, hold the claims and be paid. Address only, never a key."
+          },
+          "place": {
+            "type": "string",
+            "description": "The place: a placeId (plc_...), an address, or a venue|city reference."
+          },
+          "condition": {
+            "type": "string",
+            "description": "The Standard's condition id, for example the_ground_is_alive (place_standing lists them)."
+          },
+          "targetRung": {
+            "type": "string",
+            "enum": [
+              "Read",
+              "Tended",
+              "Kept",
+              "Whole"
+            ],
+            "description": "The rung you will move the condition to: exactly one above where it reads now."
+          },
+          "priceUsd": {
+            "type": "number",
+            "description": "Your one price in USD, in whole cents."
+          },
+          "packets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "workId": {
+                  "type": "string"
+                },
+                "shareUsd": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "workId",
+                "shareUsd"
+              ]
+            },
+            "description": "The open packets you will use, each with its share of the price. At most 25."
+          },
+          "paymentTerms": {
+            "type": "object",
+            "properties": {
+              "rail": {
+                "type": "string",
+                "enum": [
+                  "usdc",
+                  "token",
+                  "work_credit"
+                ]
+              },
+              "chainId": {
+                "type": "number",
+                "enum": [
+                  8453,
+                  4663
+                ]
+              },
+              "token": {
+                "type": "string",
+                "description": "The ERC-20 contract, for the token rail only."
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "rail"
+            ],
+            "description": "How you expect to be paid. A declaration only: money moves on the existing rails, never through this bid."
+          },
+          "crew": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Optional: the people who will do the hours, as { ref, label? } (the managed account)."
+          },
+          "holdDays": {
+            "type": "number",
+            "description": "Optional: how many days, 1 to 90, the packets stay held for you once accepted. Default 30."
+          },
+          "bidderKind": {
+            "type": "string",
+            "enum": [
+              "human",
+              "agent"
+            ],
+            "description": "Self-declared attribution. Defaults to agent."
+          },
+          "note": {
+            "type": "string",
+            "description": "Optional, up to 500 characters."
+          }
+        },
+        "required": [
+          "bidderWallet",
+          "place",
+          "condition",
+          "targetRung",
+          "priceUsd",
+          "packets",
+          "paymentTerms"
+        ]
+      },
+      "digest": "sha256:38efff617298e6db670fd85b23851fc747ca0a954b6cd759b5894ed7bc239402"
+    },
+    {
+      "name": "submit_outcome_bid",
+      "title": "Submit the signed outcome bid (step 2 of 2)",
+      "description": "Complete the outcome bid: pass the BODY_JSON from prepare_outcome_bid UNCHANGED and the signature your wallet produced over MESSAGE_TO_SIGN. Relays to POST /labor/outcome-bids, the same public door any HTTP client uses; this server holds no keys and no funds. Free with a valid signature. Returns the recorded bid; the packets' creator accepts it or lets it lapse, and outcome_bid_status shows which.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_outcome_bid, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:f106695ed3ae292951e78c9d8f9536df29649abcf723d359a2aca3671f00455b"
+    },
+    {
+      "name": "outcome_bid_status",
+      "title": "Read an outcome bid's status",
+      "description": "Where an outcome bid stands, recomputed this moment: offered, accepted, working, hold lapsed, settled, or rung reached; every named packet's real state (open, claimed, proved, accepted by a person, settled, or claimed outside the bid); and the condition's rung at the place when the bid was made and now, read from the Standing. Free and keyless. Ends with the literal next call.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "outcomeBidId": {
+            "type": "string",
+            "description": "The OBID_ id from submit_outcome_bid."
+          }
+        },
+        "required": [
+          "outcomeBidId"
+        ]
+      },
+      "digest": "sha256:6ed50567bd57f7af4a1c5592f08a891eee6f457b80d3050ced55faf2994e412d"
+    },
+    {
       "name": "prepare_post_work",
       "title": "Post your own work packet (step 1 of 2)",
-      "description": "Put work YOU define on the public board — your place, your problem, your terms. Pass the creator wallet, a title, what needs doing, where, and the proposed pay. Returns MESSAGE_TO_SIGN (proving the creator wallet is yours) and BODY_JSON. Posting is a board WRITE: it costs $0.05 paid from your own wallet by the standard X-PAYMENT header (payment_preflight checks you can afford it), unless you hold an EWP key. The pay you propose stays PROPOSED until someone funds it — approved proof on an unfunded packet earns provable credit rather than cash, and the packet says which before anyone claims. Sign MESSAGE_TO_SIGN with the creator wallet's personal_sign, then call submit_post_work within 5 minutes. The board carries only work with a home in the Vealth Standard and a documented method: a post that names neither is refused before any charge, and the refusal lists the nearest documented standards; pass one back as `standard`.",
+      "description": "Put work YOU define on the public board — your place, your problem, your terms. Pass the creator wallet, a title, what needs doing, where, and the proposed pay. Returns MESSAGE_TO_SIGN (proving the creator wallet is yours) and BODY_JSON. Posting is a board WRITE: it costs $0.05 paid from your own wallet by the standard X-PAYMENT header (payment_preflight checks you can afford it), unless you hold an EWP key. The pay you propose stays PROPOSED until someone funds it — approved proof on an unfunded packet earns provable credit rather than cash, and the packet says which before anyone claims. Sign MESSAGE_TO_SIGN with the creator wallet's personal_sign, then call submit_post_work within 5 minutes. The board carries only work with a home in the Vealth Standard and a documented method: a post that names neither is refused before any charge, and the refusal lists the nearest documented standards; pass one back as `standard`. Say who can do it (skillLevel; omitted, it posts as entry), its hazards (safetyNotes), its proof items (proofRequirements) and any permit or licensed trade it needs (flags).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -915,6 +1278,33 @@
           "workTypeLabel": {
             "type": "string",
             "description": "Optional. A documented work type (snake_case) when you know the board's own name for the work."
+          },
+          "skillLevel": {
+            "type": "string",
+            "enum": [
+              "entry",
+              "intermediate",
+              "advanced"
+            ],
+            "description": "Optional. Who can do this work: entry (a newcomer, safely, from the text alone), intermediate or advanced. Omitted, it posts as entry and the reply says so; the board's entry-level filter reads it, so never leave skilled work at the default."
+          },
+          "safetyNotes": {
+            "type": "string",
+            "description": "Optional. The hazards and stop-work rules a worker must read before starting, at most 600 characters. A packet with safety notes asks every claimer to affirm they are 18 or over and have read this exact text."
+          },
+          "proofRequirements": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional. The proof items, one line each (at most 20, 600 characters each), e.g. 'photo of the tree beside a measuring stick'."
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional authority flags, the two the claim gate reads and no others: permit-required when the work needs a permit, regulated when it needs a licensed trade (licensed electrician, plumber or contractor, asbestos or lead abatement). The board records the need and keeps such work closed to claims while regulated claims are closed; never leave a flag off to make work claimable."
           }
         },
         "required": [
@@ -925,7 +1315,7 @@
           "proposedPayUsd"
         ]
       },
-      "digest": "sha256:f120bd5567798b88dfe2ba82d9ed9c3ff3271c89aae02436a927e7d0e976e7d6"
+      "digest": "sha256:bf83d48554c263a119e5dba32c113f6ba849d8ea01cae53b576963f6a5cee204"
     },
     {
       "name": "submit_post_work",
@@ -975,7 +1365,7 @@
           },
           "proofs": {
             "type": "array",
-            "description": "1-20 proof items, e.g. {\"type\":\"photo\",\"uri\":\"https://…\",\"capturedAt\":\"<ISO>\",\"lat\":…,\"lng\":…}. The packet's proof line (get_work_packet) says exactly what it needs.",
+            "description": "1-20 proof items. A photo goes in BY REFERENCE: {\"type\":\"photo\",\"upload\":\"sha256:<hex>\",\"step\":1,\"capturedAt\":\"<ISO>\"}, where the reference is what `node vealth-agent.mjs proof-photo <workId> <claimId> <photo files>` printed on the person's own machine; the photo bytes never pass through this conversation. A small file may still go inline as {\"type\":\"photo\",\"data\":\"<base64>\"}. Text notes are {\"type\":\"text\",\"data\":\"…\"}. The packet's proof line (get_work_packet) says exactly what it needs.",
             "items": {
               "type": "object"
             }
@@ -999,6 +1389,27 @@
           "counts": {
             "type": "object",
             "description": "Optional: what the job asked to be counted, in the packet's own units, as plain numbers — {\"metres_cleared\": 120, \"blockages_removed\": 4, \"check_dams_built\": 3}. Lower_snake_case names, at most 40 of them. Recorded with the proof; it decides nothing on its own."
+          },
+          "crew": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "hoursClaimed": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "ref"
+              ]
+            },
+            "description": "Optional, for a manager handing in proof for a crew: the people who did the work, 1 to 25 of {\"ref\":\"amina\",\"hoursClaimed\":2}, refs as on the claim. Either every person states hoursClaimed or none does; stated hours add up to the proof's hoursClaimed (omit that and their sum becomes it). The human who accepts decides the accepted total, split back across the crew in proportion (equally with no per-person hours). Omit crew on a managed claim and the claim's crew carries over."
           }
         },
         "required": [
@@ -1008,7 +1419,7 @@
           "proofs"
         ]
       },
-      "digest": "sha256:118c94665cba5244ed485672958cdc35e037b8ec1b8b17ee140cd9d6b082a1a0"
+      "digest": "sha256:8b989085881dd309f4d9b3db8d18267a3173404a36e89e790cf13b2ee30aa47c"
     },
     {
       "name": "submit_proof",
@@ -1037,6 +1448,89 @@
         ]
       },
       "digest": "sha256:9f9abc46f0f3c87541d22f80b0cb1eaafeaa937fd41068d59140e34d4549f2ef"
+    },
+    {
+      "name": "prepare_physical_proof",
+      "title": "Record the physical proof for review (step 1 of 2)",
+      "description": "After submit_proof has handed in your photos, record them on the physical proof rail so a human can review them against the packet's checklist. Pass workId, claimId and your wallet. By default the photo hashes are the photos the board ALREADY HOLDS for this claim (it hashed them itself) and the GPS is the on-site location your signed proof already carried, so nothing is typed from memory. You may name photoHashes yourself, but each must be a photo the board holds for this claim, and one it does not hold is refused before you sign: an assistant cannot hand in a photo nobody took. Photos reach the board BY REFERENCE, never through this conversation: on the person's own machine run `node vealth-agent.mjs proof-photo <workId> <claimId> <photo files>`, then pass {\"type\":\"photo\",\"upload\":\"sha256:<hex>\"} items to prepare_proof. FREE when signed. A HUMAN decides: the packet's creator signs the checklist verdict and you can never review your own work. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the claiming wallet, then call submit_physical_proof within 5 minutes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id."
+          },
+          "claimId": {
+            "type": "string",
+            "description": "Your claim on it, from submit_claim or my_work."
+          },
+          "workerWallet": {
+            "type": "string",
+            "description": "The same 0x address that claimed. Address only, never a private key."
+          },
+          "photoHashes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional, 1 to 12 SHA-256 hex hashes of photo FILES the board holds for this claim (what proof-photo printed). Leave it out to use every photo the board holds for this claim."
+          },
+          "gps": {
+            "type": "object",
+            "description": "Optional {lat, lng} captured ON SITE. Defaults to the on-site GPS your signed proof already carried.",
+            "properties": {
+              "lat": {
+                "type": "number"
+              },
+              "lng": {
+                "type": "number"
+              }
+            }
+          },
+          "capturedAt": {
+            "type": "string",
+            "description": "Optional ISO time the photos were taken. Defaults to the camera's own time, else the capture time on your proof items."
+          },
+          "revisesProofId": {
+            "type": "string",
+            "description": "Only when answering a needs-more verdict: the id of the physical proof that asked for more evidence."
+          }
+        },
+        "required": [
+          "workId",
+          "claimId",
+          "workerWallet"
+        ]
+      },
+      "digest": "sha256:57bf776395d1a320ed4bc222dea732643e3d9196627fcd51d4316bdef8fc4263"
+    },
+    {
+      "name": "submit_physical_proof",
+      "title": "Submit the signed physical proof (step 2 of 2)",
+      "description": "Relay the signed physical proof to the same public door any HTTP client uses (POST /labor/work/:workId/physical-proof): pass workId, the BODY_JSON from prepare_physical_proof UNCHANGED, and the signature over MESSAGE_TO_SIGN. FREE with a valid signature from the claiming wallet. It records the photo hashes and the on-site GPS against the packet's 350 m place; a far GPS is flagged for the human, never auto-rejected. NOBODY IS PAID by this call and nothing is accepted: the packet's creator signs the verdict, never the worker.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id, the same one prepare_physical_proof was given."
+          },
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_physical_proof, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "workId",
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:adc4bf2b04385cc51f09eef9b92cf8eb01e2f2a51b5dc1c394af166c2d567ebe"
     },
     {
       "name": "work_status",
@@ -1529,7 +2023,7 @@
     {
       "name": "worker_titles",
       "title": "The titles and credentials one wallet declares, with status and evidence",
-      "description": "The Vealth titles register for one wallet: every title the worker declared on their own signature (CHST, OSHA 30, CPR, a guard card, anything), each with a status derived from the worker's OWN declared dates (current, expired, unknown_expiry), a verify pointer to the ISSUER'S record (we carry the link, we never fetch it), board evidence in that title's scope (on-chain-confirmed settlements and reviews the wallet accepted), and the declaration's anchor hash. Self-declared and shown as such; nothing here gates a claim. Public mirror: https://vealth.net/labor/worker/<wallet>/titles. Free, keyless, read-only.",
+      "description": "The Vealth titles register for one wallet: every title the worker declared on their own signature (CHST, OSHA 30, CPR, a guard card, anything), each with a status derived from the worker's OWN declared dates (current, expired, unknown_expiry), a verify pointer to the ISSUER'S record (we carry the link, we never fetch it), board evidence in that title's scope (on-chain-confirmed settlements and reviews the wallet accepted), and the declaration's anchor hash. Self-declared and shown as such; nothing here gates a claim or makes hiring, employment, qualification, or fitness decisions for an employer. Public mirror: https://vealth.net/labor/worker/<wallet>/titles. Free, keyless, read-only.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1542,12 +2036,12 @@
           "wallet"
         ]
       },
-      "digest": "sha256:f1f4bb1d1f9cd30ab66aebcae4ee995f053103a2f94d19514ef2ca39ac286788"
+      "digest": "sha256:c6b4639e7e3af53fcb72f0745478012eac1524d85cdc150d2467dd03628347ae"
     },
     {
       "name": "compare_titles",
       "title": "Lay a wallet's titles beside a job's requirements, six words, human decides",
-      "description": "Machine comparison, human decision. Give a wallet and the requirements of a job or project; each requirement comes back as exactly one of six words: verified_match (declared, current, and on-chain-confirmed board work in scope), verified_mismatch (the record contradicts the requirement), supported (declared, nothing contradicts it, no board work yet), unknown (the record does not say), expired (declared expiry passed), human_judgment_required (a human reads it: years of experience, free text). The reply never says qualified and never decides; it carries a receipt hash the decider can anchor for free. Public mirror: https://vealth.net/labor/worker/<wallet>/compare?require=CHST,STS. Free, keyless, read-only.",
+      "description": "Machine comparison, human decision. Give a wallet and the requirements of a job or project; each requirement comes back as exactly one of six words: verified_match (declared, current, and on-chain-confirmed board work in scope), verified_mismatch (the record contradicts the requirement), supported (declared, nothing contradicts it, no board work yet), unknown (the record does not say), expired (declared expiry passed), human_judgment_required (a human reads it: years of experience, free text). This is a factual comparison only; it never makes hiring, employment, qualification, or fitness decisions for an employer. The reply never says qualified and never decides; it carries a receipt hash the decider can anchor for free. Public mirror: https://vealth.net/labor/worker/<wallet>/compare?require=CHST,STS. Free, keyless, read-only.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1565,7 +2059,7 @@
           "require"
         ]
       },
-      "digest": "sha256:b5a5aa2f2a2cfa2c715c488f6d9dbf73b12c736519d09bc5eb8bbc7ce318fdbb"
+      "digest": "sha256:cbcf60612beef3f49ee3dcc0bca9ea9b2ce5ab893f08496430ffb7cc81598e8c"
     },
     {
       "name": "funding_quote",
@@ -1607,6 +2101,38 @@
         ]
       },
       "digest": "sha256:9b9d3a0d1e33fae99ac1e3bb8358ae33808909628072bad681bc9846f6cacfc4"
+    },
+    {
+      "name": "submit_funding",
+      "title": "Send your signed payment to the funding door (step 3 for a buyer)",
+      "description": "Finish funding a packet from your own wallet: pass the workId, your funderWallet, and xPayment — the standard X-PAYMENT header value (x402 exact scheme, an EIP-3009 USDC authorization on Base) that YOUR wallet built and signed against the challenge prepare_funding returned. This tool forwards it, unchanged, to the same public funding door any HTTP client uses (POST /nurture/fund) and returns that door's own answer. It holds no key, takes no payment itself, and marks nothing funded: the door settles the payment and only a verified settlement stamps a packet funded. Without xPayment it refuses and points you back to prepare_funding. A packet whose claim lane is closed is refused before any challenge, in plain words. If the door times out, do NOT pay again: read work_status first.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "The packet id, from funding_quote or find_work."
+          },
+          "funderWallet": {
+            "type": "string",
+            "description": "The 0x… address that signed the payment. The ADDRESS only, never a private key."
+          },
+          "xPayment": {
+            "type": "string",
+            "description": "The X-PAYMENT header value your own wallet built and signed for the exact accepts[] terms from prepare_funding. Required; this server cannot create it."
+          },
+          "contributeUsd": {
+            "type": "number",
+            "description": "Optional. The same EXPLICIT contribution you passed to prepare_funding; it must match the amount you signed."
+          }
+        },
+        "required": [
+          "workId",
+          "funderWallet",
+          "xPayment"
+        ]
+      },
+      "digest": "sha256:5112362353fdd6660f19fd78f7876d918b13bf9500d840bb3811490f57040634"
     },
     {
       "name": "prepare_backing",
@@ -1945,6 +2471,217 @@
       "digest": "sha256:8a0d0d0597cd8da1c8ceaa68e4240060bf8ba2b0a4b645e7241cc29a532352d3"
     },
     {
+      "name": "provision_plan",
+      "title": "Plan the governed work that answers an objective",
+      "description": "VEALTH PROVISION: send an objective in plain words (any spelling; English, Spanish or Swahili) and get back a PLAN: a verdict (plan, authority_required, clarify, no_home, or entry_work when the objective only offers help, such as 'I want to help', and names no work), ONE exact next call, the governed work units that answer it (method, safety stops, the authority each needs, whether it is executable) and any live board packets near the place you name with their posted price and what a stranger may do now. Regulated work (lead paint, gas, asbestos, electrical, needles and similar) is never presented as freely doable: the plan names whose authority it needs. Nothing in a plan has happened; no place or price is invented; corpus units have no price until posted. The same plan GET /labor/provision returns. Free, keyless, read-only, moves no money. Not provision_work, which builds a funding path for one packet.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "objective": {
+            "type": "string",
+            "description": "The useful work you want done, 5 to 300 characters, e.g. 'clear the storm drain on my street before the rain'."
+          },
+          "place": {
+            "type": "string",
+            "description": "Optional place name, e.g. 'Kibera' or 'Los Angeles'. Used as an address filter, never scored as work."
+          },
+          "latitude": {
+            "type": "number",
+            "description": "Optional, with longitude: the place's coordinates, for live packets nearby."
+          },
+          "longitude": {
+            "type": "number",
+            "description": "Optional, with latitude."
+          },
+          "radiusKm": {
+            "type": "number",
+            "description": "Search radius for live packets in km. Default 25, at most 200."
+          },
+          "entryLevelOnly": {
+            "type": "boolean",
+            "description": "Only work the corpus holds as entry level; the reply also carries entry_set, the posted work a stranger can take today."
+          },
+          "excludeAuthority": {
+            "type": "boolean",
+            "description": "Drop any unit that names an authority it requires."
+          }
+        },
+        "required": [
+          "objective"
+        ]
+      },
+      "digest": "sha256:7f06cee557d671923de712f699c2e3255ac437ad042e1492d100cbdd74ad0094"
+    },
+    {
+      "name": "understand_need",
+      "title": "Turn a health or care problem into bounded coordination work",
+      "description": "Private, read-only coordination. Converts the person's own description into a nonclinical coordination frame, routes explicit emergency/crisis/withdrawal/safeguarding signals to qualified humans, and never diagnoses, treats, prescribes, or creates an employer-facing health record.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "type": "string",
+            "description": "Minimum-necessary description of what is making life or care harder. Do not include names, date of birth, full address, medical-record number, insurance/member id, account credentials, or other identifiers."
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "care_access",
+              "appointment",
+              "referral",
+              "records",
+              "visit_preparation",
+              "transport",
+              "follow_up",
+              "daily_capacity",
+              "substance_resilience",
+              "social_support",
+              "environmental_support",
+              "other"
+            ]
+          },
+          "safetySignal": {
+            "type": "string",
+            "enum": [
+              "none",
+              "uncertain",
+              "medical_emergency",
+              "mental_health_crisis",
+              "withdrawal_risk",
+              "safeguarding"
+            ],
+            "description": "Only pass a stronger signal when the user/context explicitly supports it. Never infer one from vague distress."
+          }
+        },
+        "required": [
+          "summary"
+        ]
+      },
+      "digest": "sha256:e1cb88642a4d4bfb7b9c042b3d33a197e3acd0ac294d0c22e8dd3dbf0b083f85"
+    },
+    {
+      "name": "next_action",
+      "title": "Choose the next bounded care-coordination action",
+      "description": "Private, read-only prioritization over caller-supplied CareWork. Qualified-human routes outrank routine work; blocked work outranks creating more work. Returns one next action and no clinical interpretation.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Private CareWork items already known to the caller."
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "digest": "sha256:2a1130ece0748f4ce9b56e37f268394690d2e35effa27c0db087e9b36f386439"
+    },
+    {
+      "name": "prepare_visit",
+      "title": "Prepare a factual private visit brief",
+      "description": "Private, read-only visit preparation. Organizes the person's reason, facts, records and questions without turning them into diagnoses or treatment recommendations. The clinician's actual instructions remain authoritative.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "reasonForVisit": {
+            "type": "string",
+            "description": "Minimum-necessary reason in the person's own words; omit direct identifiers."
+          },
+          "facts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Short factual bullets only; omit direct identifiers unless strictly necessary."
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "records": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names/types of relevant records, not full documents or record identifiers."
+          }
+        },
+        "required": [
+          "reasonForVisit"
+        ]
+      },
+      "digest": "sha256:116739c27edff0f4bf012a88973a57d29b28f39dae7c73a03509a242f08efff2"
+    },
+    {
+      "name": "track_followup",
+      "title": "Track unresolved care follow-up",
+      "description": "Private, read-only follow-up tracking. Keeps appointments, referrals, records and other stated next steps from disappearing. It records what another person or service said should happen; it does not invent clinical next steps.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "digest": "sha256:4c1e88045f43eb53de1b0512c7fe76d3e8284ff40262c1065a13234a1b127f31"
+    },
+    {
+      "name": "capacity_checkin",
+      "title": "Project private human capacity into a minimal work-availability signal",
+      "description": "Private, read-only capacity check-in. Keeps private blockers private and emits only coarse available/reduced/unavailable for a shared work graph. It is never fitness-for-duty and never exposes health reasons to an employer or public board.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "selfReportedCapacity": {
+            "type": "string",
+            "enum": [
+              "available",
+              "reduced",
+              "recovery_needed",
+              "paused"
+            ]
+          },
+          "privateBlockers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "desiredFocus": {
+            "type": "string"
+          },
+          "safetySignal": {
+            "type": "string",
+            "enum": [
+              "none",
+              "uncertain",
+              "medical_emergency",
+              "mental_health_crisis",
+              "withdrawal_risk",
+              "safeguarding"
+            ]
+          }
+        },
+        "required": [
+          "selfReportedCapacity"
+        ]
+      },
+      "digest": "sha256:78a039a79a30756b222aba392f4e425bb9be7075358af78a1905fcbe65563f71"
+    },
+    {
       "name": "credential_quote",
       "title": "What a credential certificate would contain right now, and what it costs",
       "description": "Price and preview a Vealth credential certificate BEFORE paying for one. Give a wallet for a work-record certificate (its settled packets, accepted proofs and banked credit) or a place for a standing certificate under The Vealth Standard. Returns the live price, exactly what the document would contain right now, and whether issuance would be REFUSED and why — a wallet with no settled work and no banked credit is refused for free, before any payment, because an empty certificate is unsellable. Payment buys the sealed, anchored artifact, never the achievement: every fact inside is already public and free to read at its own endpoint. Issuing is HTTP (POST /certificate/worker/<wallet> or POST /certificate/place); reading and verifying an issued certificate are free forever. This tool is free, keyless, read-only, and moves no money.",
@@ -2151,6 +2888,187 @@
         ]
       },
       "digest": "sha256:1cf7c37069e77998fd9f2008e073729b1397317fedaf1d649b5a7ea41ac2bd87"
+    },
+    {
+      "name": "prepare_chain_step",
+      "title": "Prepare an EWP job-lifecycle step on Base or Robinhood Chain (non-custodial)",
+      "description": "Build the exact unsigned transaction for one step of a real ecological-work job's lifecycle — post, claim, unclaim, prove, approve, reject, cancel, or settle — on the PUBLIC Ecological Work Protocol contract, on Base or on Robinhood Chain. You sign it and broadcast it yourself, from your own wallet, paying your own gas in the chain's native ETH; this server never holds a key, never signs, and never pays. Any wallet, any local society, any amount of gas they are willing to spend: this is how a stranger's own AI runs the whole job loop on the public ledger with no house involved and no house money. Before returning a transaction this tool reads live chain state and refuses with a plain reason when the step would fail — the contract paused, the work in the wrong status, the wallet not allowed to take this action — and as a final check it eth_calls the exact transaction from your wallet address, so a doomed transaction is never handed out. Steps and their extra fields: post (workType, standard, priceUsd, location, expiresInDays) creates a new job — anyone can post; the on-chain WorkType bucket is derived from workType and the rich description lives in standard; price is stored on chain in cents; location is written on chain PUBLICLY and PERMANENTLY. claim / unclaim / cancel / approve / reject (workId) act on an existing job by id. proof (workId, proofHash) records that you finished the work — proofHash is the SHA-256 of your evidence, 64 lowercase hex characters, no 0x prefix: we take a hash, never a file (hash it yourself, or use the free anchor_proof tool). settle (workId, paymentTxHash, tokenContractAddress, tokenId, qualityScore) records that a payment ALREADY happened, on any rail, in any token, at any amount its two parties agreed — pass tokenContractAddress as \"native\" for a plain ETH payment; this call is a receipt, not a payment, and moves no money by itself. Call chain_work_status first if you are unsure of a job's current state.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "base",
+              "robinhood"
+            ],
+            "description": "Which live EWP deployment: \"base\" (chainId 8453) or \"robinhood\" (Robinhood Chain, chainId 4663). Same contract bytecode on both."
+          },
+          "step": {
+            "type": "string",
+            "enum": [
+              "post",
+              "claim",
+              "unclaim",
+              "proof",
+              "approve",
+              "reject",
+              "cancel",
+              "settle"
+            ],
+            "description": "The lifecycle action to prepare."
+          },
+          "wallet": {
+            "type": "string",
+            "description": "Your OWN 0x… address — the wallet that will sign and pay gas for this transaction. Never send a private key anywhere."
+          },
+          "workType": {
+            "type": "string",
+            "description": "post only. Free text describing the work (e.g. \"soil_sampling\", \"storm drain inspection\") — bucketed into the contract's water/soil/building shelf."
+          },
+          "standard": {
+            "type": "string",
+            "description": "post only. The rich, specific description written on chain (e.g. \"drinking_water_safety\", or a fuller sentence). Defaults to workType if omitted."
+          },
+          "priceUsd": {
+            "type": "number",
+            "description": "post only. A positive number of US dollars (e.g. 50 for $50). Stored on chain as cents."
+          },
+          "location": {
+            "type": "string",
+            "description": "post only. Where the work is. Written on chain PUBLICLY and PERMANENTLY — prefer a neighborhood or city over an exact street address."
+          },
+          "expiresInDays": {
+            "type": "number",
+            "description": "post only. Whole number, 1 to 365: how many days the posting stays claimable."
+          },
+          "workId": {
+            "type": "string",
+            "description": "Every step except post. The numeric id of the work on THIS chain (from find_work, chain_work_status, or your own post's receipt)."
+          },
+          "proofHash": {
+            "type": "string",
+            "description": "proof only. The SHA-256 of your evidence: 64 lowercase hex characters, no 0x prefix."
+          },
+          "paymentTxHash": {
+            "type": "string",
+            "description": "settle only. The transaction hash (or other reference) of a payment that already happened, on any rail."
+          },
+          "tokenContractAddress": {
+            "type": "string",
+            "description": "settle only. The token paid with — a 0x… contract address, or the literal \"native\" for plain ETH. Defaults to \"native\"."
+          },
+          "tokenId": {
+            "type": "string",
+            "description": "settle only. An NFT/token id if the payment minted one; empty string otherwise."
+          },
+          "qualityScore": {
+            "type": "number",
+            "description": "settle only. Whole number, 0 to 100."
+          }
+        },
+        "required": [
+          "chain",
+          "step",
+          "wallet"
+        ]
+      },
+      "digest": "sha256:1367ee5191718b06722f1ac14e1fea14b63ab68e2311927c47cea1258351a8a7"
+    },
+    {
+      "name": "chain_work_status",
+      "title": "Read a job's live state on Base or Robinhood Chain (keyless)",
+      "description": "Read one job straight from the public EWP contract on Base or Robinhood Chain: status, price, standard, location, who posted it, who claimed it, its proof hash once submitted, and its payment record once settled. Free, keyless, no wallet needed. Pass your own wallet to also learn your specific role on this job (creator, claimant, owner, or none) and which of your next steps prepare_chain_step would likely accept — that check there is the authoritative one; this tool's possibleNextSteps is informative only. Fields written by whoever posted or worked this job (workType, standard, location, proofHash, paymentTxHash, tokenContractAddress, tokenId) are a STRANGER's text, not ours: they arrive fenced.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "base",
+              "robinhood"
+            ],
+            "description": "Which live EWP deployment to read."
+          },
+          "workId": {
+            "type": "string",
+            "description": "The numeric id of the work on THIS chain."
+          },
+          "wallet": {
+            "type": "string",
+            "description": "Optional. Your own 0x… address, to learn your role and next options on this job."
+          }
+        },
+        "required": [
+          "chain",
+          "workId"
+        ]
+      },
+      "digest": "sha256:7703d1a3b9c60189f8b6760bec99630df43dc03821a9a168bd48c0e94ae48b48"
+    },
+    {
+      "name": "submit_feedback",
+      "title": "Report friction or a missing capability",
+      "description": "Record what you tried to do with Vealth, what happened, and what you expected. Use this when a tool, endpoint, page or capability is missing, confusing, blocked or appears broken. Free and keyless. Feedback is untrusted observation only: it does not change work, proof, payment, safety, authority, standards or code. Do not include passwords, private keys, seed phrases or API keys.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "actorRef": {
+            "type": "string",
+            "description": "Optional self-declared reporter reference. This is attribution only, never verified identity."
+          },
+          "targetKind": {
+            "type": "string",
+            "enum": [
+              "http",
+              "mcp",
+              "capability",
+              "page",
+              "other"
+            ],
+            "description": "What kind of Vealth surface you were using."
+          },
+          "targetName": {
+            "type": "string",
+            "description": "The exact endpoint, MCP tool, capability or page, e.g. find_work or POST /labor/work."
+          },
+          "targetVersion": {
+            "type": "string",
+            "description": "Optional exact version/ref if known."
+          },
+          "requestId": {
+            "type": "string",
+            "description": "Optional request/trace id if one was returned."
+          },
+          "attemptedIntent": {
+            "type": "string",
+            "description": "What you were trying to accomplish."
+          },
+          "observedResult": {
+            "type": "string",
+            "description": "What actually happened, including the refusal/error if useful."
+          },
+          "expectedResult": {
+            "type": "string",
+            "description": "Optional: what you expected instead."
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 12,
+            "description": "Optional references to existing evidence/receipts. Do not paste secrets."
+          }
+        },
+        "required": [
+          "targetKind",
+          "targetName",
+          "attemptedIntent",
+          "observedResult"
+        ]
+      },
+      "digest": "sha256:7abaf2829fe9f1dc1be6f73a2ce0815209de829553e7b5eb5dae928fad2d0bf5"
     }
   ]
 }
