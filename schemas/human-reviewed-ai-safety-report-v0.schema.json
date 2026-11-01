@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Eco-Wealth/ecological-provisioning-agent/schemas/human-reviewed-ai-safety-report-v0.schema.json",
+  "title": "Human-Reviewed AI Safety Report record, v0 (draft)",
+  "description": "A record of who observed, which tools helped draft, who reviewed, and the fingerprints of the evidence. It records what was seen. It is not an inspection, a compliance determination or a certification. See docs/human-reviewed-ai-safety-report-v0.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec_version", "report_id", "created_at", "observation", "observer", "tools", "inputs", "final", "limits_statement", "ai_disclosure", "review_log", "signoff"],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "time": { "type": "string", "format": "date-time" }
+  },
+  "properties": {
+    "spec_version": { "const": "hrsr-0" },
+    "report_id": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "created_at": { "$ref": "#/$defs/time" },
+    "conformance_claimed": { "enum": ["L0", "L1", "L2", "L3"] },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end", "site_label"],
+      "properties": {
+        "start": { "$ref": "#/$defs/time" },
+        "end": { "$ref": "#/$defs/time" },
+        "site_label": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "area_note": { "type": "string", "maxLength": 200 }
+      }
+    },
+    "observer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "role": { "type": "string" },
+        "credential": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["issuer", "type", "id", "verify_url"],
+          "properties": {
+            "issuer": { "type": "string" },
+            "type": { "type": "string" },
+            "id": { "type": "string" },
+            "verify_url": { "type": "string", "format": "uri" }
+          }
+        }
+      }
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "kind", "purpose"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "version": { "type": "string" },
+          "kind": { "enum": ["ai_drafting", "ai_transcription", "ai_image_assist", "other_software", "manual"] },
+          "purpose": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["notes", "photos"],
+      "properties": {
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sha256", "kind", "captured_at"],
+            "properties": {
+              "sha256": { "$ref": "#/$defs/sha256" },
+              "kind": { "enum": ["voice_note", "text_note"] },
+              "captured_at": { "$ref": "#/$defs/time" },
+              "file": { "type": "string" }
+            }
+          }
+        },
+        "photos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "sha256", "captured_at", "location_shared", "disposition", "disposition_by"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "sha256": { "$ref": "#/$defs/sha256" },
+              "captured_at": { "$ref": "#/$defs/time" },
+              "location_shared": { "type": "boolean" },
+              "disposition": { "enum": ["used", "excluded", "blurred_then_used"] },
+              "disposition_by": { "type": "string", "minLength": 1 },
+              "file": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "draft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256"],
+      "properties": { "sha256": { "$ref": "#/$defs/sha256" } }
+    },
+    "final": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "format"],
+      "properties": {
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "format": { "enum": ["md", "pdf", "txt"] },
+        "file": { "type": "string" }
+      }
+    },
+    "summary": { "type": "string" },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "observation"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "observation": { "type": "string", "minLength": 1 },
+          "photo_ids": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "notices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["told_name", "told_role", "told_at", "how", "what_in_plain_words"],
+        "properties": {
+          "told_name": { "type": "string" },
+          "told_role": { "type": "string" },
+          "told_at": { "$ref": "#/$defs/time" },
+          "how": { "type": "string" },
+          "what_in_plain_words": { "type": "string" }
+        }
+      }
+    },
+    "limits_statement": { "type": "string", "minLength": 40 },
+    "ai_disclosure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ai_used", "statement"],
+      "properties": {
+        "ai_used": { "type": "boolean" },
+        "statement": { "type": "string", "minLength": 1 }
+      }
+    },
+    "review_log": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["at", "by_name", "by_kind", "action"],
+        "properties": {
+          "at": { "$ref": "#/$defs/time" },
+          "by_name": { "type": "string", "minLength": 1 },
+          "by_kind": { "enum": ["human", "tool"] },
+          "action": { "enum": ["read_all", "edited", "removed_line", "added_line", "excluded_photo", "blurred_photo", "approved_text_for_release"] },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "signoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "signed_at", "statement"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "signed_at": { "$ref": "#/$defs/time" },
+        "statement": { "type": "string", "minLength": 1 }
+      }
+    },
+    "anchoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level"],
+      "properties": {
+        "level": { "enum": ["none", "list", "ledger"] },
+        "list_url": { "type": "string", "format": "uri" },
+        "ledger": { "type": "string" },
+        "root_sha256": { "$ref": "#/$defs/sha256" },
+        "client_consent_ref": { "type": "string" }
+      }
+    }
+  }
+}
