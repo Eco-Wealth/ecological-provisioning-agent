@@ -1,0 +1,156 @@
+{
+  "spec_version": "hrsr-0",
+  "report_id": "SYNTHETIC-2026-0001",
+  "created_at": "2026-01-15T14:00:00Z",
+  "conformance_claimed": "L2",
+  "observation": {
+    "start": "2026-01-15T13:30:00Z",
+    "end": "2026-01-15T14:10:00Z",
+    "site_label": "Example Yard (synthetic)",
+    "area_note": "east gate and roof edge"
+  },
+  "observer": {
+    "name": "Alex Example (synthetic)",
+    "role": "construction safety technician",
+    "credential": {
+      "issuer": "Example Credentialing Board (synthetic)",
+      "type": "SYNTHETIC-CHST",
+      "id": "SYNTHETIC-0000",
+      "verify_url": "https://example.org/verify/SYNTHETIC-0000"
+    }
+  },
+  "tools": [
+    {
+      "name": "Example Voice Transcriber",
+      "version": "1.0",
+      "kind": "ai_transcription",
+      "purpose": "turn the voice note into text"
+    },
+    {
+      "name": "Example Drafting Assistant",
+      "version": "2.3",
+      "kind": "ai_drafting",
+      "purpose": "draft the report text from the observer's notes"
+    }
+  ],
+  "inputs": {
+    "notes": [
+      {
+        "sha256": "e5d7133be797c5b0755b5bb4d46eb88edfc4f680f67ea42b2a0042910c396c6f",
+        "kind": "voice_note",
+        "captured_at": "2026-01-15T14:08:00Z",
+        "file": "notes.txt"
+      }
+    ],
+    "photos": [
+      {
+        "id": "photo-01",
+        "sha256": "edfe77c5ca9a78a60d2fc03b7f4f9773f65b1ecd838c239ba3f0517f20a1b400",
+        "captured_at": "2026-01-15T13:41:00Z",
+        "location_shared": false,
+        "disposition": "used",
+        "disposition_by": "Alex Example (synthetic)",
+        "file": "photo-01.txt"
+      },
+      {
+        "id": "photo-02",
+        "sha256": "16967860b19c5aa86b1da09cc1f8658bedff7518fe1f4468cf642feb770e0ddd",
+        "captured_at": "2026-01-15T13:52:00Z",
+        "location_shared": false,
+        "disposition": "used",
+        "disposition_by": "Alex Example (synthetic)",
+        "file": "photo-02.txt"
+      },
+      {
+        "id": "photo-03",
+        "sha256": "14d2b7e17c5fdb077f76772533ecf24c10a3a08c3701878a1b819afcc84eaa53",
+        "captured_at": "2026-01-15T14:00:00Z",
+        "location_shared": false,
+        "disposition": "excluded",
+        "disposition_by": "Alex Example (synthetic)",
+        "file": "photo-03.txt"
+      }
+    ]
+  },
+  "draft": {
+    "sha256": "c20b61b71b20280b4bc8d441f0e976c964c399844046210fde0429c2d8417d59"
+  },
+  "final": {
+    "sha256": "6f79b90dbb4a86c0a0fddf59515981280ad0cfd09a818bb8f451a0bd6c512de7",
+    "format": "md",
+    "file": "final-report.md"
+  },
+  "summary": "Three conditions recorded at the east gate and roof edge; the site lead was told at 14:05.",
+  "findings": [
+    {
+      "id": "f1",
+      "observation": "Pallets are stacked about chest high next to the east walkway.",
+      "photo_ids": [
+        "photo-01"
+      ]
+    },
+    {
+      "id": "f2",
+      "observation": "A hose crosses the east walkway near the water tank.",
+      "photo_ids": [
+        "photo-02"
+      ]
+    },
+    {
+      "id": "f3",
+      "observation": "Two workers were on the roof edge. No tie-off was visible from where the observer stood."
+    }
+  ],
+  "notices": [
+    {
+      "told_name": "Sam Example (synthetic)",
+      "told_role": "client site lead",
+      "told_at": "2026-01-15T14:05:00Z",
+      "how": "in person",
+      "what_in_plain_words": "Two workers on the roof edge with no tie-off visible from the ground."
+    }
+  ],
+  "limits_statement": "This is a record of conditions as seen by one person on one day. It is not an inspection, not a compliance determination and not a certification. It does not say any condition is acceptable or unacceptable. The observer did not direct or confirm any correction and did not measure anything against a rule.",
+  "ai_disclosure": {
+    "ai_used": true,
+    "statement": "An AI tool transcribed the voice note and drafted the text from the observer's own notes. The observer read every line, edited it and signed."
+  },
+  "review_log": [
+    {
+      "at": "2026-01-15T14:20:00Z",
+      "by_name": "Alex Example (synthetic)",
+      "by_kind": "human",
+      "action": "read_all",
+      "note": "read the whole draft against the notes and photos"
+    },
+    {
+      "at": "2026-01-15T14:26:00Z",
+      "by_name": "Alex Example (synthetic)",
+      "by_kind": "human",
+      "action": "edited",
+      "note": "added a line saying the draft came from an AI tool; changed one sentence to match the notes"
+    },
+    {
+      "at": "2026-01-15T14:28:00Z",
+      "by_name": "Alex Example (synthetic)",
+      "by_kind": "human",
+      "action": "excluded_photo",
+      "note": "photo-03 left out: a worker's face is in the frame"
+    },
+    {
+      "at": "2026-01-15T14:35:00Z",
+      "by_name": "Alex Example (synthetic)",
+      "by_kind": "human",
+      "action": "approved_text_for_release",
+      "note": "text matches what was seen"
+    }
+  ],
+  "signoff": {
+    "name": "Alex Example (synthetic)",
+    "signed_at": "2026-01-15T14:36:00Z",
+    "statement": "I read every line of this report and I stand behind what it says I saw."
+  },
+  "anchoring": {
+    "level": "none"
+  }
+}

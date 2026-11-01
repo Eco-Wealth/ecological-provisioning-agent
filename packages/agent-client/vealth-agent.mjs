@@ -9,9 +9,12 @@
 // day this agent has earned enough to pay its own way — everything else stays
 // free, exactly as before.
 //
-//   npm i viem            (the one dependency — real, audited signing)
+//   npm i viem            (the one dependency — real, audited signing; only the commands that sign need it)
 //   node vealth-agent.mjs                     # read-only preflight, no wallet needed
 //   node vealth-agent.mjs --flag vsh_eligible # preflight, but only packets that pay REGEN (proposal 77)
+//   node vealth-agent.mjs earn --dry          # read-only: the work you could take from anywhere, what each pays, the proof each needs
+//   node vealth-agent.mjs earn [--origin https://your-host] [--work <workId>] [--query words] [--adult] [--safety-read]
+//                                             # claim ONE packet (free, signed by your VEALTH_AGENT_KEY) and print the NEXT_CALL for the proof
 //   node vealth-agent.mjs vote <workId>       # cast one FREE vote (voterKind: agent)
 //   node vealth-agent.mjs claim <workId> [httpsOriginYouControl] [--adult] [--safety-read]
 //   node vealth-agent.mjs proof <workId> <claimId> <proofs.json>
@@ -66,7 +69,11 @@
 // key never) — spend-402 will then always be refused, since a fresh wallet
 // holds no USDC.
 
-import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+// viem is loaded only if it is installed: the commands that read (no command,
+// status, earn --dry) need no install, and the ones that sign say so when it is
+// missing instead of failing at import.
+let viem = null;
+try { viem = await import("viem/accounts"); } catch { /* account() explains */ }
 
 const MCP = process.env.VEALTH_MCP_URL || "https://vealth.net/mcp";
 // The board's own HTTP doors (the photo upload is the one call that is not MCP).
@@ -93,6 +100,11 @@ const EIP3009_TYPES = {
 const MAX_SPEND_USDC = Number(process.env.VEALTH_AGENT_MAX_SPEND_USDC || 0.25);
 
 function account() {
+  if (!viem) {
+    console.error("this command signs, so it needs the one dependency: npm i viem (then run it again). Commands that only read need no install.");
+    process.exit(1);
+  }
+  const { generatePrivateKey, privateKeyToAccount } = viem;
   const k = process.env.VEALTH_AGENT_KEY;
   if (k && !/^0x[0-9a-fA-F]{64}$/.test(k)) {
     console.error("VEALTH_AGENT_KEY must be a 0x…64-hex private key. Never share it with anyone — including vealth.net.");
@@ -280,7 +292,9 @@ async function claim(acct, workId, targetUrl, passed) {
   }
   const said = att ? ["--adult", ...(att.safetyTextSha256 ? ["--safety-read"] : [])] : [];
   console.log(`Signing the claim on ${workId} as ${acct.address}${said.length ? `, affirming ${said.join(" and ")} as you passed them` : ""}.`);
-  report(await signedSubmit(acct, prepared, "submit_claim"));
+  const done = await signedSubmit(acct, prepared, "submit_claim");
+  report(done);
+  return done;
 }
 
 // ── spend-402: pay a paid door in USDC-on-Base (EIP-3009, self-settled) ─────
@@ -419,6 +433,138 @@ async function spend402(acct, url, bodyArg) {
   );
 }
 
+// ── earn: the one command. Read what you could take, or take ONE packet ─────
+//
+// `earn --dry` reads the board (no key, no install, nothing signed, nothing
+// sent) and lists the work an agent can do from anywhere: what each packet
+// pays, the proof it needs, and whether it needs an https origin you control.
+// `earn` takes ONE of them through the same claim path as `claim` and prints
+// the NEXT_CALL for the proof. Claiming is free. What the work earns is the
+// board's to say, never this file's: cash only on a packet the board marks
+// funded; on any other an approved proof banks a credit, a receipt for the work.
+
+const SKILL_RANK = { entry: 0, intermediate: 1, advanced: 2 };
+const EARN_VALUE_FLAGS = new Set(["--origin", "--work", "--query"]);
+const EARN_USAGE = "usage: earn [--dry] [--origin https://your-host] [--work <workId>] [--query words] [--adult] [--safety-read]";
+
+/** An https origin the person controls, or "" when none was given. */
+function httpsOrigin(value) {
+  if (!value) return "";
+  const u = new URL(value);
+  if (u.protocol !== "https:") { console.error("targetUrl must be an https origin YOU control. Never claim an origin that is not yours."); process.exit(1); }
+  return u.origin;
+}
+
+function parseEarnArgs(args) {
+  const o = { dry: false, passed: new Set(), origin: "", work: "", query: "" };
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (a === "--dry") o.dry = true;
+    else if (Object.hasOwn(CLAIM_FLAGS, a)) o.passed.add(a);
+    else if (EARN_VALUE_FLAGS.has(a) && args[i + 1] !== undefined && !args[i + 1].startsWith("--")) { i += 1; o[a.slice(2)] = args[i]; }
+    else { console.error(`${EARN_USAGE}  (not an argument this client takes: ${a})`); process.exit(1); }
+  }
+  return o;
+}
+
+/** Ids of the packets find_work labels "self-verifying template": they need an
+ * https origin the person controls. Read outside the poster's fenced text, so
+ * a poster's words can never decide it. */
+function templateIdsIn(text) {
+  const ids = new Set();
+  const bare = text.replace(/\[\[untrusted\]\][\s\S]*?\[\[\/untrusted\]\]/g, "[[fenced]]");
+  for (const block of bare.split("\n\n")) {
+    const id = block.match(/\n {2}id: (\S+)/)?.[1];
+    if (id && block.includes("self-verifying template:")) ids.add(id);
+  }
+  return ids;
+}
+
+async function earnCandidates(query) {
+  // remote:true is the set an agent with no field presence can finish; the
+  // board already surfaces funded work first, the sort below keeps it that way.
+  const r = await call("find_work", { remote: true, limit: 25, ...(query ? { query } : {}), ...(flagValue ? { flag: flagValue } : {}) });
+  if (r.isError) report(r);
+  const needsOrigin = templateIdsIn(r.text);
+  const rows = (r.structured?.matches ?? [])
+    .filter((m) => m.claimable === true)
+    .map((m) => ({ ...m, needsOrigin: needsOrigin.has(m.workId) }));
+  rows.sort((a, b) => Number(Boolean(b.funded)) - Number(Boolean(a.funded)) || (SKILL_RANK[a.skillLevel] ?? 3) - (SKILL_RANK[b.skillLevel] ?? 3) || (b.payUsd ?? 0) - (a.payUsd ?? 0));
+  return rows;
+}
+
+/** The board's own live counts, so the page says the honest number. */
+async function boardCounts() {
+  try {
+    const res = await fetch(`${BOARD}/labor/stats`, { headers: { accept: "application/json" } });
+    const s = (await res.json())?.stats;
+    return s && Number.isFinite(s.claimableOpenPostings) ? s : null;
+  } catch { return null; }
+}
+
+function payWords(m) {
+  if (m.paysCashNow) return `$${m.payUsd}, funded: settles in USDC after approved proof`;
+  if (m.funded) return `$${m.payUsd}, funded, but read the packet's pay model: it may bank credit, not cash`;
+  return `$${m.payUsd} proposed, not funded: approved proof banks a credit, not cash, unless a buyer funds it`;
+}
+
+async function earn(args) {
+  const o = parseEarnArgs(args);
+  const targetUrl = httpsOrigin(o.origin);
+  const rows = await earnCandidates(o.query);
+  const counts = await boardCounts();
+  console.log(counts
+    ? `board now (${BOARD}/labor/stats): ${counts.claimableOpenPostings} claimable open, ${counts.fundedCount} funded, ${counts.claimableOpenCashPostings} claimable that pay cash now`
+    : "board counts unavailable right now");
+  if (!rows.length) {
+    console.log("no claimable work that an agent can do from anywhere matched, so there is nothing to take. Try another --query, or `vote <workId>` (free) on any packet.");
+    return;
+  }
+  if (o.dry) {
+    const shown = rows.slice(0, 5);
+    shown.forEach((m, i) => {
+      console.log(`\n${i + 1}. ${m.title}`);
+      console.log(`   id      ${m.workId}`);
+      console.log(`   pays    ${payWords(m)}`);
+      console.log(`   proof   ${m.proofRule}`);
+      console.log(`   needs   ${m.needsOrigin ? "an https origin you control (--origin): you publish your finding there and the board checks it" : "your wallet only"}`);
+      console.log(`   packet  ${m.page}`);
+    });
+    if (rows.length > shown.length) console.log(`\n(${rows.length - shown.length} more; use --query to narrow)`);
+    console.log("\nDry: nothing was signed or sent, and no key was used.");
+    console.log(`Take one: VEALTH_AGENT_KEY=<your key> node vealth-agent.mjs earn${shown[0].needsOrigin ? " --origin https://your-host" : ""}${o.query ? ` --query "${o.query}"` : ""}`);
+    return;
+  }
+  // Your claim and your proof must be signed by the SAME wallet, so earn will
+  // not claim on a throwaway one: the key would be gone before the proof.
+  if (!process.env.VEALTH_AGENT_KEY) {
+    console.error("earn needs a key you keep: the wallet that claims is the wallet that must hand the proof in. Make one on your machine, keep it, and export it:");
+    console.error("  export VEALTH_AGENT_KEY=0x$(openssl rand -hex 32)");
+    console.error("Nothing was signed. `earn --dry` reads the board with no key.");
+    process.exit(1);
+  }
+  const pick = o.work ? (rows.find((m) => m.workId === o.work) ?? { workId: o.work, needsOrigin: false }) : rows.find((m) => !m.needsOrigin || targetUrl);
+  if (!pick) {
+    console.error("Every packet found needs an https origin you control (you publish one small finding there and the board checks it). Nothing was signed.");
+    console.error("Run again with --origin https://your-host, or run `earn --dry` to read them first.");
+    process.exit(1);
+  }
+  if (pick.needsOrigin && !targetUrl) {
+    console.error(`${pick.workId} is a self-verifying packet: it needs an https origin you control. Nothing was signed. Run again with --origin https://your-host.`);
+    process.exit(1);
+  }
+  const acct = account();
+  console.log(`\nTaking ${pick.workId}${pick.title ? `: ${pick.title}` : ""}`);
+  const done = await claim(acct, pick.workId, targetUrl, o.passed);
+  const claimId = done?.structured?.claimId;
+  console.log(`\nearn: claimed ${pick.workId} as ${acct.address}${claimId ? `, claimId ${claimId} (keep it)` : ""}. The packet, in full: ${pick.page ?? `${BOARD}/work/${pick.workId}`}`);
+  console.log("Do the work the packet names. An unworked claim is released after 24 hours.");
+  if (claimId) console.log(`When you have the proof: node vealth-agent.mjs proof ${pick.workId} ${claimId} proofs.json`);
+  console.log(pick.paysCashNow
+    ? "This packet is funded: approved proof settles in USDC."
+    : "Approved proof on this packet banks a credit, a receipt for the work. It is not cash unless a buyer funds the packet.");
+}
+
 // --flag <name> is read from anywhere in argv, stripped before the normal
 // command/positional parsing below so no other command's argv shape changes,
 // and used only by the no-command preflight's find_work call: --flag
@@ -439,7 +585,9 @@ if (!cmd) {
   console.log(start.text);
   const work = await call("find_work", { limit: 5, ...(flagValue ? { flag: flagValue } : {}) });
   console.log(`\n${work.text}`);
-  console.log("\nread-only preflight done — nothing signed, nothing sent. `vote <workId>` is the free first act.");
+  console.log("\nread-only preflight done — nothing signed, nothing sent. `earn --dry` lists the work you could take from anywhere; `vote <workId>` is the free first act.");
+} else if (cmd === "earn") {
+  await earn(argv.slice(1));
 } else if (cmd === "vote") {
   if (!a1) { console.error("usage: vote <workId>"); process.exit(1); }
   const acct = account();
@@ -451,12 +599,7 @@ if (!cmd) {
     console.error(`usage: claim <workId> [httpsOriginYouControl] [--adult] [--safety-read]${unknownFlags.length ? `  (not a flag this client takes: ${unknownFlags.join(" ")})` : ""}`);
     process.exit(1);
   }
-  let targetUrl = "";
-  if (a2) {
-    const u = new URL(a2);
-    if (u.protocol !== "https:") { console.error("targetUrl must be an https origin YOU control. Never claim an origin that is not yours."); process.exit(1); }
-    targetUrl = u.origin;
-  }
+  const targetUrl = httpsOrigin(a2);
   const acct = account();
   await claim(acct, a1, targetUrl, new Set(claimFlagArgs));
 } else if (cmd === "proof") {
@@ -488,6 +631,6 @@ if (!cmd) {
   const acct = account();
   await spend402(acct, a1, a2);
 } else {
-  console.error(`unknown command: ${cmd}. Use vote | claim | proof | proof-photo | physical | status | mine | spend-402, or no command for the read-only preflight.`);
+  console.error(`unknown command: ${cmd}. Use earn | vote | claim | proof | proof-photo | physical | status | mine | spend-402, or no command for the read-only preflight.`);
   process.exit(1);
 }
