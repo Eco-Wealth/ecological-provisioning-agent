@@ -775,6 +775,7 @@
       },
       "legacy_standard_ids": [
         "civic_surface_cleaning",
+        "civic_biohazard_spot_cleaning",
         "civic_hard_surface_repair",
         "civic_asset_install",
         "civic_small_structure_build",
