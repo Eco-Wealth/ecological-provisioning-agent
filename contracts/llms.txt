@@ -142,7 +142,7 @@ afford: `GET /labor/work/advanced-search?status=OPEN&sort=entry-first&limit=5`.
 
 <!-- GENERATED:mcp-tools BEGIN. Built from the MCP tool registry. Do not hand-edit: run npm run agents:surfaces -->
 
-All 110 tools, generated from the server's own registry as of commit `0f624b2e0` (2026-11-07), toolset `b769c0e61269`.
+All 110 tools, generated from the server's own registry as of commit `4a97fe71e` (2026-11-08), toolset `b769c0e61269`.
 `tools/list` on the live endpoint stays the authority: call
 `{"jsonrpc":"2.0","id":1,"method":"tools/list"}` before you depend on a name.
 

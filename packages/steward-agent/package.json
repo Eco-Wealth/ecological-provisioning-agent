@@ -1,6 +1,6 @@
 {
   "name": "vealth-steward-agent",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A small program that keeps provisioning one place through the public Vealth door, forever, on your own machine. Dry by default, never pays, never claims, never decides a proof.",
   "type": "module",
   "license": "Apache-2.0",
