@@ -38,6 +38,7 @@ See [BUY.md](BUY.md) for the three calls and their exact arguments.
 ```text
 README.md, BUY.md        this page and the buyer's three calls
 packages/agent-client/   vealth-agent.mjs: earn, vote, claim, proof, status (one file, one dependency to sign)
+packages/steward-agent/  steward.mjs: keeps provisioning one place, always on, dry by default (one file, one pinned dependency to sign)
 contracts/               the work-control document, is-this-safe.json, llms.txt, the pinned MCP tool list
 schemas/                 the Vealth Standard v0, WorkGrant v0, the HRSR v0 record, and the kernel's packet, proof and receipt schemas
 docs/                    the constitution, agent execution continuity, HRSR v0, truth boundaries
