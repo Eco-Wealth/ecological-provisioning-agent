@@ -1,11 +1,11 @@
 # Kernel export
 
-Files below are copied verbatim from the private Vealth repository by `scripts/publish/kernel-export.sh` at that repo's commit `d982e371d966475cef7b2bd2f424e98b1f8cb938` on 2026-11-08T06:42:15Z.
+Files below are copied verbatim from the private Vealth repository by `scripts/publish/kernel-export.sh` at that repo's commit `36b535e234eb1ea8e4dbdd6005590fc245ea64ce` on 2026-11-08T08:00:53Z.
 Most of them are also served live at https://vealth.net (the standard at /labor/standard, the tool list at /mcp, the client at /vealth-agent.mjs), and the live site stays the authority for those. The constitution, the worker sidecar and the packet-review skill are not served there; they are published here. This copy gives every file a home with history.
 
 | Path | sha256 |
 |---|---|
-| `README.md` | `659ae98e1af683fbe196043c292058397dc157bb786f4c43d41b1ab306a09794` |
+| `README.md` | `10988abdbab13a00335c768a9552b05f68102c69486d8a7d77fd6877dd026ed9` |
 | `BUY.md` | `5be91e4d187517cf95a5dc3e3532f21605e396a476435ec1a009516af307dedb` |
 | `packages/agent-client/vealth-agent.mjs` | `c04706d514fddbeac71a7c1cd4fad095718cae466011da4e2b7a7a1a754da951` |
 | `schemas/vealth-standard-v0.json` | `36efb029aa8a24c8d1e52379ee9e5005d964412ebca46afa9564dd68c1d084bb` |
@@ -33,8 +33,9 @@ Most of them are also served live at https://vealth.net (the standard at /labor/
 | `examples/human-reviewed-ai-safety-report/photo-01.txt` | `edfe77c5ca9a78a60d2fc03b7f4f9773f65b1ecd838c239ba3f0517f20a1b400` |
 | `examples/human-reviewed-ai-safety-report/photo-02.txt` | `16967860b19c5aa86b1da09cc1f8658bedff7518fe1f4468cf642feb770e0ddd` |
 | `examples/human-reviewed-ai-safety-report/photo-03.txt` | `14d2b7e17c5fdb077f76772533ecf24c10a3a08c3701878a1b819afcc84eaa53` |
-| `packages/steward-agent/steward.mjs` | `8d6c99c8daa84eb2435dbe1c08dd98e2e637e511240dbfa8ab033550fe2bb710` |
-| `packages/steward-agent/README.md` | `e519e9cd28d696a0c800ffce65d25485fb8ca361a8bdbdb6f818ccdcb63f2331` |
-| `packages/steward-agent/package.json` | `15bb0dc1f07d4a0662e5cec11186d4ffb0492ed4e06935aacb35b9f85626350d` |
+| `packages/steward-agent/steward.mjs` | `3e6431af6bc17ba43ad0a449b92c406ce6c3673d6e95a8569d58c3b224379cde` |
+| `packages/steward-agent/README.md` | `0fbe8183ed93e58fbee8512583a536923b90c1655cbfc149997e715f1179e45f` |
+| `packages/steward-agent/package.json` | `59174a4a4dbe9b89dc498997c6d82b9c57e6891c5b75890b5d0a37bec97394e0` |
+| `packages/steward-agent/package-lock.json` | `764b310574790beaf85c725430a5aac831b3834ed6fa079297fd097b5514b871` |
 
 Verify a file: fetch it from vealth.net and compare the hash, or diff it against this repo. Nothing here is a promise of funding, certification or completed work; see docs/truth-boundaries.md.
