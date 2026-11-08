@@ -19,7 +19,7 @@
 //   node vealth-agent.mjs claim <workId> [httpsOriginYouControl] [--adult] [--safety-read]
 //   node vealth-agent.mjs proof <workId> <claimId> <proofs.json>
 //   node vealth-agent.mjs proof-photo <workId> <claimId> <photo...>  # upload photos, print references
-//   node vealth-agent.mjs physical <workId> <claimId> [capturedAtISO] # record them for the human reviewer
+//   node vealth-agent.mjs physical <workId> <claimId> --gps <lat,lng> [capturedAtISO] # record them for the human reviewer
 //   node vealth-agent.mjs status <workId>     # packet state (free, keyless)
 //   node vealth-agent.mjs mine                # everything your wallet has done
 //   node vealth-agent.mjs spend-402 <url> [bodyJson]   # pay a 402 door in USDC-on-Base
@@ -43,7 +43,10 @@
 // prepare_proof as {"type":"photo","upload":"sha256:<hex>"}. The model never
 // reads the photo. The board stores each photo once under its own hash, bound
 // to this wallet, packet and claim, and serves it to nobody but the packet's
-// reviewer. `physical` then records those photos on the physical proof rail.
+// reviewer. `physical` then records those photos on the physical proof rail,
+// with the on-site --gps lat,lng you captured (the `camera GPS` proof-photo
+// printed, or the gps you sent with the proof): the board never reads a stored
+// location back to a caller, because the packet, claim and wallet are public.
 //
 // claim on PHYSICAL work: the board asks the person two factual questions
 // before a claim can be signed (claim-attestation.ts, #1226): "I am at least 18
@@ -574,7 +577,19 @@ async function earn(args) {
 const rawArgv = process.argv.slice(2);
 const flagIdx = rawArgv.indexOf("--flag");
 const flagValue = flagIdx !== -1 ? rawArgv[flagIdx + 1] : undefined;
-const argv = flagIdx !== -1 ? [...rawArgv.slice(0, flagIdx), ...rawArgv.slice(flagIdx + 2)] : rawArgv;
+const afterFlag = flagIdx !== -1 ? [...rawArgv.slice(0, flagIdx), ...rawArgv.slice(flagIdx + 2)] : rawArgv;
+// --gps <lat,lng> belongs to `physical` alone (the on-site pin the person captured),
+// stripped the same way so no other command's argv shape changes.
+const gpsIdx = afterFlag.indexOf("--gps");
+const gpsValue = gpsIdx !== -1 ? afterFlag[gpsIdx + 1] : undefined;
+const argv = gpsIdx !== -1 ? [...afterFlag.slice(0, gpsIdx), ...afterFlag.slice(gpsIdx + 2)] : afterFlag;
+function parsePin(text) {
+  const m = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(String(text ?? ""));
+  if (!m) return null;
+  const lat = Number(m[1]);
+  const lng = Number(m[2]);
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
+}
 // Flags belong to `claim` alone, so every other command reads its arguments
 // exactly as it always has.
 const claimFlagArgs = argv[0] === "claim" ? argv.slice(1).filter((a) => a.startsWith("--")) : [];
@@ -615,9 +630,11 @@ if (!cmd) {
   const acct = account();
   await proofPhoto(acct, a1, a2, [a3, ...rest]);
 } else if (cmd === "physical") {
-  if (!a1 || !a2) { console.error("usage: physical <workId> <claimId> [capturedAtISO]  (after proof: records the photos the board holds for this claim for the human reviewer)"); process.exit(1); }
+  if (!a1 || !a2) { console.error("usage: physical <workId> <claimId> --gps <lat,lng> [capturedAtISO]  (after proof: records the photos the board holds for this claim for the human reviewer; --gps is the on-site location you captured, which the board never reads back to you)"); process.exit(1); }
+  const pin = gpsValue === undefined ? null : parsePin(gpsValue);
+  if (gpsValue !== undefined && !pin) { console.error("--gps must be the on-site numbers you captured as lat,lng, for example --gps 34.0501,-118.2401"); process.exit(1); }
   const acct = account();
-  const prep = await call("prepare_physical_proof", { workId: a1, claimId: a2, workerWallet: acct.address, ...(a3 ? { capturedAt: a3 } : {}) });
+  const prep = await call("prepare_physical_proof", { workId: a1, claimId: a2, workerWallet: acct.address, ...(pin ? { gps: pin } : {}), ...(a3 ? { capturedAt: a3 } : {}) });
   if (prep.isError) report(prep);
   report(await signedSubmit(acct, prep, "submit_physical_proof"));
 } else if (cmd === "status") {

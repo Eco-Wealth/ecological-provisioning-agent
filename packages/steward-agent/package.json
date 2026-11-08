@@ -1,0 +1,13 @@
+{
+  "name": "vealth-steward-agent",
+  "version": "0.1.0",
+  "description": "A small program that keeps provisioning one place through the public Vealth door, forever, on your own machine. Dry by default, never pays, never claims, never decides a proof.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": { "vealth-steward": "steward.mjs" },
+  "files": ["steward.mjs", "README.md"],
+  "engines": { "node": ">=18.17" },
+  "scripts": { "start": "node steward.mjs run" },
+  "dependencies": { "viem": "^2.0.0" },
+  "keywords": ["vealth", "mcp", "agent", "ecological-work"]
+}
