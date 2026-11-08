@@ -45,6 +45,7 @@ docs/                    the constitution, agent execution continuity, HRSR v0, 
 packages/vcwp-sidecar/   the dependency-free worker sidecar for an invited compute worker
 packages/hrsr-validate/  the dependency-free checker for a human-reviewed AI safety report
 skills/ewp-packet-review/ a free, read-only packet-review skill: no wallet, no payment
+skills/net-circle/       the ETH / NET / ECO / ZORA loop on Base: quote it, take it with your own wallet, never lose more than gas
 examples/                synthetic inputs, outputs and a synthetic safety report
 ```
 
