@@ -3,7 +3,7 @@
   "law": "A description change is a trust change. Re-pin deliberately with `npm run check:mcp-tool-descriptions -- --write` and let the reviewer read the before/after text in the diff. Never re-pin to make a red lane green.",
   "regenerate_with": "npm run check:mcp-tool-descriptions -- --write",
   "tool_count": 110,
-  "registry_digest": "sha256:06f3f00254ac1035cb0442144404ade79d96257a54fb701d0d0f9a1ad74dd404",
+  "registry_digest": "sha256:e74deba65e468ba553eb3b169c1b1d5f334fb55370fafb8cadfa6d4ee9c3edd2",
   "tools": [
     {
       "name": "start_here",
@@ -1809,7 +1809,7 @@
           },
           "proofs": {
             "type": "array",
-            "description": "1-20 proof items. A photo goes in BY REFERENCE: {\"type\":\"photo\",\"upload\":\"sha256:<hex>\",\"step\":1,\"capturedAt\":\"<ISO>\"}, where the reference is what `node vealth-agent.mjs proof-photo <workId> <claimId> <photo files>` printed on the person's own machine; the photo bytes never pass through this conversation. A small file may still go inline as {\"type\":\"photo\",\"data\":\"<base64>\"}. Text notes are {\"type\":\"text\",\"data\":\"…\"}. The packet's proof line (get_work_packet) says exactly what it needs.",
+            "description": "1-20 proof items. A photo goes in BY REFERENCE: {\"type\":\"photo\",\"upload\":\"sha256:<hex>\",\"step\":1,\"capturedAt\":\"<ISO>\"}, where the reference is what `node vealth-agent.mjs proof-photo <workId> <claimId> <photo files>` printed on the person's own machine; the photo bytes never pass through this conversation. A small file may still go inline as {\"type\":\"photo\",\"data\":\"<base64>\"}. Text notes are {\"type\":\"text\",\"data\":\"…\"}. When the packet's proof is numbered (p1, p2 …), tag each entry forItem:\"p1\" so it answers its own item. The packet's proof line (get_work_packet) says exactly what it needs.",
             "items": {
               "type": "object"
             }
@@ -1832,7 +1832,7 @@
           },
           "counts": {
             "type": "object",
-            "description": "Optional: what the job asked to be counted, in the packet's own units, as plain numbers — {\"metres_cleared\": 120, \"blockages_removed\": 4, \"check_dams_built\": 3}. Lower_snake_case names, at most 40 of them. Recorded with the proof; it decides nothing on its own."
+            "description": "Optional: what the job asked to be counted, in the packet's own units, as plain numbers — {\"metres_cleared\": 120, \"blockages_removed\": 4, \"check_dams_built\": 3}. Lower_snake_case names, at most 40 of them. A numbered count or measurement item is met by a count whose NAME uses a word of the item (\"Count of bags removed\" is met by bags_removed, never by p3); prepare_proof and a short submit_proof name it. Recorded with the proof; the human who accepts decides the accepted figure."
           },
           "measurement": {
             "type": "object",
@@ -1882,7 +1882,7 @@
           "proofs"
         ]
       },
-      "digest": "sha256:7476d2f6f46997222400969aa3f568399706a181dfe02a0d1bd16c10dcbc455d"
+      "digest": "sha256:752080096618972b5273234d84126dd9e95ab2a7925705e5bb68ab0d9c1d25fb"
     },
     {
       "name": "submit_proof",

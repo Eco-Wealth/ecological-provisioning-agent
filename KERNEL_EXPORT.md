@@ -1,6 +1,6 @@
 # Kernel export
 
-Files below are copied verbatim from the private Vealth repository by `scripts/publish/kernel-export.sh` at that repo's commit `36b535e234eb1ea8e4dbdd6005590fc245ea64ce` on 2026-11-08T08:00:53Z.
+Files below are copied verbatim from the private Vealth repository by `scripts/publish/kernel-export.sh` at that repo's commit `63a8f50c9bc6bde2f4b6f0483a9170b60975126a` on 2026-11-08T16:35:25Z.
 Most of them are also served live at https://vealth.net (the standard at /labor/standard, the tool list at /mcp, the client at /vealth-agent.mjs), and the live site stays the authority for those. The constitution, the worker sidecar and the packet-review skill are not served there; they are published here. This copy gives every file a home with history.
 
 | Path | sha256 |
@@ -12,8 +12,8 @@ Most of them are also served live at https://vealth.net (the standard at /labor/
 | `schemas/vealth-work-grant-v0.schema.json` | `45d910a1907878a64eb68f6b2402da2c06b00b7e58e5048736bbc0c09f5771c7` |
 | `contracts/vealth-work-control.json` | `664edb443396dc4b7917456de80bab4f37e26e9e965f6f629fe6f0058dcd66f1` |
 | `contracts/is-this-safe.json` | `32a00e5dff3d9970479a468fa6910089d9bda4c14e2bd12c580cd22b30c3f8d4` |
-| `contracts/llms.txt` | `30857c5ebd8f6d4a67a954b09d99207cb4174fe0c655ed1b4c383ee2c4523c10` |
-| `contracts/mcp-tools.json` | `df9172310547453e6c9952994c2d088860810a5c77aa2efb5b30410502a41fbf` |
+| `contracts/llms.txt` | `f433e94c68d35df7970aaeb86719a1cce2c76a1a02040da70329aa27abffecdd` |
+| `contracts/mcp-tools.json` | `4057345eeb0f9eeb5af78919c523a11daf83f38eda04a945d5506a3342d9d89c` |
 | `docs/ecowealth-constitution.md` | `fa5d86dcaf9eb54ecfe68588752c2ddfb3387532c0adcba47e1c5c794e892cdd` |
 | `packages/vcwp-sidecar/vcwp-sidecar.mjs` | `5518c37dd47010130202f96e267faaf7542a972b82a4c949981e2c43aa33033a` |
 | `packages/vcwp-sidecar/README.md` | `d1f51ace66910ba51812541f070e91582c3d26d26a584bc52fcc01303fa07d22` |
@@ -33,9 +33,9 @@ Most of them are also served live at https://vealth.net (the standard at /labor/
 | `examples/human-reviewed-ai-safety-report/photo-01.txt` | `edfe77c5ca9a78a60d2fc03b7f4f9773f65b1ecd838c239ba3f0517f20a1b400` |
 | `examples/human-reviewed-ai-safety-report/photo-02.txt` | `16967860b19c5aa86b1da09cc1f8658bedff7518fe1f4468cf642feb770e0ddd` |
 | `examples/human-reviewed-ai-safety-report/photo-03.txt` | `14d2b7e17c5fdb077f76772533ecf24c10a3a08c3701878a1b819afcc84eaa53` |
-| `packages/steward-agent/steward.mjs` | `3e6431af6bc17ba43ad0a449b92c406ce6c3673d6e95a8569d58c3b224379cde` |
-| `packages/steward-agent/README.md` | `0fbe8183ed93e58fbee8512583a536923b90c1655cbfc149997e715f1179e45f` |
-| `packages/steward-agent/package.json` | `59174a4a4dbe9b89dc498997c6d82b9c57e6891c5b75890b5d0a37bec97394e0` |
-| `packages/steward-agent/package-lock.json` | `764b310574790beaf85c725430a5aac831b3834ed6fa079297fd097b5514b871` |
+| `packages/steward-agent/steward.mjs` | `ac405eb5192c49d23b02d27ad6bc3185ca6e964161689d9b098f191b8a574550` |
+| `packages/steward-agent/README.md` | `28c3dab9a8e02f8cb032055fc890de43bf86981c764a076e041ec6bb602c1f16` |
+| `packages/steward-agent/package.json` | `a653455547145f875f5891062307995f5609ae4c81d2fc244d9eb8063e2c3324` |
+| `packages/steward-agent/package-lock.json` | `b20c2a6cab7d36b658073d2849ffe9382c0014f37c64d12cfdda9420265d56a9` |
 
 Verify a file: fetch it from vealth.net and compare the hash, or diff it against this repo. Nothing here is a promise of funding, certification or completed work; see docs/truth-boundaries.md.

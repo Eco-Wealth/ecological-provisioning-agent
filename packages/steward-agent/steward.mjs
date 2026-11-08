@@ -5,7 +5,8 @@
 //   node steward.mjs run --place "Boyle Heights, Los Angeles, CA" --radius 5
 //
 // What it does every look (default every 30 minutes):
-//   1. find_work near your place, and write every NEW job to digest.md and to the screen in plain words;
+//   1. find_work near your place, and write every NEW job to digest.md and to the screen in plain words (with --kind, only the jobs
+//      whose title, proof line or work type carries one of your words; the default watches everything);
 //   2. turn each .txt or .md file you drop in needs/ into a post (the free post signed by your own wallet);
 //   3. read my_work for its own wallet, and follow the reply's NEXT_CALL for read steps only;
 //   4. vote, free, only on the work ids you wrote in votes.txt.
@@ -28,7 +29,7 @@ import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0"; // 0.3.0 (2026-11-08): --kind, watch one kind of work; the "Run a steward for your block" README section
 export const DEFAULT_MCP_URL = "https://vealth.net/mcp";
 /** The board's free signed lane takes ten posts per wallet per rolling day; the steward never asks for more. */
 export const POSTS_PER_DAY = 10;
@@ -51,6 +52,11 @@ const LOCK_FRESH_MS = 5 * 60_000;
 /** Waits are slept a minute at a time by the wall clock, so a machine that slept looks again when it wakes and a stop file is seen within a minute. */
 const SLEEP_CHUNK_MS = 60_000;
 const MIN_INTERVAL_MINUTES = 5;
+/** --kind: at most this many kinds, each at most this many characters once reduced to plain words. */
+export const MAX_KINDS = 12;
+export const MAX_KIND_CHARS = 40;
+/** The board reads at most 32 words of a search; a watch with more words than that is filtered here only. */
+const MAX_QUERY_WORDS = 32;
 
 const FENCE_OPEN = "[[untrusted]]";
 const FENCE_CLOSE = "[[/untrusted]]";
@@ -324,6 +330,49 @@ export function parsePlace(text) {
   const m = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(String(text ?? ""));
   return m ? { lat: Number(m[1]), lng: Number(m[2]) } : null;
 }
+// ── --kind: watch only one kind of work ───────────────────────────────────────────────────────────────────────────────
+/** Words the way the board itself reads them (accents folded, lower case, every run of other characters one space), so a kind the board would find, the steward finds. */
+const COMBINING_MARKS_RE = new RegExp(`[${cls([[0x300, 0x36f]])}]`, "g"); // built at run time, like the other invisible-character classes, so no such character sits in this file
+export const kindWords = (s) => String(s ?? "").normalize("NFD").replace(COMBINING_MARKS_RE, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+/**
+ * The kinds a person asked to watch, as plain words: `--kind "fire,ember zone"` is two kinds. Commas separate kinds; a kind is one or
+ * more words. `all` or `any` on its own means no filter (watch everything again). Returns the list, never null.
+ */
+export function parseKinds(raw) {
+  const parts = (Array.isArray(raw) ? raw : [raw]).flatMap((x) => String(x ?? "").split(","));
+  const kinds = [];
+  for (const part of parts) {
+    const k = kindWords(part);
+    if (!k) continue;
+    if (k.length < 2 || k.length > MAX_KIND_CHARS) throw new Error(`A kind is one or more words of 2 to ${MAX_KIND_CHARS} letters or digits in all ("${safeName(part).slice(0, 30)}" is not).`);
+    if (!kinds.includes(k)) kinds.push(k);
+  }
+  if (kinds.length === 1 && (kinds[0] === "all" || kinds[0] === "any")) return [];
+  if (kinds.length > MAX_KINDS) throw new Error(`Watch at most ${MAX_KINDS} kinds at a time (it was ${kinds.length}).`);
+  return kinds;
+}
+/** The work type as words: the board sends a number (0 water, 1 soil and planting, 2 building) or its own label. */
+const WORK_TYPE_WORDS = ["water", "soil planting", "building"];
+const workTypeWords = (v) => (typeof v === "number" ? (WORK_TYPE_WORDS[v] ?? "") : typeof v === "string" ? v : "");
+/** What a kind is matched against: the job's title, its proof line and its work type, as find_work returns them. Never its place, so a kind is never a street. */
+export function kindText(row) {
+  const words = (x) => scrub(textOf(x)).replace(FENCE_RE, " ");
+  return kindWords([words(row?.title), words(row?.proofRule), workTypeWords(row?.workType)].join(" "));
+}
+/** True when the row has no filter on it (no kinds), or when any kind begins a word of the row's title, proof line or work type, the board's own rule. */
+export function matchesKinds(row, kinds) {
+  if (!Array.isArray(kinds) || !kinds.length) return true;
+  const hay = ` ${kindText(row)}`;
+  return kinds.some((k) => hay.includes(` ${k}`));
+}
+/** The words for the board's own search, so it sends back work that carries them; null when there are more than it reads (the steward then filters alone). */
+export function kindQuery(kinds) {
+  const words = [...new Set((Array.isArray(kinds) ? kinds : []).flatMap((k) => k.split(" ")))];
+  return words.length && words.length <= MAX_QUERY_WORDS ? words.join(" ") : null;
+}
+/** The kinds to keep: the ones just asked for (an empty list clears them), else the ones already saved. */
+const checkedKinds = (asked, saved) => (asked === undefined ? parseKinds(saved) : parseKinds(asked));
+
 function checkedPlace({ place, lat, lng, radiusKm, intervalMinutes }, base = {}) {
   const c = { ...base };
   if (place !== undefined && place !== null && String(place).trim()) {
@@ -372,12 +421,15 @@ export async function setupSteward(opts, say = () => {}) {
   const previous = readJson(p.config, {});
   const config = checkedPlace(opts, previous);
   config.mcpUrl = checkedMcpUrl(opts.mcpUrl || previous.mcpUrl || DEFAULT_MCP_URL);
+  const kinds = checkedKinds(opts.kinds, previous.kinds);
+  if (kinds.length) config.kinds = kinds; else delete config.kinds; // no kinds saved means watch everything, as before this existed
   const changed = JSON.stringify(config) !== JSON.stringify(previous);
   if (changed) writeJsonAtomic(p.config, config);
   if (created || changed) {
     say(`${created ? "Made a new wallet for this steward." : "Kept the wallet this steward already has."} Its public address: ${signer.address}`);
     say(`The key is in ${p.key}, readable only by you. It never leaves this machine and is never printed. The wallet holds nothing and needs nothing.`);
     say(`Place: ${config.place}, within ${config.radiusKm} km. Looks every ${config.intervalMinutes} minutes. Door: ${config.mcpUrl}`);
+    if (config.kinds) say(`Only work matching: ${config.kinds.join(", ")}. Watch everything again with --kind all.`);
   }
   if (created) {
     say([
@@ -404,6 +456,8 @@ export async function openSteward(opts = {}) {
   const keyHex = readKey(p.key);
   const signer = await signerFor(keyHex);
   const merged = checkedPlace(opts, config);
+  const kinds = checkedKinds(opts.kinds, config.kinds);
+  if (kinds.length) merged.kinds = kinds; else delete merged.kinds;
   const mcpUrl = checkedMcpUrl(opts.mcpUrl || config.mcpUrl || DEFAULT_MCP_URL);
   const secrets = [keyHex.slice(2).toLowerCase()];
   const out = makeOut(secrets, deps.write, deps.log === false ? null : p.log);
@@ -642,10 +696,13 @@ function saveState(s, state) {
 export const postsInLastDay = (state, now) => [...(state.posts ?? []), ...Object.values(state.pending ?? {})].filter((p) => Date.parse(p?.at ?? "") >= now - 86_400_000).length;
 
 // ── 1. new jobs near the place ────────────────────────────────────────────────────────────────────────────────────
-export const searchArgs = (c) => (c.lat !== undefined ? { latitude: c.lat, longitude: c.lng, radiusKm: c.radiusKm } : { near: c.place, radiusKm: c.radiusKm });
+export const searchArgs = (c) => {
+  const query = kindQuery(c.kinds); // with kinds, the board is asked for work that carries those words; the steward still checks every row itself
+  return { ...(c.lat !== undefined ? { latitude: c.lat, longitude: c.lng, radiusKm: c.radiusKm } : { near: c.place, radiusKm: c.radiusKm }), ...(query ? { query } : {}) };
+};
 
 async function phaseJobs(s, state, report) {
-  const found = []; const ids = new Set(); let dropped = 0; let more = false;
+  const seenRows = []; const ids = new Set(); let dropped = 0; let more = false;
   for (let page = 1; page <= s.maxPages && !s.stopped; page++) {
     const rep = await door(s, "find_work", { ...searchArgs(s.config), limit: 25, page });
     if (rep.isError) { report.notes.push(`find_work said: ${boardWords(rep.prose, 240)}`); break; }
@@ -653,11 +710,15 @@ async function phaseJobs(s, state, report) {
       const id = safeId(row?.workId);
       if (!id) { dropped += 1; continue; }
       if (ids.has(id)) continue;
-      ids.add(id); found.push({ ...row, workId: id });
+      ids.add(id); seenRows.push({ ...row, workId: id });
     }
     more = rep.sc.morePages === true;
     if (!more) break;
   }
+  // --kind: only the work whose title, proof line or work type carries one of the kinds. Everything else is left out of this look and never marked seen,
+  // so changing the kinds takes effect at the next look.
+  const found = seenRows.filter((r) => matchesKinds(r, s.config.kinds));
+  report.jobsFiltered = seenRows.length - found.length;
   const at = iso(s.now());
   for (const r of found) { const seen = state.seen[r.workId]; if (seen && typeof seen === "object") seen.last = at; } // still open: kept as newest
   const fresh = found.filter((r) => !Object.hasOwn(state.seen, r.workId));
@@ -970,7 +1031,7 @@ async function phaseVotes(s, state, report) {
 export async function runLook(s) {
   s.calls = 0;
   const state = loadState(s);
-  const report = { at: iso(s.now()), jobs: [], jobsWaiting: 0, jobsOpen: 0, jobsMore: false, needs: [], own: [], ownCount: 0, votes: [], notes: [], backoff: null, failed: null };
+  const report = { at: iso(s.now()), jobs: [], jobsWaiting: 0, jobsOpen: 0, jobsFiltered: 0, jobsMore: false, needs: [], own: [], ownCount: 0, votes: [], notes: [], backoff: null, failed: null };
   if (state.note) report.notes.push(state.note);
   try {
     await phaseJobs(s, state, report);
@@ -991,7 +1052,8 @@ export async function runLook(s) {
     try { saveState(s, state); } catch (e) { report.failed ??= "state.json could not be written"; report.notes.push(`state.json could not be written (${safeName(String(e?.code ?? e?.message ?? e))}).`); }
   }
   const sections = [];
-  if (report.jobs.length) sections.push(`### New jobs near ${scrub(s.config.place)} (${report.jobs.length})\n\n${report.jobs.map((j) => jobBlock(j, s)).join("\n\n")}${report.jobsWaiting ? `\n\n${report.jobsWaiting} more new jobs will be listed at the next look.` : ""}`);
+  const watching = s.config.kinds?.length ? ` (only work matching ${s.config.kinds.join(", ")})` : "";
+  if (report.jobs.length) sections.push(`### New jobs near ${scrub(s.config.place)}${watching} (${report.jobs.length})\n\n${report.jobs.map((j) => jobBlock(j, s)).join("\n\n")}${report.jobsWaiting ? `\n\n${report.jobsWaiting} more new jobs will be listed at the next look.` : ""}`);
   if (report.needs.length) sections.push(`### Your needs\n\n${report.needs.join("\n")}`);
   if (report.own.length) sections.push(`### Your own work (this wallet)\n\n${report.own.join("\n")}`);
   if (report.votes.length) sections.push(`### Votes\n\n${report.votes.join("\n")}`);
@@ -1002,7 +1064,8 @@ export async function runLook(s) {
     try { appendRotating(s.paths.digest, `${s.out.hide(text)}\n`); } catch (e) { s.say(`steward: digest.md could not be written (${safeName(String(e?.code ?? e))}).`); }
   }
   const open = `${report.jobsOpen}${report.jobsMore ? "+" : ""}`;
-  report.summary = `look at ${report.at.slice(0, 16).replace("T", " ")} UTC. New jobs: ${report.jobs.length} (${open} open near the place). Need notes: ${report.needs.length}. Claimed by this wallet: ${report.ownCount}. Votes: ${report.votes.length}.${report.backoff ? " The door asked the steward to wait." : ""}${report.failed ? " The look went wrong; it will be tried again." : ""}`;
+  const skipped = report.jobsFiltered ? `, ${report.jobsFiltered} more left out as not matching ${s.config.kinds.join(", ")}` : "";
+  report.summary = `look at ${report.at.slice(0, 16).replace("T", " ")} UTC. New jobs: ${report.jobs.length} (${open} open near the place${skipped}). Need notes: ${report.needs.length}. Claimed by this wallet: ${report.ownCount}. Votes: ${report.votes.length}.${report.backoff ? " The door asked the steward to wait." : ""}${report.failed ? " The look went wrong; it will be tried again." : ""}`;
   return report;
 }
 
@@ -1017,7 +1080,7 @@ function writeHeartbeat(s, fields) {
   const state = readJson(s.paths.state, {});
   s.heartbeat = {
     ...s.heartbeat, schema: "vealth-steward-heartbeat-v1", version: VERSION, pid: process.pid, address: s.address, place: s.config.place, radiusKm: s.config.radiusKm,
-    intervalMinutes: s.config.intervalMinutes, door: s.mcpUrl, mode: s.live ? "live" : "dry", startedAt: s.startedAt ?? null, ...fields,
+    intervalMinutes: s.config.intervalMinutes, door: s.mcpUrl, mode: s.live ? "live" : "dry", startedAt: s.startedAt ?? null, ...(s.config.kinds?.length ? { kinds: s.config.kinds } : {}), ...fields,
     postsLast24h: postsInLastDay({ posts: Array.isArray(state.posts) ? state.posts : [], pending: state.pending ?? {} }, s.now()), postCap: s.postsPerDay, updatedAt: iso(s.now()),
   };
   try { writeJsonAtomic(s.paths.heartbeat, s.heartbeat); } catch { /* a heartbeat that cannot be written never stops the steward */ }
@@ -1095,7 +1158,7 @@ export function statusOf(dir, extraStopFiles = []) {
   const now = Date.now();
   return {
     dir, setUp: true, version: VERSION, address: readText(p.address).trim() || null, place: config.place, radiusKm: config.radiusKm, intervalMinutes: config.intervalMinutes,
-    door: config.mcpUrl, mode: hb?.mode ?? null, running, pid: running ? lock.pid : null, lastLookAt: state.lastLookAt ?? hb?.lastLookAt ?? null,
+    ...(Array.isArray(config.kinds) && config.kinds.length ? { kinds: config.kinds } : {}), door: config.mcpUrl, mode: hb?.mode ?? null, running, pid: running ? lock.pid : null, lastLookAt: state.lastLookAt ?? hb?.lastLookAt ?? null,
     lastLook: hb?.lastLook ?? null, lastLookSummary: hb?.lastLookSummary ?? null, nextLookAt: running ? hb?.nextLookAt ?? null : null, stoppedBecause: running ? null : hb?.stoppedBecause ?? null,
     postsLast24h: postsInLastDay({ posts: Array.isArray(state.posts) ? state.posts : [], pending: state.pending ?? {} }, now), postCap: POSTS_PER_DAY,
     votesCast: Object.keys(state.votes ?? {}).length, jobsSeen: Object.keys(state.seen ?? {}).length, backoffUntil: state.backoffUntil ?? null,
@@ -1109,6 +1172,7 @@ export function statusText(st) {
   return [
     `Steward ${st.version} in ${st.dir}`,
     `  watching: ${st.place}, within ${st.radiusKm} km, a look every ${st.intervalMinutes} minutes`,
+    ...(st.kinds?.length ? [`  only work matching: ${st.kinds.join(", ")} (change it with --kind, or --kind all to watch everything)`] : []),
     `  door: ${st.door}${st.door === DEFAULT_MCP_URL ? "" : " (not the public Vealth door)"}`,
     `  wallet: ${st.address ?? "not made yet"}`,
     `  mode: ${st.mode === "live" ? "live (it posts your needs and casts your votes)" : st.mode === "dry" ? "dry (it shows what it would post and vote, and does neither)" : "not run yet"}`,
@@ -1125,7 +1189,7 @@ export function statusText(st) {
 // ── the command line ──────────────────────────────────────────────────────────────────────────────────────────────
 class UsageError extends Error {}
 const BOOLEAN_FLAGS = new Set(["live", "once", "help", "version", "json"]);
-const VALUE_FLAGS = new Set(["dir", "place", "lat", "lng", "radius", "interval", "mcp-url", "max-new", "pace-ms", "stop-file", "house"]);
+const VALUE_FLAGS = new Set(["dir", "place", "lat", "lng", "radius", "interval", "mcp-url", "max-new", "pace-ms", "stop-file", "house", "kind"]);
 export function parseArgs(argv) {
   const out = { command: null, flags: {} };
   for (let i = 0; i < argv.length; i++) {
@@ -1139,7 +1203,7 @@ export function parseArgs(argv) {
     if (!VALUE_FLAGS.has(name)) throw new UsageError(`Unknown option --${safeName(name).slice(0, 30)}. Run with --help to see the options.`);
     const value = inline ?? argv[++i];
     if (value === undefined || (inline === undefined && value.startsWith("--"))) throw new UsageError(`--${name} needs a value.`);
-    if (name === "stop-file") (out.flags[name] ??= []).push(value); else out.flags[name] = value;
+    if (name === "stop-file" || name === "kind") (out.flags[name] ??= []).push(value); else out.flags[name] = value;
   }
   return out;
 }
@@ -1154,11 +1218,13 @@ export const HELP = `vealth steward ${VERSION}: keeps provisioning one place thr
   node steward.mjs run --place "Boyle Heights, Los Angeles, CA" --radius 5     first time: makes your wallet, then looks
   node steward.mjs run --live                                                  later: act (post your needs, cast your votes)
   node steward.mjs run --once                                                  one look, then stop (for a scheduler)
+  node steward.mjs run --kind "fire,ember zone"                                watch only work whose title, proof line or work type carries those words
   node steward.mjs setup --lat 34.03 --lng -118.21 --radius 5                  set the place and make the wallet, no look
   node steward.mjs status [--json]                                             where things stand
   node steward.mjs address                                                     your wallet's public address
 
   --dir <folder>        the steward's folder (default ~/.vealth-steward, or VEALTH_STEWARD_HOME)
+  --kind <words>        watch only one kind of work: words separated by commas (up to ${MAX_KINDS}); saved with the place; --kind all watches everything again
   --interval <min>      minutes between looks (default 30, at least ${MIN_INTERVAL_MINUTES})
   --mcp-url <url>       the door (default ${DEFAULT_MCP_URL}); https only
   --max-new <n>         new jobs listed per look (default 15)
@@ -1194,6 +1260,9 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     };
     maxNew = numFlag("max-new", flags["max-new"], 1, 100);
     paceMs = numFlag("pace-ms", flags["pace-ms"], 0, 60_000);
+    if (flags.kind !== undefined) {
+      try { given.kinds = parseKinds(flags.kind); } catch (e) { throw new UsageError(`--kind: ${e.message}`); }
+    }
   } catch (e) {
     if (e instanceof UsageError) { say(e.message); return 2; }
     throw e;
@@ -1215,7 +1284,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       if (!process.stdin.isTTY) { say('No place yet. Run: node steward.mjs run --place "Your Place" --radius 5'); return 2; }
       Object.assign(given, await askForPlace());
     }
-    if (!configured || command === "setup" || asked) await setupSteward(given, say);
+    if (!configured || command === "setup" || asked || given.kinds !== undefined) await setupSteward(given, say);
     if (command === "setup") return 0;
     const s = await openSteward({ ...given, live: flags.live, maxNew, paceMs, stopFiles, house: flags.house });
     if (s.mcpUrl !== DEFAULT_MCP_URL) say(`steward: note, this steward talks to ${s.mcpUrl}, not ${DEFAULT_MCP_URL}. It signs only the posts and votes it checked itself, but the words it shows come from that door.`);
