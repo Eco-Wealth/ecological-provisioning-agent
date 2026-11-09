@@ -1,11 +1,11 @@
 # Kernel export
 
-Files below are copied verbatim from the private Vealth repository by `scripts/publish/kernel-export.sh` at that repo's commit `c6a6c32705d49c9a6eeca0bc9aaeab706265da30` on 2026-11-08T23:25:07Z.
+Files below are copied verbatim from the private Vealth repository by `scripts/publish/kernel-export.sh` at that repo's commit `51f44f231f9b77aa8363ab9cbfd3ae3e42d16577` on 2026-11-09T01:24:18Z.
 Most of them are also served live at https://vealth.net (the standard at /labor/standard, the tool list at /mcp, the client at /vealth-agent.mjs), and the live site stays the authority for those. The constitution, the worker sidecar and the packet-review skill are not served there; they are published here. This copy gives every file a home with history.
 
 | Path | sha256 |
 |---|---|
-| `README.md` | `16f1ca9bb8f1aee4a9dfa1e13b42d7e0ff7391546f29b3c0291be4cd647e6b62` |
+| `README.md` | `560a8767ba417afade32c9ce30d5018e2467416f917ac368abeb5d19c9d7feb0` |
 | `BUY.md` | `5be91e4d187517cf95a5dc3e3532f21605e396a476435ec1a009516af307dedb` |
 | `packages/agent-client/vealth-agent.mjs` | `c04706d514fddbeac71a7c1cd4fad095718cae466011da4e2b7a7a1a754da951` |
 | `schemas/vealth-standard-v0.json` | `36efb029aa8a24c8d1e52379ee9e5005d964412ebca46afa9564dd68c1d084bb` |
@@ -22,9 +22,11 @@ Most of them are also served live at https://vealth.net (the standard at /labor/
 | `skills/ewp-packet-review/review-packet.mjs` | `95e369474065d520148c62808e678af89a06a039a8d414ef52205d183a13fb2d` |
 | `skills/ewp-packet-review/fixture-packet.json` | `68043432dfd73a39b3aba65d853c8d239f15d2e230e53f21ec20d4ca8ac5948b` |
 | `skills/ewp-packet-review/README.md` | `c6aa88aad833fcb240967d873567f6b6dcd22aabf8df0d13ee4bc59ad8c2c8c7` |
-| `skills/net-circle/SKILL.md` | `f81bb6095593c463882edda4e915ff1fe31de87614161d01d1a1bbffd4cb0c0a` |
-| `skills/net-circle/net-circle.mjs` | `8ad609b52689bc94beb9f5a377dfa694f4d7730daa0bf01f40adaf151a6c813c` |
-| `skills/net-circle/package.json` | `2ffc5e34bf603b6b017272e690496e2dc37dd6365506b0bb85e8c24ac57738cc` |
+| `skills/net-circle/SKILL.md` | `84eb92f36fdd7b37af793fe2ca911bd64232f050038c9aa2ea3123aa307b9aac` |
+| `skills/net-circle/net-circle.mjs` | `cf5ba3d016c37f0040e3dd3369574922c6af32221635ee03be8f21144362eaf1` |
+| `skills/net-circle/package.json` | `f888f4bc474c14f1390c5b2bb62cd82173f094273ca8fb2c2c214d6a2a26af18` |
+| `skills/net-circle/net-circle.test.mjs` | `3e1d8598576439e6f2e4980d4fba77853bc0fe834f3f49d35f706d4c8d37645b` |
+| `skills/net-circle/package-lock.json` | `8e2e32be9481f18e656b7224ba6b5fcb4900eaef887d71833ba56d311328a2a3` |
 | `docs/human-reviewed-ai-safety-report-v0.md` | `33f208eb1882a8b320d02ec8f5937e8305941dddb1be4d7f215f886090953b5a` |
 | `schemas/human-reviewed-ai-safety-report-v0.schema.json` | `610ebf3b876e1d26f871b3a16d1da01507e11f6d593755fd3091ea2e460491db` |
 | `packages/hrsr-validate/hrsr-validate.mjs` | `8ec126da7eda0ecdae8324dd5bd86eb44485e193b8e8d87d571c424374ebcfb9` |
