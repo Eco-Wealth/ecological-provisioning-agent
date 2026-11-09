@@ -1,13 +1,28 @@
 {
   "name": "net-circle",
-  "version": "0.1.0",
-  "description": "Quote, prepare and simulate the ETH / NET / ECO / ZORA circle on Base as one atomic transaction that reverts unless it returns more ETH than it takes plus gas. Holds no key, signs nothing, sends nothing.",
+  "version": "0.3.0",
+  "description": "Every ETH loop through the NET token pools on Base, quoted and prepared as one transaction that reverts unless at least input plus gas comes back. Holds no key, signs nothing, sends nothing.",
   "type": "module",
   "license": "Apache-2.0",
-  "bin": { "net-circle": "net-circle.mjs" },
-  "files": ["net-circle.mjs", "SKILL.md"],
-  "engines": { "node": ">=20" },
-  "scripts": { "quote": "node net-circle.mjs", "prepare": "node net-circle.mjs prepare" },
-  "dependencies": { "viem": "2.57.10" },
-  "keywords": ["base", "uniswap-v4", "zora", "agent", "arbitrage"]
+  "bin": {
+    "net-circle": "net-circle.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "quote": "node net-circle.mjs quote",
+    "pools": "node net-circle.mjs pools",
+    "test": "node --test net-circle.test.mjs"
+  },
+  "dependencies": {
+    "viem": "2.57.10"
+  },
+  "keywords": [
+    "base",
+    "uniswap-v4",
+    "zora",
+    "agent",
+    "arbitrage"
+  ]
 }
