@@ -242,15 +242,27 @@ export function verifyBundle(bundle, { asOf } = {}) {
   const admissions = [...attestations].filter(([id, a]) =>
     a.role === 'obligation_admission' && before(a) && !invalidAttestationIds.has(id));
   const dispositions = [...attestations].filter(([, a]) => a.role === 'disposition' && before(a));
+  // Build a closure index once. Quadratic admission/disposition scans are
+  // exploitable resource exhaustion on otherwise well-formed large bundles.
+  const closuresByObligation = new Map();
+  for (const [dispositionId, d] of dispositions) {
+    if (d.effect !== 'close' || invalidDispositionRefs.has(dispositionId) ||
+        invalidAttestationIds.has(dispositionId)) continue;
+    for (const rel of d.relations) {
+      if (!isObject(rel) || rel.kind !== 'disposes') continue;
+      const obligationId = attId(rel.to);
+      if (obligationId === null) continue;
+      if (!closuresByObligation.has(obligationId)) closuresByObligation.set(obligationId, []);
+      const closers = closuresByObligation.get(obligationId);
+      if (!closers.includes(dispositionId)) closers.push(dispositionId);
+    }
+  }
   for (const [id] of admissions) {
-    const closers = dispositions.filter(([dispositionId, d]) => d.effect === 'close' &&
-      !invalidDispositionRefs.has(dispositionId) &&
-      !invalidAttestationIds.has(dispositionId) &&
-      d.relations.some(rel => isObject(rel) && rel.kind === 'disposes' && attId(rel.to) === id));
+    const closers = closuresByObligation.get(id) ?? [];
     if (closers.length) {
       add('obligations', 'O001', 'UNKNOWN', 'closure asserted; authorization unverified', id);
       report.recordedState.closureAssertions.push({
-        obligation: id, dispositions: closers.map(([closeId]) => closeId)
+        obligation: id, dispositions: closers
       });
     } else {
       add('obligations', 'O002', 'WARN', 'no closure assertion yet', id);
