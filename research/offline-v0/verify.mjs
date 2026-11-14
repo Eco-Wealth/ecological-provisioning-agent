@@ -89,12 +89,16 @@ export function verifyBundle(bundle, { asOf } = {}) {
     evidence: bundle.evidence.length
   };
   const referents = new Set();
+  const ambiguousReferents = new Set();
   for (const [i, r] of bundle.referents.entries()) {
     if (!isObject(r) || !nonempty(r.id) || !nonempty(r.boundary)) {
       add('structural', 'S005', 'FAIL', 'invalid Referent', 'referents[' + i + ']');
       continue;
     }
-    if (referents.has(r.id)) add('structural', 'S006', 'FAIL', 'duplicate Referent', r.id);
+    if (referents.has(r.id)) {
+      add('structural', 'S006', 'FAIL', 'duplicate Referent', r.id);
+      ambiguousReferents.add(r.id);
+    }
     referents.add(r.id);
   }
   const attestations = new Map();
@@ -108,12 +112,12 @@ export function verifyBundle(bundle, { asOf } = {}) {
       add('structural', 'S007', 'FAIL', 'incomplete Attestation', 'attestations[' + i + ']');
       continue;
     }
-    if (!referents.has(a.scopeReferent)) {
-      add('structural', 'S008', 'FAIL', 'unknown scope Referent', id);
+    if (!referents.has(a.scopeReferent) || ambiguousReferents.has(a.scopeReferent)) {
+      add('structural', 'S008', 'FAIL', 'unknown or ambiguous scope Referent', id);
       invalidAttestationIds.add(id);
     }
-    if (!a.concerns.length || a.concerns.some(ref => !referents.has(ref))) {
-      add('structural', 'S009', 'FAIL', 'unknown concern Referent', id);
+    if (!a.concerns.length || a.concerns.some(ref => !referents.has(ref) || ambiguousReferents.has(ref))) {
+      add('structural', 'S009', 'FAIL', 'unknown or ambiguous concern Referent', id);
       invalidAttestationIds.add(id);
     }
     if (!ROLES.has(a.role)) add('structural', 'S010', 'UNKNOWN', 'unrecognized derived role', id);
