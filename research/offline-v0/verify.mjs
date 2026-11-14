@@ -117,23 +117,43 @@ export function verifyBundle(bundle, { asOf } = {}) {
     add('signatures', 'G001', 'UNKNOWN', 'cryptographic signature not checked', id);
   }
   const evidence = new Map();
+  const evidenceIntegrityFailures = new Set();
+  const verifiedDigests = new Map();
   for (const [i, item] of bundle.evidence.entries()) {
     if (!isObject(item) || !nonempty(item.id) ||
         !['inline', 'restricted', 'missing'].includes(item.access)) {
       add('evidence', 'E001', 'FAIL', 'invalid evidence item', 'evidence[' + i + ']');
       continue;
     }
-    if (evidence.has(item.id)) add('evidence', 'E002', 'FAIL', 'duplicate evidence identity', item.id);
+    if (evidence.has(item.id)) {
+      add('evidence', 'E002', 'FAIL', 'duplicate evidence identity', item.id);
+      evidenceIntegrityFailures.add(item.id);
+      continue; // first identity wins; never let duplicates overwrite the trusted index
+    }
     evidence.set(item.id, item);
+    if (Object.hasOwn(item, 'sha256') && !SHA.test(item.sha256)) {
+      add('evidence', 'E011', 'FAIL', 'invalid evidence SHA-256 commitment', item.id);
+      evidenceIntegrityFailures.add(item.id);
+    }
     if (item.access === 'inline') {
-      if (typeof item.text !== 'string' || !SHA.test(item.sha256))
+      if (typeof item.text !== 'string' || !SHA.test(item.sha256)) {
         add('evidence', 'E003', 'FAIL', 'inline text and SHA-256 required', item.id);
-      else if (digest(item.text) !== item.sha256)
+        evidenceIntegrityFailures.add(item.id);
+      } else if (digest(item.text) !== item.sha256) {
         add('evidence', 'E004', 'FAIL', 'inline digest mismatch', item.id);
-      else add('evidence', 'E004', 'PASS', 'bytes match claimed digest; truth unverified', item.id);
+        evidenceIntegrityFailures.add(item.id);
+      } else {
+        add('evidence', 'E004', 'PASS', 'bytes match claimed digest; truth unverified', item.id);
+        const original = verifiedDigests.get(item.sha256);
+        if (original !== undefined)
+          add('evidence', 'E009', 'WARN', 'identical verified bytes reused under another evidence identity', item.id);
+        else verifiedDigests.set(item.sha256, item.id);
+      }
     } else {
-      if (Object.hasOwn(item, 'text'))
+      if (Object.hasOwn(item, 'text')) {
         add('evidence', 'E008', 'FAIL', 'restricted/missing evidence includes inline content', item.id);
+        evidenceIntegrityFailures.add(item.id);
+      }
       add('evidence', 'E005', 'UNKNOWN', 'withheld or missing evidence cannot be checked', item.id);
       if (item.access === 'restricted' && !Object.hasOwn(item, 'text'))
         add('privacy', 'R001', 'PASS', 'restricted content not included', item.id);
@@ -147,9 +167,19 @@ export function verifyBundle(bundle, { asOf } = {}) {
   const invalidDispositionRefs = new Set();
   for (const [id, a] of attestations) {
     dependencies.set(id, []);
+    const seenEvidence = new Set();
     for (const ref of a.evidenceRefs) {
-      if (!evidence.has(ref)) add('evidence', 'E007', 'FAIL', 'absent evidence reference', id);
+      if (typeof ref !== 'string' || !ref || !evidence.has(ref))
+        add('evidence', 'E007', 'FAIL', 'absent or malformed evidence reference', id);
+      else if (seenEvidence.has(ref))
+        add('evidence', 'E010', 'WARN', 'repeated evidence reference does not establish independent support', id);
+      seenEvidence.add(ref);
+      if (a.role === 'disposition' && a.effect === 'close' && evidenceIntegrityFailures.has(ref))
+        invalidDispositionRefs.add(id);
     }
+    if (a.role === 'disposition' && a.effect === 'close' &&
+        a.evidenceRefs.some(ref => evidenceIntegrityFailures.has(ref)))
+      add('obligations', 'O005', 'FAIL', 'closing disposition cites compromised evidence', id);
     for (const rel of a.relations) {
       const targetId = isObject(rel) ? attId(rel.to) : null;
       if (!isObject(rel) || !nonempty(rel.kind) || !targetId || !attestations.has(targetId)) {
