@@ -19,5 +19,7 @@ jobs:
           node-version: '22'
       - name: Unit and source-integrity tests
         run: node --test tests/*.test.mjs
+      - name: Independent Python/Node differential conformance
+        run: python3 tests/offline-differential.py
       - name: Offline research CLI (synthetic only)
         run: node research/offline-v0/cli.mjs research/offline-v0/fixtures/synthetic.json
