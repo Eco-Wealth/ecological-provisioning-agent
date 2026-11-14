@@ -107,7 +107,7 @@ def inspect(bundle):
             if not isinstance(ref, str) or not ref or ref not in evidence:
                 errors.add("bad-evidence-ref")
                 invalid.add(key)
-            if a["role"] == "disposition" and ref in bad_evidence:
+            if a["role"] == "disposition" and isinstance(ref, str) and ref in bad_evidence:
                 invalid.add(key)
                 errors.add("tainted-disposition")
         for edge in a["relations"]:
