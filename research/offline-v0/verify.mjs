@@ -170,18 +170,31 @@ export function verifyBundle(bundle, { asOf } = {}) {
       }
     }
   }
-  // Three-color DFS identifies equal-time dependency cycles as well as cycles
-  // whose individual edges passed chronological checks.
+  // Iterative three-color DFS avoids call-stack exhaustion on long, valid
+  // lineages supplied by untrusted bundles. Work is linear in vertices + edges.
   const state = new Map();
   let cycleDetected = false;
-  function visit(id) {
-    if (state.get(id) === 1) { cycleDetected = true; return; }
-    if (state.get(id) === 2) return;
-    state.set(id, 1);
-    for (const next of dependencies.get(id) ?? []) visit(next);
-    state.set(id, 2);
+  for (const root of dependencies.keys()) {
+    if (state.has(root)) continue;
+    state.set(root, 1);
+    const stack = [{ id: root, index: 0 }];
+    while (stack.length) {
+      const frame = stack[stack.length - 1];
+      const edges = dependencies.get(frame.id) ?? [];
+      if (frame.index >= edges.length) {
+        state.set(frame.id, 2);
+        stack.pop();
+        continue;
+      }
+      const target = edges[frame.index++];
+      if (state.get(target) === 1) {
+        cycleDetected = true;
+      } else if (!state.has(target)) {
+        state.set(target, 1);
+        stack.push({ id: target, index: 0 });
+      }
+    }
   }
-  for (const id of dependencies.keys()) visit(id);
   if (cycleDetected) add('structural', 'S016', 'FAIL', 'cyclic Attestation dependencies');
 
   const admissions = [...attestations].filter(([, a]) => a.role === 'obligation_admission' && before(a));
