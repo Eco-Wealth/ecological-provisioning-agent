@@ -51,3 +51,12 @@ test('an invalid admission must not be reported as an admitted obligation', () =
   assert.equal(r.recordedState.closureAssertions.length, 0);
   assert.deepEqual(r.recordedState.openObligationAssertions, []);
 });
+
+test('duplicate Referent identity with conflicting boundaries quarantines dependent obligation projections', () => {
+  const b = fresh();
+  b.referents.push({ id: 'synthetic-place', boundary: 'different disputed physical boundary' });
+  const r = verifyBundle(b);
+  assert.equal(failed(r, 'structural', 'S006'), true);
+  assert.deepEqual(r.recordedState.closureAssertions, []);
+  assert.deepEqual(r.recordedState.openObligationAssertions, []);
+});
