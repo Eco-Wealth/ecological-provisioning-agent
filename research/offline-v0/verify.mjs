@@ -139,7 +139,14 @@ export function verifyBundle(bundle, { asOf } = {}) {
         add('privacy', 'R001', 'PASS', 'restricted content not included', item.id);
     }
   }
+  const before = a => asOf === undefined || Date.parse(a.assertedAt) <= Date.parse(asOf);
+  // Only causal / dependency links form a directed lineage. Contradictions are
+  // contestation edges and may legitimately be reciprocal.
+  const nonCausalKinds = new Set(['contradicts']);
+  const dependencies = new Map();
+  const invalidDispositionRefs = new Set();
   for (const [id, a] of attestations) {
+    dependencies.set(id, []);
     for (const ref of a.evidenceRefs) {
       if (!evidence.has(ref)) add('evidence', 'E007', 'FAIL', 'absent evidence reference', id);
     }
@@ -147,21 +154,42 @@ export function verifyBundle(bundle, { asOf } = {}) {
       const targetId = isObject(rel) ? attId(rel.to) : null;
       if (!isObject(rel) || !nonempty(rel.kind) || !targetId || !attestations.has(targetId)) {
         add('structural', 'S013', 'FAIL', 'unresolved Attestation relation', id);
+        if (a.role === 'disposition') invalidDispositionRefs.add(id);
         continue;
       }
       const target = attestations.get(targetId);
-      if (Date.parse(target.assertedAt) > Date.parse(a.assertedAt))
+      if (Date.parse(target.assertedAt) > Date.parse(a.assertedAt)) {
         add('structural', 'S014', 'FAIL', 'relation points to later assertion', id);
-      if (rel.kind === 'contradicts')
-        report.recordedState.conflictingAttestations.push([id, targetId]);
+        if (a.role === 'disposition') invalidDispositionRefs.add(id);
+      }
+      if (rel.kind === 'contradicts') {
+        if (before(a)) report.recordedState.conflictingAttestations.push([id, targetId]);
+      } else {
+        if (id === targetId) add('structural', 'S015', 'FAIL', 'self-referential causal relation', id);
+        dependencies.get(id).push(targetId);
+      }
     }
   }
-  const before = a => asOf === undefined || Date.parse(a.assertedAt) <= Date.parse(asOf);
+  // Three-color DFS identifies equal-time dependency cycles as well as cycles
+  // whose individual edges passed chronological checks.
+  const state = new Map();
+  let cycleDetected = false;
+  function visit(id) {
+    if (state.get(id) === 1) { cycleDetected = true; return; }
+    if (state.get(id) === 2) return;
+    state.set(id, 1);
+    for (const next of dependencies.get(id) ?? []) visit(next);
+    state.set(id, 2);
+  }
+  for (const id of dependencies.keys()) visit(id);
+  if (cycleDetected) add('structural', 'S016', 'FAIL', 'cyclic Attestation dependencies');
+
   const admissions = [...attestations].filter(([, a]) => a.role === 'obligation_admission' && before(a));
   const dispositions = [...attestations].filter(([, a]) => a.role === 'disposition' && before(a));
   for (const [id] of admissions) {
-    const closers = dispositions.filter(([, d]) => d.effect === 'close' &&
-      d.relations.some(rel => rel.kind === 'disposes' && attId(rel.to) === id));
+    const closers = dispositions.filter(([dispositionId, d]) => d.effect === 'close' &&
+      !invalidDispositionRefs.has(dispositionId) &&
+      d.relations.some(rel => isObject(rel) && rel.kind === 'disposes' && attId(rel.to) === id));
     if (closers.length) {
       add('obligations', 'O001', 'UNKNOWN', 'closure asserted; authorization unverified', id);
       report.recordedState.closureAssertions.push({
@@ -174,7 +202,7 @@ export function verifyBundle(bundle, { asOf } = {}) {
   }
   for (const [id, d] of dispositions) {
     if (d.effect === 'close' && !d.relations.some(rel =>
-      rel.kind === 'disposes' && attestations.get(attId(rel.to))?.role === 'obligation_admission'))
+      isObject(rel) && rel.kind === 'disposes' && attestations.get(attId(rel.to))?.role === 'obligation_admission'))
       add('obligations', 'O003', 'FAIL', 'closing disposition lacks obligation admission', id);
   }
   const present = role => [...attestations.values()].some(a => a.role === role && before(a));
