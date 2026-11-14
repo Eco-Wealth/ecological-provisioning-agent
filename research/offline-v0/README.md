@@ -10,6 +10,16 @@ The graph inspector rejects self-referential causal links and circular dependenc
 
 Attestation identities are represented as JSON-encoded ordered pairs, for example `["synthetic-place","obligation"]`, including in report snapshots. The two fields remain separate and are never joined by a delimiter: a scope containing `::` must not alias another `(scope, localId)` pair. This is an experimental report encoding, not a constitutional serialization standard. Unknown authority, cryptographic signatures, real-world work, funding, settlement and ecological outcomes remain **UNKNOWN**. A digest match proves only that supplied bytes match; it does not establish that the evidence is true.
 
+## Evidence lineage and projection safety
+
+The inspector compares verified inline SHA-256 digests, warning when identical bytes appear under multiple evidence IDs (E009) or the same ID is repeated by an Attestation (E010). A cryptographic byte match is not independent corroboration, authenticity, or scientific proof. Restricted or missing evidence remains UNKNOWN even if a syntactically valid digest was supplied. Malformed digest commitments fail E011.
+
+Malformed attestation referents, ambiguous duplicate identities, and absent evidence references are excluded from the research obligation projection. A closing disposition citing corrupted evidence also cannot clear an obligation in the displayed projection. These conservative filters do not decide whether an obligation is legally or constitutionally open: authority, admission and disposition remain unverified. Inspect all FAIL and UNKNOWN findings before interpreting a projection.
+
+## Independent cross-implementation experiment
+
+Run `python3 tests/offline-differential.py` from repository root. This compares a separately written, dependency-free Python oracle with the Node CLI on a fixed set of synthetic adversarial bundles. CI runs it after the JavaScript tests. The Python checker deliberately covers only a narrow intersection: identity/referent consistency, local SHA-256 integrity, causal graph relationships, and asserted closure. Agreement on these fixtures does not establish full semantic equivalence, production security, or constitutional conformance. No network, key, wallet or field action is needed.
+
 Usage from repository root:
 
     node research/offline-v0/cli.mjs research/offline-v0/fixtures/synthetic.json
