@@ -11,8 +11,9 @@ test('deep acyclic attestation lineage does not overflow the JavaScript call sta
   const b = structuredClone(original);
   const base = b.attestations[0];
   const length = 12000;
+  const chain = [];
   for (let i = 0; i < length; i++) {
-    b.attestations.push({
+    chain.push({
       ...base, localId: 'chain-' + i, evidenceRefs: [],
       relations: i === 0 ? [] : [{
         kind: 'based_on',
@@ -20,6 +21,8 @@ test('deep acyclic attestation lineage does not overflow the JavaScript call sta
       }]
     });
   }
+  // Adversarial input order: the first visited node traverses the full chain.
+  b.attestations.push(...chain.reverse());
   const r = verifyBundle(b);
   assert.equal(hasFailures(r), false);
   assert.equal(r.dimensions.structural.some(x => x.ruleId === 'S016'), false);
