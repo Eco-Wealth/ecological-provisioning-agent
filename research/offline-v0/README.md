@@ -16,6 +16,10 @@ The inspector compares verified inline SHA-256 digests, warning when identical b
 
 Malformed attestation referents, ambiguous duplicate identities, and absent evidence references are excluded from the research obligation projection. A closing disposition citing corrupted evidence also cannot clear an obligation in the displayed projection. These conservative filters do not decide whether an obligation is legally or constitutionally open: authority, admission and disposition remain unverified. Inspect all FAIL and UNKNOWN findings before interpreting a projection.
 
+## Bounded resource use
+
+Research-v0 deliberately fails closed before graph construction if a bundle exceeds 25,000 Referents, 25,000 Attestations, 25,000 evidence identities, or 100,000 relation entries. Individual inline evidence text is capped at 16 MiB of UTF-8. These are implementation guardrails for this prototype, not a constitutional limit on ecological work or a protocol-wide maximum. A limit failure does **not** mean the underlying claims are false; split records into independently attributable bundles and retain cross-bundle lineage.
+
 ## Independent cross-implementation experiment
 
 Run `python3 tests/offline-differential.py` from repository root. This compares a separately written, dependency-free Python oracle with the Node CLI on a fixed set of synthetic adversarial bundles. CI runs it after the JavaScript tests. The Python checker deliberately covers only a narrow intersection: identity/referent consistency, local SHA-256 integrity, causal graph relationships, and asserted closure. Agreement on these fixtures does not establish full semantic equivalence, production security, or constitutional conformance. No network, key, wallet or field action is needed.
