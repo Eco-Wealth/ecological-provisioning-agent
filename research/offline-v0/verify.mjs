@@ -12,7 +12,10 @@ const STAMP = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(
 const ROLES = new Set(['transition_specification','observation','authority_claim','work_proposal','commitment','intervention','judgement','obligation_admission','disposition','funding','payment','settlement','follow_up_observation']);
 const isObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const nonempty = v => typeof v === 'string' && v.length > 0;
-const attId = a => isObject(a) && nonempty(a.scopeReferent) && nonempty(a.localId) ? a.scopeReferent + '::' + a.localId : null;
+// Preserve the ordered identity pair without delimiter collisions. A scope or local ID
+// may contain punctuation; a string join can alias unrelated attestations.
+const attId = a => isObject(a) && nonempty(a.scopeReferent) && nonempty(a.localId)
+  ? JSON.stringify([a.scopeReferent, a.localId]) : null;
 const digest = s => createHash('sha256').update(s, 'utf8').digest('hex');
 
 /** Reject rollover dates (e.g. February 30) and malformed RFC3339 offsets. */
