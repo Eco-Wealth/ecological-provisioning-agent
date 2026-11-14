@@ -44,6 +44,7 @@ def cases():
     yield "missing-concern", lambda b: by_id(b, "obligation").update(concerns=["missing"])
     yield "missing-scope", lambda b: by_id(b, "disposition").update(scopeReferent="missing")
     yield "evidence-absent", lambda b: by_id(b, "disposition").update(evidenceRefs=["missing"])
+    yield "evidence-object", lambda b: by_id(b, "disposition").update(evidenceRefs=[{"id": "note"}])
     yield "invalid-effect", lambda b: by_id(b, "disposition").update(effect="imaginary")
     yield "duplicate-obligation", lambda b: b["attestations"].append(copy.deepcopy(by_id(b, "obligation")))
     yield "future-disposition", lambda b: by_id(b, "disposition").update(assertedAt="2026-01-01T00:00:00Z")
