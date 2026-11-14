@@ -98,6 +98,7 @@ export function verifyBundle(bundle, { asOf } = {}) {
     referents.add(r.id);
   }
   const attestations = new Map();
+  const invalidAttestationIds = new Set();
   for (const [i, a] of bundle.attestations.entries()) {
     const id = attId(a);
     if (!id || !nonempty(a.actor) || !nonempty(a.role) || !nonempty(a.method) ||
@@ -107,12 +108,19 @@ export function verifyBundle(bundle, { asOf } = {}) {
       add('structural', 'S007', 'FAIL', 'incomplete Attestation', 'attestations[' + i + ']');
       continue;
     }
-    if (!referents.has(a.scopeReferent)) add('structural', 'S008', 'FAIL', 'unknown scope Referent', id);
-    if (!a.concerns.length || a.concerns.some(ref => !referents.has(ref)))
+    if (!referents.has(a.scopeReferent)) {
+      add('structural', 'S008', 'FAIL', 'unknown scope Referent', id);
+      invalidAttestationIds.add(id);
+    }
+    if (!a.concerns.length || a.concerns.some(ref => !referents.has(ref))) {
       add('structural', 'S009', 'FAIL', 'unknown concern Referent', id);
+      invalidAttestationIds.add(id);
+    }
     if (!ROLES.has(a.role)) add('structural', 'S010', 'UNKNOWN', 'unrecognized derived role', id);
-    if (attestations.has(id)) add('structural', 'S011', 'FAIL', 'duplicate Attestation identity', id);
-    else attestations.set(id, a);
+    if (attestations.has(id)) {
+      add('structural', 'S011', 'FAIL', 'duplicate Attestation identity', id);
+      invalidAttestationIds.add(id); // both claims sharing the identity become ambiguous
+    } else attestations.set(id, a);
     add('authority', 'A001', 'UNKNOWN', 'authority is not independently checked', id);
     add('signatures', 'G001', 'UNKNOWN', 'cryptographic signature not checked', id);
   }
@@ -169,8 +177,10 @@ export function verifyBundle(bundle, { asOf } = {}) {
     dependencies.set(id, []);
     const seenEvidence = new Set();
     for (const ref of a.evidenceRefs) {
-      if (typeof ref !== 'string' || !ref || !evidence.has(ref))
+      if (typeof ref !== 'string' || !ref || !evidence.has(ref)) {
         add('evidence', 'E007', 'FAIL', 'absent or malformed evidence reference', id);
+        invalidAttestationIds.add(id);
+      }
       else if (seenEvidence.has(ref))
         add('evidence', 'E010', 'WARN', 'repeated evidence reference does not establish independent support', id);
       seenEvidence.add(ref);
@@ -185,12 +195,14 @@ export function verifyBundle(bundle, { asOf } = {}) {
       if (!isObject(rel) || !nonempty(rel.kind) || !targetId || !attestations.has(targetId)) {
         add('structural', 'S013', 'FAIL', 'unresolved Attestation relation', id);
         if (a.role === 'disposition') invalidDispositionRefs.add(id);
+        invalidAttestationIds.add(id);
         continue;
       }
       const target = attestations.get(targetId);
       if (Date.parse(target.assertedAt) > Date.parse(a.assertedAt)) {
         add('structural', 'S014', 'FAIL', 'relation points to later assertion', id);
         if (a.role === 'disposition') invalidDispositionRefs.add(id);
+        invalidAttestationIds.add(id);
       }
       if (rel.kind === 'contradicts') {
         if (before(a)) report.recordedState.conflictingAttestations.push([id, targetId]);
@@ -227,11 +239,13 @@ export function verifyBundle(bundle, { asOf } = {}) {
   }
   if (cycleDetected) add('structural', 'S016', 'FAIL', 'cyclic Attestation dependencies');
 
-  const admissions = [...attestations].filter(([, a]) => a.role === 'obligation_admission' && before(a));
+  const admissions = [...attestations].filter(([id, a]) =>
+    a.role === 'obligation_admission' && before(a) && !invalidAttestationIds.has(id));
   const dispositions = [...attestations].filter(([, a]) => a.role === 'disposition' && before(a));
   for (const [id] of admissions) {
     const closers = dispositions.filter(([dispositionId, d]) => d.effect === 'close' &&
       !invalidDispositionRefs.has(dispositionId) &&
+      !invalidAttestationIds.has(dispositionId) &&
       d.relations.some(rel => isObject(rel) && rel.kind === 'disposes' && attId(rel.to) === id));
     if (closers.length) {
       add('obligations', 'O001', 'UNKNOWN', 'closure asserted; authorization unverified', id);
