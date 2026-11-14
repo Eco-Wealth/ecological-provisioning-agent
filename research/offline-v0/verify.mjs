@@ -88,6 +88,28 @@ export function verifyBundle(bundle, { asOf } = {}) {
     attestations: bundle.attestations.length,
     evidence: bundle.evidence.length
   };
+  // Bounded research-v0 input, not an unbounded ingest service.
+  // Keeping these guards before graph construction prevents resource exhaustion.
+  if (report.counts.referents > 25000 || report.counts.attestations > 25000 ||
+      report.counts.evidence > 25000) {
+    add('structural', 'S020', 'FAIL', 'research record-count limit exceeded');
+    return report;
+  }
+  let relationCount = 0;
+  for (const a of bundle.attestations) {
+    if (isObject(a) && Array.isArray(a.relations)) relationCount += a.relations.length;
+    if (relationCount > 100000) {
+      add('structural', 'S021', 'FAIL', 'research relation-count limit exceeded');
+      return report;
+    }
+  }
+  for (const e of bundle.evidence) {
+    if (isObject(e) && e.access === 'inline' &&
+        typeof e.text === 'string' && Buffer.byteLength(e.text, 'utf8') > 16 * 1024 * 1024) {
+      add('evidence', 'E012', 'FAIL', 'inline evidence exceeds research byte limit', e.id);
+      return report;
+    }
+  }
   const referents = new Set();
   const ambiguousReferents = new Set();
   for (const [i, r] of bundle.referents.entries()) {
