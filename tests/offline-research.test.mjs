@@ -65,7 +65,7 @@ for (const good of ['2024-02-29T00:00:00Z','2026-01-01T00:00:00-08:00']) {
 }
 test('record-time open obligation is visible before later disposition', () => {
   const report = verifyBundle(fresh(), { asOf: '2026-01-02T12:00:00Z' });
-  assert.deepEqual(report.recordedState.openObligationAssertions, ['synthetic-place::obligation']);
+  assert.deepEqual(report.recordedState.openObligationAssertions, [JSON.stringify(['synthetic-place', 'obligation'])]);
   assert.equal(report.recordedState.closureAssertions.length, 0);
 });
 test('later disposition is only an UNKNOWN closure assertion', () => {
