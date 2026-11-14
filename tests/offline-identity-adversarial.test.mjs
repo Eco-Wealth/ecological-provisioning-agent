@@ -39,6 +39,7 @@ test('distinct (scope, localId) identity pairs must not be called duplicates', (
   const admission = at(b, 'obligation');
   admission.scopeReferent = 'a::b';
   admission.localId = 'c';
+  at(b, 'disposition').relations[0].to = { scopeReferent: 'a::b', localId: 'c' };
   const other = structuredClone(at(b, 'observation'));
   other.scopeReferent = 'a';
   other.localId = 'b::c';
