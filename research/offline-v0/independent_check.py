@@ -50,12 +50,14 @@ def inspect(bundle):
         return {"fail": True, "open": [], "closures": []}
 
     referents = set()
+    ambiguous_referents = set()
     for r in raw_refs:
         if not isinstance(r, dict) or not isinstance(r.get("id"), str) or not r["id"] or not isinstance(r.get("boundary"), str) or not r["boundary"]:
             errors.add("referent-format")
             continue
         if r["id"] in referents:
             errors.add("duplicate-referent")
+            ambiguous_referents.add(r["id"])
         referents.add(r["id"])
 
     items, invalid = {}, set()
@@ -69,7 +71,7 @@ def inspect(bundle):
             invalid.add(key)
         else:
             items[key] = a
-        if key[0] not in referents or not a["concerns"] or any(x not in referents for x in a["concerns"]):
+        if key[0] not in referents or key[0] in ambiguous_referents or not a["concerns"] or any(x not in referents or x in ambiguous_referents for x in a["concerns"]):
             errors.add("referent-resolution")
             invalid.add(key)
 
