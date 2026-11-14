@@ -201,6 +201,10 @@ export function verifyBundle(bundle, { asOf } = {}) {
     }
   }
   for (const [id, d] of dispositions) {
+    // These are the research-v0 effect labels only; they do not confer
+    // admission or authorization. Unknown effects must not silently pass.
+    if (!['close', 'confirm_open', 'transform'].includes(d.effect))
+      add('obligations', 'O004', 'FAIL', 'unknown or missing disposition effect', id);
     if (d.effect === 'close' && !d.relations.some(rel =>
       isObject(rel) && rel.kind === 'disposes' && attestations.get(attId(rel.to))?.role === 'obligation_admission'))
       add('obligations', 'O003', 'FAIL', 'closing disposition lacks obligation admission', id);
