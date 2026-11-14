@@ -4,7 +4,9 @@ This is a **publicly runnable, non-normative research prototype**, adapted from 
 
 Two root identity types are modeled: **Referent** and **Attestation**. Observation, work proposal, obligation, disposition, payment and settlement are derived Attestation roles, not new permanent primitives.
 
-The inspector checks local identity uniqueness, graph references, record-time disposition assertions, declared Constitution digest, inline SHA-256 evidence integrity and accidental exposure of restricted content. Unknown authority, cryptographic signatures, real-world work, funding, settlement and ecological outcomes remain **UNKNOWN**. A digest match proves only that supplied bytes match; it does not establish that the evidence is true.
+The inspector checks local identity uniqueness, graph references, record-time disposition assertions, declared Constitution digest, inline SHA-256 evidence integrity and accidental exposure of restricted content.
+
+Attestation identities are represented as JSON-encoded ordered pairs, for example `["synthetic-place","obligation"]`, including in report snapshots. The two fields remain separate and are never joined by a delimiter: a scope containing `::` must not alias another `(scope, localId)` pair. This is an experimental report encoding, not a constitutional serialization standard. Unknown authority, cryptographic signatures, real-world work, funding, settlement and ecological outcomes remain **UNKNOWN**. A digest match proves only that supplied bytes match; it does not establish that the evidence is true.
 
 Usage from repository root:
 
