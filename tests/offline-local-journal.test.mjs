@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { appendRecord, canonical, createJournal, exportBundle, readJournal,
+import { appendRecord, canonical, checkHead, createJournal, exportBundle, readJournal,
   serializeJournal, snapshot, validateJournal } from '../research/offline-v0/journal.mjs';
 import { hasFailures } from '../research/offline-v0/verify.mjs';
 
@@ -99,6 +99,16 @@ test('append rejects duplicate scope, evidence tampering and claims dated after 
     '2026-01-07T00:00:00Z'), /E004/);
 });
 
+test('trusted external head catches replacement, including internally consistent later history', () => {
+  const entries = sample();
+  const checkpoint = validateJournal(entries).head;
+  assert.deepEqual(checkHead(entries, checkpoint), { head: checkpoint, matches: true });
+  assert.throws(() => checkHead(entries, '0'.repeat(64)), /trusted checkpoint/);
+  const rewritten = createJournal({ source: 'replacement-history', recordedAt: genesisAt });
+  assert.doesNotThrow(() => validateJournal(rewritten));
+  assert.throws(() => checkHead(rewritten, checkpoint), /trusted checkpoint/);
+});
+
 test('canonical serialization ignores object-key insertion order', () => {
   assert.equal(canonical({ z: 2, a: { y: 1, b: true } }),
                canonical({ a: { b: true, y: 1 }, z: 2 }));
@@ -117,6 +127,9 @@ test('CLI initializes and exports locally, refusing overwrite or malformed input
     assert.equal(run(['add', file, record]).status, 0);
     assert.equal(run(['inspect', file]).status, 0);
     assert.equal(run(['export', file, bundle]).status, 0);
+    const checkpoint = readJournal(readFileSync(file, 'utf8')).at(-1).hash;
+    assert.equal(run(['check-head', file, checkpoint]).status, 0);
+    assert.equal(run(['check-head', file, '0'.repeat(64)]).status, 2);
     assert.equal(existsSync(bundle), true);
     assert.equal(JSON.parse(readFileSync(bundle)).referents.length, 1);
     assert.equal(run(['export', file, bundle]).status, 2);
