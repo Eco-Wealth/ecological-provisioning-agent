@@ -53,7 +53,7 @@ function main(args) {
       const record = JSON.parse(readFileSync(arg, 'utf8'));
       const next = appendRecord(previous, record, now);
       const handle = openSync(file, 'a');
-      try { writeSync(handle, serializeJournal([next[next.length - 1]]).trimEnd() + '\n'); }
+      try { writeSync(handle, JSON.stringify(next[next.length - 1]) + '\n'); }
       finally { closeSync(handle); }
       console.log(JSON.stringify(validateJournal(next)));
       return 0;
