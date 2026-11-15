@@ -53,6 +53,26 @@ def cases():
     yield "disposition-tamper", lambda b: (
         by_id(b, "disposition").update(evidenceRefs=["note"]),
         b["evidence"][0].update(text="tampered"))
+    yield "cyclic-admission", lambda b: by_id(b, "obligation").update(relations=[{
+        "kind": "based_on", "to": {"scopeReferent": "synthetic-place", "localId": "obligation"}}])
+    yield "cyclic-disposition", lambda b: by_id(b, "disposition")["relations"].append({
+        "kind": "based_on", "to": {"scopeReferent": "synthetic-place", "localId": "disposition"}})
+    yield "tainted-admission", lambda b: (
+        by_id(b, "obligation").update(evidenceRefs=["note"]),
+        b["evidence"][0].update(text="corrupt-attested-obligation"))
+    yield "compromised-ancestor", lambda b: (
+        b["attestations"].append({
+            **copy.deepcopy(by_id(b, "observation")),
+            "localId": "compromised-ancestor",
+            "evidenceRefs": ["not-there"],
+            "relations": []
+        }),
+        by_id(b, "disposition")["relations"].append({
+            "kind": "based_on", "to": {
+                "scopeReferent": "synthetic-place", "localId": "compromised-ancestor"
+            }
+        }))
+
 
 
 class Differential(unittest.TestCase):
