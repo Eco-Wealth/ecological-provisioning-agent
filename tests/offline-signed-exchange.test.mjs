@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { createHash, generateKeyPairSync, sign } from 'node:crypto';
+import { createHash, generateKeyPairSync } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { createJournal, appendRecord, validateJournal } from '../research/offline-v0/journal.mjs';
 import { pae, signJournal, inspectSignedExchange, inspectSignedPair, serializeSignedExchange,
-  readSignedExchange, CHECKPOINT_PAYLOAD_TYPE } from '../research/offline-v0/signed-exchange.mjs';
+  readSignedExchange, inspectSignedHistoryConflict } from '../research/offline-v0/signed-exchange.mjs';
 
 const hash = s => createHash('sha256').update(s).digest('hex');
 const at = '2026-01-03T00:00:00Z';
@@ -34,15 +34,6 @@ function journal(source, id, measured = 12, reused = sameEvidence) {
     relations: [], measurement
   } }, at);
   return entries;
-}
-function signed() {
-  const a = journal('fictional-A', 'baseline');
-  const b = journal('fictional-B', 'contest', 20);
-  const aKey = generateKeyPairSync('ed25519');
-  const bKey = generateKeyPairSync('ed25519');
-  const first = signJournal(a, aKey.privateKey, '2026-01-04T00:00:00Z');
-  b[3] = null; // intentionally don't mutate hash chain: rebuild with a contest locator
-  return { a, aKey, bKey, first };
 }
 function pair({ sameKey = false, sameText = true } = {}) {
   const a = journal('fictional-A', 'baseline');
@@ -172,4 +163,44 @@ test('Python independently checks the same local journal byte-chain and trusted 
     input: p.first.journal, encoding: 'utf8'
   });
   assert.equal(run.status, 0, run.stderr + run.stdout);
+});
+
+test('one signing key cannot conceal two incompatible signed histories past a shared anchor', () => {
+  const p = pair();
+  const secondHistory = journal('fictional-A', 'baseline', 31,
+    'FICTIONAL contrary notes, second complete journal fork');
+  const privateKey = generateKeyPairSync('ed25519');
+  // Keep a single exact signer for both histories.
+  const signedOriginal = signJournal(p.a, privateKey.privateKey, '2026-01-04T00:00:00Z');
+  const signedFork = signJournal(secondHistory, privateKey.privateKey, '2026-01-04T00:00:00Z');
+  const pinned = {
+    publisher: 'fictional-A',
+    publicKeySha256: inspectSignedExchange(signedOriginal).checkpoint.signerKeySha256,
+    anchor: { sequence: 1, head: p.a[1].hash }
+  };
+  const report = inspectSignedHistoryConflict(signedOriginal, signedFork, pinned);
+  assert.equal(status(report, 'HF001'), 'PASS');
+  assert.equal(status(report, 'HF002'), 'WARN');
+  assert.equal(report.firstDivergentSequence, 2);
+  assert.equal(status(report, 'HF003'), 'PASS');
+});
+test('signed append-only journal extension is not falsely marked a fork', () => {
+  const p = pair();
+  const keyPair = generateKeyPairSync('ed25519');
+  const first = signJournal(p.a, keyPair.privateKey, '2026-01-04T00:00:00Z');
+  const longer = appendRecord(p.a, { kind: 'evidence', value: {
+    id: 'new-note', access: 'inline', text: 'FICTIONAL future note',
+    sha256: hash('FICTIONAL future note')
+  } }, '2026-01-04T01:00:00Z');
+  const second = signJournal(longer, keyPair.privateKey, '2026-01-05T00:00:00Z');
+  assert.equal(status(inspectSignedHistoryConflict(first, second), 'HF002'), 'PASS');
+  assert.equal(status(inspectSignedHistoryConflict(first, first), 'HF002'), 'PASS');
+});
+test('history conflict detection is withheld when signatures identify different keys', () => {
+  const p = pair();
+  const alternative = signJournal(p.a, generateKeyPairSync('ed25519').privateKey,
+    '2026-01-04T00:00:00Z');
+  const result = inspectSignedHistoryConflict(p.first, alternative);
+  assert.equal(status(result, 'HF001'), 'UNKNOWN');
+  assert.equal(result.firstDivergentSequence, undefined);
 });
