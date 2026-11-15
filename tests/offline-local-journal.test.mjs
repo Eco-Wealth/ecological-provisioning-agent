@@ -108,6 +108,11 @@ test('ambiguous JSON bytes with duplicate keys are rejected despite an intact pa
   assert.throws(() => readJournal(lines.join('\n') + '\n'), /noncanonical journal JSON/);
 });
 
+test('extra trailing blank journal entries are not silently discarded', () => {
+  const bytes = serializeJournal(sample());
+  assert.throws(() => readJournal(bytes + '\n'), /noncanonical journal JSON|invalid JSON/);
+});
+
 test('noncanonical whitespace and altered numeric spellings are rejected', () => {
   const entries = sample();
   const lines = serializeJournal(entries).trimEnd().split('\n');
