@@ -139,3 +139,17 @@ test('independent Python oracle agrees on bounded mechanical rule subset', async
       assert.equal(row(primary, rule)?.status, status, v.id + ': ' + rule);
   }
 });
+
+test('two fictional independent publisher bundles exchange and contest claims offline', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const file = new URL('../research/offline-v0/examples/fictional-measurement-exchange.mjs', import.meta.url).pathname;
+  const run = spawnSync(process.execPath, [file], { encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  const report = JSON.parse(run.stdout);
+  assert.equal(report.fictional, true);
+  assert.equal(report.comparisons.length, 1);
+  assert.equal(report.comparisons[0].findings.find(x => x.ruleId === 'XC003').status, 'WARN');
+  assert.equal(report.authority, 'UNKNOWN');
+  assert.equal(report.ecology, 'UNKNOWN');
+  assert.equal(report.causality, 'UNKNOWN');
+});
