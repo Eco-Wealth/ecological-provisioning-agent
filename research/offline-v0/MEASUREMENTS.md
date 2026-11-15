@@ -29,6 +29,7 @@ The boundary digest covers the Referent's boundary **UTF-8 bytes**, not a scient
 Run from repository root (Node.js 22+, Python 3):
 
 \`\`\`sh
+node research/offline-v0/examples/fictional-measurement-exchange.mjs
 node --test tests/offline-measurement-conformance.test.mjs
 node --test tests/*.test.mjs
 python3 tests/offline-differential.py
