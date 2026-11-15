@@ -99,6 +99,22 @@ test('append rejects duplicate scope, evidence tampering and claims dated after 
     '2026-01-07T00:00:00Z'), /E004/);
 });
 
+test('ambiguous JSON bytes with duplicate keys are rejected despite an intact parsed hash chain', () => {
+  const entries = sample();
+  const lines = serializeJournal(entries).trimEnd().split('\n');
+  const modified = lines[1].replace('"seq":1', '"seq":1,"seq":1');
+  assert.notEqual(modified, lines[1]);
+  lines[1] = modified;
+  assert.throws(() => readJournal(lines.join('\n') + '\n'), /noncanonical journal JSON/);
+});
+
+test('noncanonical whitespace and altered numeric spellings are rejected', () => {
+  const entries = sample();
+  const lines = serializeJournal(entries).trimEnd().split('\n');
+  lines[0] = ' ' + lines[0];
+  assert.throws(() => readJournal(lines.join('\n') + '\n'), /noncanonical journal JSON/);
+});
+
 test('trusted external head catches replacement, including internally consistent later history', () => {
   const entries = sample();
   const checkpoint = validateJournal(entries).head;
