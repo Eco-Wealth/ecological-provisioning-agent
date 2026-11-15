@@ -6,7 +6,7 @@
  */
 import { readFileSync, openSync, writeSync, closeSync, unlinkSync } from 'node:fs';
 import { hasFailures } from './verify.mjs';
-import { appendRecord, createJournal, exportBundle, readJournal,
+import { appendRecord, canonical, checkHead, createJournal, exportBundle, readJournal,
   serializeJournal, snapshot, validateJournal } from './journal.mjs';
 
 const usage = () => {
@@ -14,6 +14,7 @@ const usage = () => {
   console.error('       node research/offline-v0/journal-cli.mjs add <journal.jsonl> <record.json>');
   console.error('       node research/offline-v0/journal-cli.mjs inspect <journal.jsonl> [asOf-RFC3339]');
   console.error('       node research/offline-v0/journal-cli.mjs export <journal.jsonl> <bundle.json>');
+  console.error('       node research/offline-v0/journal-cli.mjs check-head <journal.jsonl> <trusted-head-sha256>');
 };
 
 function withLock(path, operation) {
@@ -31,11 +32,12 @@ function exclusiveWrite(path, content) {
 
 function main(args) {
   const [command, file, arg] = args;
-  if (!['init','add','inspect','export'].includes(command) || !file ||
+  if (!['init','add','inspect','export','check-head'].includes(command) || !file ||
       (command === 'init' && (!arg || args.length !== 3)) ||
       (command === 'add' && (!arg || args.length !== 3)) ||
       (command === 'inspect' && args.length > 3) ||
-      (command === 'export' && (!arg || args.length !== 3))) {
+      (command === 'export' && (!arg || args.length !== 3)) ||
+      (command === 'check-head' && (!arg || args.length !== 3))) {
     usage(); return 2;
   }
   const now = new Date().toISOString();
@@ -53,13 +55,17 @@ function main(args) {
       const record = JSON.parse(readFileSync(arg, 'utf8'));
       const next = appendRecord(previous, record, now);
       const handle = openSync(file, 'a');
-      try { writeSync(handle, JSON.stringify(next[next.length - 1]) + '\n'); }
+      try { writeSync(handle, canonical(next[next.length - 1]) + '\n'); }
       finally { closeSync(handle); }
       console.log(JSON.stringify(validateJournal(next)));
       return 0;
     });
   }
   const entries = readJournal(readFileSync(file, 'utf8'));
+  if (command === 'check-head') {
+    console.log(JSON.stringify(checkHead(entries, arg)));
+    return 0;
+  }
   if (command === 'export') {
     const bundle = exportBundle(entries);
     const report = snapshot(entries);
