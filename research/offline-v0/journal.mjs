@@ -75,13 +75,13 @@ export function createJournal({ source, recordedAt }) {
 }
 
 export function readJournal(text) {
-  if (typeof text !== 'string' || text.length > 64 * 1024 * 1024)
+  if (typeof text !== 'string' || Buffer.byteLength(text, 'utf8') > 64 * 1024 * 1024)
     throw new TypeError('journal text exceeds 64 MiB limit');
   if (!text.endsWith('\n')) throw new TypeError('incomplete journal: trailing newline required');
   const lines = text.slice(0, -1).split('\n');
   if (lines.length > 25001) throw new TypeError('journal entry limit exceeded');
   const entries = lines.map((line, i) => {
-    if (line.length > 17 * 1024 * 1024) throw new TypeError('journal line exceeds limit');
+    if (Buffer.byteLength(line, 'utf8') > 17 * 1024 * 1024) throw new TypeError('journal line exceeds limit');
     let record;
     try { record = JSON.parse(line); }
     catch { throw new TypeError('invalid JSON at journal entry ' + i); }
