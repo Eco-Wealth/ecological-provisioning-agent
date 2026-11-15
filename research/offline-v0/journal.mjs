@@ -78,7 +78,7 @@ export function readJournal(text) {
   if (typeof text !== 'string' || text.length > 64 * 1024 * 1024)
     throw new TypeError('journal text exceeds 64 MiB limit');
   if (!text.endsWith('\n')) throw new TypeError('incomplete journal: trailing newline required');
-  const lines = text.trimEnd().split('\n');
+  const lines = text.slice(0, -1).split('\n');
   if (lines.length > 25001) throw new TypeError('journal entry limit exceeded');
   const entries = lines.map((line, i) => {
     if (line.length > 17 * 1024 * 1024) throw new TypeError('journal line exceeds limit');
