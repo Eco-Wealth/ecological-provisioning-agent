@@ -84,6 +84,11 @@ export function readJournal(text) {
     let record;
     try { record = JSON.parse(line); }
     catch { throw new TypeError('invalid JSON at journal entry ' + i); }
+    // Strict canonical bytes reject duplicate JSON keys, whitespace variants,
+    // ambiguous numeric spellings, and mixed serialization conventions.
+    // Never verify a hash over parsed data while accepting different raw bytes.
+    if (canonical(record) !== line)
+      throw new TypeError('noncanonical journal JSON at entry ' + i);
     return record;
   });
   validateJournal(entries);
