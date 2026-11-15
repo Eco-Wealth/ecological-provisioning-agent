@@ -6,6 +6,7 @@ Only structural identity, graph, SHA-256, and claimed obligation closure are cov
 """
 import hashlib
 import json
+from collections import deque
 import re
 import sys
 from datetime import datetime
@@ -107,9 +108,10 @@ def inspect(bundle):
             if not isinstance(ref, str) or not ref or ref not in evidence:
                 errors.add("bad-evidence-ref")
                 invalid.add(key)
-            if a["role"] == "disposition" and isinstance(ref, str) and ref in bad_evidence:
+            if isinstance(ref, str) and ref in bad_evidence:
                 invalid.add(key)
-                errors.add("tainted-disposition")
+                if a["role"] == "disposition":
+                    errors.add("tainted-disposition")
         for edge in a["relations"]:
             target = identity(edge.get("to")) if isinstance(edge, dict) else None
             if target not in items or not isinstance(edge.get("kind"), str) or not edge["kind"]:
@@ -138,6 +140,28 @@ def inspect(bundle):
             elif nxt not in colors:
                 colors[nxt] = 1
                 stack.append((nxt, iter(graph[nxt])))
+
+    # Independent bounded projection: eliminate cycle participants and their
+    # dependents, then propagate any other invalid causal ancestry upstream.
+    dependents = {key: [] for key in graph}
+    outstanding = {key: len(edges) for key, edges in graph.items()}
+    for key, edges in graph.items():
+        for target in edges:
+            dependents[target].append(key)
+    ready = deque(key for key, degree in outstanding.items() if degree == 0)
+    while ready:
+        node = ready.popleft()
+        for dependant in dependents[node]:
+            outstanding[dependant] -= 1
+            if outstanding[dependant] == 0:
+                ready.append(dependant)
+    invalid.update(key for key, degree in outstanding.items() if degree > 0)
+    queue = deque(invalid)
+    while queue:
+        for dependant in dependents[queue.popleft()]:
+            if dependant not in invalid:
+                invalid.add(dependant)
+                queue.append(dependant)
 
     admitted = {key for key, a in items.items()
                 if a["role"] == "obligation_admission" and key not in invalid}
