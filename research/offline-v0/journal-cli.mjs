@@ -4,7 +4,8 @@
  * Every write takes a cooperative exclusive lock; keep an external head digest
  * to make wholesale journal replacement detectable.
  */
-import { readFileSync, openSync, writeSync, closeSync, unlinkSync } from 'node:fs';
+import { readFileSync, openSync, writeSync, closeSync, unlinkSync,
+  statSync, fsyncSync } from 'node:fs';
 import { hasFailures } from './verify.mjs';
 import { appendRecord, canonical, checkHead, createJournal, exportBundle, readJournal,
   serializeJournal, snapshot, validateJournal } from './journal.mjs';
@@ -24,9 +25,30 @@ function withLock(path, operation) {
   finally { closeSync(handle); unlinkSync(lock); }
 }
 
+const MAX_JOURNAL_BYTES = 64 * 1024 * 1024;
+const MAX_RECORD_BYTES = 17 * 1024 * 1024;
+
+function readBounded(path, limit) {
+  const size = statSync(path).size;
+  if (!Number.isSafeInteger(size) || size > limit)
+    throw new TypeError('local file exceeds maximum supported input size');
+  return readFileSync(path, 'utf8');
+}
+
+function writeAllAndFlush(fd, value) {
+  const bytes = Buffer.from(value, 'utf8');
+  let offset = 0;
+  while (offset < bytes.length) {
+    const written = writeSync(fd, bytes, offset, bytes.length - offset);
+    if (written <= 0) throw new Error('short local file write');
+    offset += written;
+  }
+  fsyncSync(fd);
+}
+
 function exclusiveWrite(path, content) {
   const handle = openSync(path, 'wx', 0o600);
-  try { writeSync(handle, content); }
+  try { writeAllAndFlush(handle, content); }
   finally { closeSync(handle); }
 }
 
@@ -51,17 +73,17 @@ function main(args) {
   }
   if (command === 'add') {
     return withLock(file, () => {
-      const previous = readJournal(readFileSync(file, 'utf8'));
-      const record = JSON.parse(readFileSync(arg, 'utf8'));
+      const previous = readJournal(readBounded(file, MAX_JOURNAL_BYTES));
+      const record = JSON.parse(readBounded(arg, MAX_RECORD_BYTES));
       const next = appendRecord(previous, record, now);
       const handle = openSync(file, 'a');
-      try { writeSync(handle, canonical(next[next.length - 1]) + '\n'); }
+      try { writeAllAndFlush(handle, canonical(next[next.length - 1]) + '\n'); }
       finally { closeSync(handle); }
       console.log(JSON.stringify(validateJournal(next)));
       return 0;
     });
   }
-  const entries = readJournal(readFileSync(file, 'utf8'));
+  const entries = readJournal(readBounded(file, MAX_JOURNAL_BYTES));
   if (command === 'check-head') {
     console.log(JSON.stringify(checkHead(entries, arg)));
     return 0;
