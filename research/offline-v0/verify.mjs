@@ -210,8 +210,10 @@ export function verifyBundle(bundle, { asOf } = {}) {
       else if (seenEvidence.has(ref))
         add('evidence', 'E010', 'WARN', 'repeated evidence reference does not establish independent support', id);
       seenEvidence.add(ref);
-      if (a.role === 'disposition' && a.effect === 'close' && evidenceIntegrityFailures.has(ref))
-        invalidDispositionRefs.add(id);
+      if (evidenceIntegrityFailures.has(ref)) {
+        invalidAttestationIds.add(id);
+        if (a.role === 'disposition') invalidDispositionRefs.add(id);
+      }
     }
     if (a.role === 'disposition' && a.effect === 'close' &&
         a.evidenceRefs.some(ref => evidenceIntegrityFailures.has(ref)))
@@ -233,7 +235,10 @@ export function verifyBundle(bundle, { asOf } = {}) {
       if (rel.kind === 'contradicts') {
         if (before(a)) report.recordedState.conflictingAttestations.push([id, targetId]);
       } else {
-        if (id === targetId) add('structural', 'S015', 'FAIL', 'self-referential causal relation', id);
+        if (id === targetId) {
+          add('structural', 'S015', 'FAIL', 'self-referential causal relation', id);
+          invalidAttestationIds.add(id);
+        }
         dependencies.get(id).push(targetId);
       }
     }
@@ -264,6 +269,40 @@ export function verifyBundle(bundle, { asOf } = {}) {
     }
   }
   if (cycleDetected) add('structural', 'S016', 'FAIL', 'cyclic Attestation dependencies');
+
+  // Independently compute the causal fixed point: invalid ancestors, cycles
+  // and their dependents cannot confer an uncontested projection. Kahn-style
+  // pruning removes all acyclic terminal dependencies. Anything remaining
+  // participates in, or depends on, a cycle. This keeps unrelated records.
+  const dependents = new Map();
+  const outstanding = new Map();
+  for (const [id, deps] of dependencies) {
+    outstanding.set(id, deps.length);
+    for (const dep of deps) {
+      if (!dependents.has(dep)) dependents.set(dep, []);
+      dependents.get(dep).push(id);
+    }
+  }
+  const queue = [...outstanding].filter(([, degree]) => degree === 0).map(([id]) => id);
+  for (let head = 0; head < queue.length; head++) {
+    const resolved = queue[head];
+    for (const dependent of dependents.get(resolved) ?? []) {
+      const left = outstanding.get(dependent) - 1;
+      outstanding.set(dependent, left);
+      if (left === 0) queue.push(dependent);
+    }
+  }
+  for (const [id, degree] of outstanding) {
+    if (degree > 0) invalidAttestationIds.add(id);
+  }
+  const taintQueue = [...invalidAttestationIds];
+  for (let head = 0; head < taintQueue.length; head++) {
+    for (const dependent of dependents.get(taintQueue[head]) ?? []) {
+      if (invalidAttestationIds.has(dependent)) continue;
+      invalidAttestationIds.add(dependent);
+      taintQueue.push(dependent);
+    }
+  }
 
   const admissions = [...attestations].filter(([id, a]) =>
     a.role === 'obligation_admission' && before(a) && !invalidAttestationIds.has(id));
