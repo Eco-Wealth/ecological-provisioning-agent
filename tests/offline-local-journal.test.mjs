@@ -120,6 +120,12 @@ test('noncanonical whitespace and altered numeric spellings are rejected', () =>
   assert.throws(() => readJournal(lines.join('\n') + '\n'), /noncanonical journal JSON/);
 });
 
+test('journal parser enforces UTF-8 byte limits rather than JavaScript character count', () => {
+  const multibyte = '\u6c34'.repeat(6 * 1024 * 1024) + '\n';
+  assert.ok(multibyte.length < 17 * 1024 * 1024);
+  assert.throws(() => readJournal(multibyte), /journal line exceeds limit/);
+});
+
 test('trusted external head catches replacement, including internally consistent later history', () => {
   const entries = sample();
   const checkpoint = validateJournal(entries).head;
