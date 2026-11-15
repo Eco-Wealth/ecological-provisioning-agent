@@ -204,3 +204,25 @@ test('history conflict detection is withheld when signatures identify different 
   assert.equal(status(result, 'HF001'), 'UNKNOWN');
   assert.equal(result.firstDivergentSequence, undefined);
 });
+
+test('independent Python/OpenSSL checks Ed25519 checkpoint bytes and exact journal head', () => {
+  const p = pair();
+  const checker = new URL('../research/offline-v0/signed_exchange_check.py', import.meta.url).pathname;
+  const good = spawnSync('python3', [checker, p.firstPolicy.publicKeySha256], {
+    input: serializeSignedExchange(p.first), encoding: 'utf8'
+  });
+  assert.equal(good.status, 0, good.stderr + good.stdout);
+  const result = JSON.parse(good.stdout);
+  assert.equal(result.valid, true);
+  assert.equal(result.head, validateJournal(p.a).head);
+  const badKey = spawnSync('python3', [checker, '0'.repeat(64)], {
+    input: serializeSignedExchange(p.first), encoding: 'utf8'
+  });
+  assert.equal(badKey.status, 1, badKey.stdout + badKey.stderr);
+  const forged = copy(p.first);
+  forged.envelope.signatures[0].sig = Buffer.alloc(64).toString('base64');
+  const invalidSig = spawnSync('python3', [checker], {
+    input: serializeSignedExchange(forged), encoding: 'utf8'
+  });
+  assert.equal(invalidSig.status, 1, invalidSig.stdout + invalidSig.stderr);
+});
