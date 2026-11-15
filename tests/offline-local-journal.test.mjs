@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync, mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, rmSync, existsSync, truncateSync, unlinkSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -150,5 +150,15 @@ test('CLI initializes and exports locally, refusing overwrite or malformed input
     assert.equal(JSON.parse(readFileSync(bundle)).referents.length, 1);
     assert.equal(run(['export', file, bundle]).status, 2);
     assert.equal(run(['init', file, 'duplicate']).status, 2);
+    const before = readFileSync(file, 'utf8');
+    writeFileSync(file + '.lock', 'external writer');
+    assert.equal(run(['add', file, record]).status, 2);
+    assert.equal(readFileSync(file, 'utf8'), before, 'lock cannot mutate journal');
+    unlinkSync(file + '.lock');
+    const oversized = join(dir, 'oversized-record.json');
+    writeFileSync(oversized, '');
+    truncateSync(oversized, 17 * 1024 * 1024 + 1);
+    assert.equal(run(['add', file, oversized]).status, 2);
+    assert.equal(readFileSync(file, 'utf8'), before, 'oversized input cannot append');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
