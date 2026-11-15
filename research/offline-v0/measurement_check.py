@@ -54,6 +54,11 @@ def inspect(bundle):
         m = a.get("measurement")
         if not isinstance(m, dict):
             continue
+        # Unsupported formats and derived roles fail MV001 in the JS verifier;
+        # no downstream fields may be evaluated under the wrong version.
+        if m.get('format') != FORMAT or a.get('role') not in ('observation', 'follow_up_observation'):
+            out.append({})
+            continue
         statuses = {}
         f = m.get("featureOfInterest")
         ref_id = f.get("referentId") if isinstance(f, dict) else None
