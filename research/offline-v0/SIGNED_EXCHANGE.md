@@ -42,7 +42,7 @@ node --test tests/*.test.mjs
 python3 tests/offline-differential.py
 \`\`\`
 
-The tests create two synthetic journals, generate ephemeral keys in memory, independently checkpoint each history, exchange the resulting signed records, verify saved historical anchors, and contest an inconsistent fictional measurement. They assert FAIL on tampering and bad trust anchors; WARN on reused evidence and aliased signing keys; UNKNOWN where identity or ecological proof is missing.
+The independent `signed_exchange_check.py` replays the journal using the separately written Python byte-chain checker and uses the system OpenSSL 3 utility to verify the Ed25519 DSSE signature; this is cross-implementation validation, not an independent trust authority. The GitHub CI runner supplies OpenSSL, and the Python checker requires it to be installed locally. The tests create two synthetic journals, generate ephemeral keys in memory, independently checkpoint each history, exchange the resulting signed records, verify saved historical anchors, and contest an inconsistent fictional measurement. They assert FAIL on tampering and bad trust anchors; WARN on reused evidence and aliased signing keys; UNKNOWN where identity or ecological proof is missing.
 
 ## Hard review boundaries
 
