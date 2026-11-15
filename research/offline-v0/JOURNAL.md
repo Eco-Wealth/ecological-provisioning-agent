@@ -35,14 +35,35 @@ Each added JSON file contains one record:
 
 Allowed `kind` values after genesis are `referent`, `evidence`, and `attestation`. Examples for each appear in `fixtures/synthetic.json` as root arrays. Wrap the chosen array element as `{"kind":"attestation","value":{...}}` (or its corresponding kind) before appending. Reference records that have already been appended, not unresolved future records.
 
+## Fully runnable fictional lifecycle
+
+Generate a complete synthetic record with separate observation, proposal, admitted-obligation claim, intervention claim, follow-up, judgement, disposition, and payment claim. The example explicitly preserves unresolved authority, settlement and ecological outcome:
+
+```sh
+node research/offline-v0/examples/fictional-workflow.mjs fictional.jsonl
+node research/offline-v0/journal-cli.mjs inspect fictional.jsonl
+node research/offline-v0/journal-cli.mjs export fictional.jsonl fictional-bundle.json
+node research/offline-v0/cli.mjs fictional-bundle.json
+python3 research/offline-v0/journal_check.py < fictional.jsonl
+```
+
+The generator prints the journal head digest. Store that digest somewhere independent from the journal file, then check it later:
+
+```sh
+node research/offline-v0/journal-cli.mjs check-head fictional.jsonl <trusted-head-sha256>
+python3 research/offline-v0/journal_check.py <trusted-head-sha256> < fictional.jsonl
+```
+
+Do not interpret a synthetic closed obligation as a real authorized disposition.
+
 ## Invariants and limitations
 
 - Each journal entry carries a consecutive sequence, local receipt time, previous hash, and SHA-256 hash over deterministic JSON. No record can be edited or deleted undetectably **relative to a trusted copy of the last head digest**.
 - Preserve the latest head digest independently. Without an outside checkpoint, someone with file access can rewrite the *entire* history and create another valid hash chain. The journal is not a trusted clock, identity system, authorization service, or blockchain anchor.
 - Receipt times are nondecreasing and cannot precede an attestation's claimed assertion time. Historical views use the optional `recordedAt` receipt time rather than accepting a backdated `assertedAt` as evidence that a claim was known earlier.
 - Appends fail when the projected bundle fails existing research structural/evidence checks. Missing links must be resolved before append. Unknown authority and ecological conclusions remain explicit, not silently upgraded to PASS.
-- The writer uses a cooperative exclusive `.lock` file for edits. It does not protect against malicious writers, direct file edits, a hostile filesystem, crash during a single append, power loss, or a privileged replacement of the journal. Keep backups. The file's complete trailing newline detects basic truncated writes.
-- The serialization order is deterministic for a given record set; it uses lexicographically sorted JavaScript JSON keys. This is **not** an IETF JSON Canonicalization Scheme conformance claim.
+- The writer uses a cooperative exclusive `.lock` file for edits. Reads are size-limited, writes check for partial writes and flush the file descriptor. These measures do not protect against malicious writers, direct file edits, a hostile filesystem, power loss, crash after partial append, or privileged wholesale replacement. Keep backups and independent head checkpoints. The file's complete trailing newline detects basic truncated writes.
+- The serialization order is deterministic for a given record set; it uses lexicographically sorted JavaScript JSON keys. Noncanonical JSON, including duplicate keys, is rejected on read. This is **not** an IETF JSON Canonicalization Scheme conformance claim. The independently implemented Python checker verifies the raw journal byte-chain without reserializing floating-point measurements, and rejects duplicate keys. It does not establish real-world truth or delegated authority.
 - An export is a research bundle, not an admitted obligation or verified ecological improvement. It includes an independently checkable local journal head and the declared source.
 
 Run tests:
@@ -51,6 +72,7 @@ Run tests:
 node --test tests/offline-local-journal.test.mjs
 node --test tests/*.test.mjs
 python3 tests/offline-differential.py
+python3 research/offline-v0/journal_check.py < fictional.jsonl
 ```
 
 ## Honest model of a completed intervention
