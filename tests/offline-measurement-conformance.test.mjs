@@ -125,3 +125,17 @@ test('duplicate publisher identities fail closed for external contest matching',
   assert.equal(inspectExchange(pub, challenge()).comparisons[0].findings[0].ruleId, 'XC001');
   assert.equal(inspectExchange(pub, challenge()).comparisons[0].findings[0].status, 'FAIL');
 });
+
+test('independent Python oracle agrees on bounded mechanical rule subset', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const python = new URL('../research/offline-v0/measurement_check.py', import.meta.url).pathname;
+  for (const v of vectors.vectors) {
+    const b = bundle(); mutations[v.mutation](b);
+    const run = spawnSync('python3', [python], { input: JSON.stringify(b), encoding: 'utf8' });
+    assert.equal(run.status, 0, v.id + ': ' + run.stderr);
+    const independent = JSON.parse(run.stdout)[0];
+    const primary = inspectMeasurements(b);
+    for (const [rule, status] of Object.entries(independent))
+      assert.equal(row(primary, rule)?.status, status, v.id + ': ' + rule);
+  }
+});
