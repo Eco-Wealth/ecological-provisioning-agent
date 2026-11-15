@@ -38,7 +38,8 @@ function entry(seq, recordedAt, record, prevHash) {
 }
 
 function checkRecord(record) {
-  if (!object(record) || !['genesis', 'referent', 'attestation', 'evidence'].includes(record.kind) ||
+  if (!object(record) || Object.keys(record).sort().join(',') !== 'kind,value' ||
+      !['genesis', 'referent', 'attestation', 'evidence'].includes(record.kind) ||
       !object(record.value)) throw new TypeError('unknown or malformed journal record');
   if (record.kind === 'genesis') {
     const value = record.value;
