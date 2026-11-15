@@ -5,6 +5,7 @@
  */
 import { createHash } from 'node:crypto';
 import { inspectExchange, MEASUREMENT_FORMAT } from '../measurement.mjs';
+import { createJournal, appendRecord, exportBundle, validateJournal } from '../journal.mjs';
 import { FORMAT, CONSTITUTION_SHA256, verifyBundle, hasFailures } from '../verify.mjs';
 const h = s => createHash('sha256').update(s, 'utf8').digest('hex');
 const boundary = 'FICTIONAL bounded drain cell; not an actual location';
@@ -35,12 +36,23 @@ const make = (source, head, id, value, role) => ({
     }
   }]
 });
-const primary = make('fictional-publisher-A', '1'.repeat(64), 'baseline', 12, 'observation');
-const challenger = make('fictional-publisher-B', '2'.repeat(64), 'contest', 20, 'follow_up_observation');
-challenger.attestations[0].measurement.contests = {
-  publisher: primary.provenance.source, journalHead: primary.provenance.localJournalHead,
+// Generate genuinely separate local journal histories and exchange their exports.
+function journalize(bundle) {
+  let entries = createJournal({ source: bundle.provenance.source, recordedAt: '2026-01-01T00:00:00Z' });
+  entries = appendRecord(entries, { kind: 'referent', value: bundle.referents[0] }, '2026-01-01T01:00:00Z');
+  entries = appendRecord(entries, { kind: 'evidence', value: bundle.evidence[0] }, '2026-01-01T02:00:00Z');
+  entries = appendRecord(entries, { kind: 'attestation', value: bundle.attestations[0] }, at);
+  return { journalHead: validateJournal(entries).head, bundle: exportBundle(entries) };
+}
+const primaryHistory = journalize(make('fictional-publisher-A', '0'.repeat(64), 'baseline', 12, 'observation'));
+const contested = make('fictional-publisher-B', '0'.repeat(64), 'contest', 20, 'follow_up_observation');
+contested.attestations[0].measurement.contests = {
+  publisher: primaryHistory.bundle.provenance.source,
+  journalHead: primaryHistory.journalHead,
   scopeReferent: 'fictional-drain', localId: 'baseline'
 };
+const challengerHistory = journalize(contested);
+const primary = primaryHistory.bundle, challenger = challengerHistory.bundle;
 const primaryGraph = verifyBundle(primary), challengerGraph = verifyBundle(challenger);
 if (hasFailures(primaryGraph) || hasFailures(challengerGraph)) {
   console.error('Synthetic graph construction unexpectedly failed');
