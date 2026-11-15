@@ -251,3 +251,52 @@ export function inspectSignedPair(publisherExchange, challengerExchange, { publi
   add('PX004', 'UNKNOWN', 'scientific, legal, delegated authority, causality and real-world observations remain unverified');
   return report;
 }
+
+
+/**
+ * Detect a bounded signed-history split for one declared publisher/key.
+ * Both complete histories must be present; without independently pinned keys
+ * this is evidence of a *key's* incompatible signatures, not actor attribution.
+ */
+export function inspectSignedHistoryConflict(firstExchange, secondExchange, trust = {}) {
+  const first = inspectSignedExchange(firstExchange, trust);
+  const second = inspectSignedExchange(secondExchange, trust);
+  const findings = [];
+  const add = (ruleId, status, reason) => findings.push({ ruleId, status, reason });
+  const report = { experimental: true, first, second, findings };
+  if (!first.bundle || !second.bundle) {
+    add('HF001', 'FAIL', 'both signed complete journal histories must pass the configured verification gates');
+    return report;
+  }
+  if (first.checkpoint.publisher !== second.checkpoint.publisher ||
+      first.checkpoint.signerKeySha256 !== second.checkpoint.signerKeySha256) {
+    add('HF001', 'UNKNOWN', 'journals have different declared publishers or signing keys; fork cannot be attributed to one key');
+    return report;
+  }
+  add('HF001', 'PASS', 'same declared publisher and signing key; external actor identity still unverified');
+  let a, b;
+  try {
+    a = readJournal(firstExchange.journal);
+    b = readJournal(secondExchange.journal);
+  } catch {
+    add('HF002', 'FAIL', 'journal could not be re-read after successful verification');
+    return report;
+  }
+  const min = Math.min(a.length, b.length);
+  let divergence = -1;
+  for (let i = 0; i < min; i++) {
+    if (a[i].hash !== b[i].hash) { divergence = i; break; }
+  }
+  if (divergence >= 0) {
+    add('HF002', 'WARN', 'one signing key endorsed incompatible history at sequence ' + divergence);
+    report.firstDivergentSequence = divergence;
+  } else if (a.length === b.length) {
+    add('HF002', 'PASS', 'same signed journal head and full history; duplicate publication only');
+  } else {
+    add('HF002', 'PASS', 'one fully signed journal is an exact append-only extension of the other');
+  }
+  if (!object(trust) || !word(trust.publisher) || !HEX.test(trust.publicKeySha256))
+    add('HF003', 'UNKNOWN', 'publisher-to-key identity is not independently pinned');
+  else add('HF003', 'PASS', 'same signer matched caller-pinned publisher-to-key binding');
+  return report;
+}
