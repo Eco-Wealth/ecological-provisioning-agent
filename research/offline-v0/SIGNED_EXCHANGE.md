@@ -14,7 +14,8 @@ The signed checkpoint includes the declared publisher, complete journal head, en
 4. Optionally matches the source name and signer public-key fingerprint to a value supplied **independently** by the receiver.
 5. Optionally checks a previously saved sequence/head pair against the complete imported history, detecting a self-consistent rewrite that diverged from that independent prior checkpoint.
 6. When two signed journals are submitted, preserves their separate history, flags reused inline measurement evidence SHA-256 digests and warns if both publisher labels share the same signing public key.
-7. Keeps ecological quality, authority, calibration, truthful time, and independent sampling UNKNOWN. Different signing keys and different hashes are not proof of separate operators or observations.
+7. For two signed histories claiming the **same** source and signing key, compares their full replayed hash chains and warns at the first conflicting sequence rather than classifying a valid extension as a fork.
+8. Keeps ecological quality, authority, calibration, truthful time, and independent sampling UNKNOWN. Different signing keys and different hashes are not proof of separate operators or observations.
 
 **Important:** the public key embedded in an envelope is **self-asserted**, not a verified real-world identity. A valid signature proves only that the owner of that key signed those checkpoint bytes. Publisher identity becomes *conditionally* bound only when the receiver independently stores and checks the publisher name and key fingerprint. A declared signing timestamp is still an unverified statement. A local checkpoint and an Ed25519 signature do not constitute an independent timestamping service, durable global transparency log, or constitutional ratification.
 
@@ -52,3 +53,8 @@ The tests create two synthetic journals, generate ephemeral keys in memory, inde
 5. Support for key rotation and revocation, anti-equivocation across witnesses, reproducible external method evidence, and observational independence remains **future engineering**, not a v0 capability.
 
 Relevant upstream specifications: [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032), [DSSE protocol](https://github.com/secure-systems-lab/dsse/blob/master/protocol.md). The journal's local canonicalizer is **not** claimed to implement [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785).
+
+
+## Conflicting signed histories
+
+\`inspectSignedHistoryConflict(first, second, trust)\` verifies each full journal and checkpoint, then compares the consecutive entry digests for one declared publisher and signing key. **HF002=WARN** reports the first divergent sequence if the signer has endorsed two incompatible complete histories; **HF002=PASS** means identical history or an exact prefix extension. The warning is proof of cryptographically inconsistent statements **by one signing key**, not necessarily proof of a dishonest person: key compromise, duplication, or legitimate recovery protocols can also explain conflicts. Publisher attribution remains UNKNOWN without independently pinned keys and institutional governance.
