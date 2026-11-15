@@ -42,7 +42,8 @@ function checkRecord(record) {
       !object(record.value)) throw new TypeError('unknown or malformed journal record');
   if (record.kind === 'genesis') {
     const value = record.value;
-    if (!string(value.source) || !object(value.constitution) ||
+    if (value.journalFormat !== JOURNAL_FORMAT || !string(value.source) ||
+        !object(value.constitution) ||
         value.constitution.identifier !== 'ECOWEALTH-CONSTITUTION-v1' ||
         value.constitution.sha256 !== CONSTITUTION_SHA256)
       throw new TypeError('invalid pinned genesis constitution or source');
@@ -65,7 +66,7 @@ export function createJournal({ source, recordedAt }) {
   if (!string(source) || !validTime(recordedAt)) throw new TypeError('invalid journal provenance or time');
   return [entry(0, recordedAt, {
     kind: 'genesis', value: {
-      source, constitution: {
+      journalFormat: JOURNAL_FORMAT, source, constitution: {
         identifier: 'ECOWEALTH-CONSTITUTION-v1', sha256: CONSTITUTION_SHA256
       }
     }
@@ -164,4 +165,13 @@ export function snapshot(entries, asOf) {
 export function serializeJournal(entries) {
   validateJournal(entries);
   return entries.map(e => canonical(e)).join('\n') + '\n';
+}
+
+/** Compare with a separately retained digest to detect wholesale replacement. */
+export function checkHead(entries, expectedHead) {
+  const { head } = validateJournal(entries);
+  if (typeof expectedHead !== 'string' || !HEX.test(expectedHead))
+    throw new TypeError('expected head must be a lowercase SHA-256 hex digest');
+  if (head !== expectedHead) throw new TypeError('journal head does not match trusted checkpoint');
+  return { head, matches: true };
 }
