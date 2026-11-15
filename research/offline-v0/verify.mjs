@@ -134,6 +134,11 @@ export function verifyBundle(bundle, { asOf } = {}) {
       add('structural', 'S007', 'FAIL', 'incomplete Attestation', 'attestations[' + i + ']');
       continue;
     }
+    if (Object.hasOwn(a, 'recordedAt') &&
+        (!validTime(a.recordedAt) || Date.parse(a.recordedAt) < Date.parse(a.assertedAt))) {
+      add('structural', 'S022', 'FAIL', 'invalid or pre-assertion local recordedAt', id);
+      invalidAttestationIds.add(id);
+    }
     if (!referents.has(a.scopeReferent) || ambiguousReferents.has(a.scopeReferent)) {
       add('structural', 'S008', 'FAIL', 'unknown or ambiguous scope Referent', id);
       invalidAttestationIds.add(id);
@@ -193,7 +198,11 @@ export function verifyBundle(bundle, { asOf } = {}) {
         add('privacy', 'R001', 'PASS', 'restricted content not included', item.id);
     }
   }
-  const before = a => asOf === undefined || Date.parse(a.assertedAt) <= Date.parse(asOf);
+  // The optional recordedAt field is a local journal receipt time, not proof
+  // of external admission. A historical view must never include an assertion
+  // imported later merely because its assertedAt was backdated.
+  const localTime = a => Date.parse(a.recordedAt ?? a.assertedAt);
+  const before = a => asOf === undefined || localTime(a) <= Date.parse(asOf);
   // Only causal / dependency links form a directed lineage. Contradictions are
   // contestation edges and may legitimately be reciprocal.
   const nonCausalKinds = new Set(['contradicts']);
@@ -227,8 +236,9 @@ export function verifyBundle(bundle, { asOf } = {}) {
         continue;
       }
       const target = attestations.get(targetId);
-      if (Date.parse(target.assertedAt) > Date.parse(a.assertedAt)) {
-        add('structural', 'S014', 'FAIL', 'relation points to later assertion', id);
+      if (Date.parse(target.assertedAt) > Date.parse(a.assertedAt) ||
+          localTime(target) > localTime(a)) {
+        add('structural', 'S014', 'FAIL', 'relation points to a later assertion or recorded event', id);
         if (a.role === 'disposition') invalidDispositionRefs.add(id);
         invalidAttestationIds.add(id);
       }
