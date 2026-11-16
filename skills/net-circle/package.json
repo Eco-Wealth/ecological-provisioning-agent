@@ -13,6 +13,7 @@
   "scripts": {
     "quote": "node net-circle.mjs quote",
     "pools": "node net-circle.mjs pools",
+    "prepare-tx": "node net-circle.mjs prepare",
     "test": "node --test net-circle.test.mjs"
   },
   "dependencies": {
@@ -24,5 +25,9 @@
     "zora",
     "agent",
     "arbitrage"
+  ],
+  "files": [
+    "net-circle.mjs",
+    "SKILL.md"
   ]
 }
