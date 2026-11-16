@@ -186,25 +186,18 @@
         "window_glazing_repair",
         "masonry_repointing_repair",
         "basement_water_seal_repair",
-        "historic_pier_beam_foundation_releveling",
-        "rowhouse_stoop_crack_patch_repair",
-        "rowhouse_stoop_step_rebuild_repair",
         "rowhouse_gutter_downspout_ground_clear_repair",
         "rowhouse_roofline_gutter_repair",
         "rowhouse_areaway_waterproof_regrade_repair",
-        "rowhouse_areaway_drain_clear_repair",
-        "winter_access_freeze_protection_maintenance",
         "ibhs_fortified_home_wind_mitigation",
         "wildfire_defensible_space_readiness",
         "home_defensible_space_zone1_maintenance",
         "defensible_space_vegetation_stewardship",
-        "lbc_energy_petal",
         "lbc_full_cert",
-        "lfa_lbc_petal_practice",
         "lfa_biophilic_design",
-        "lfa_zero_energy",
-        "home_mold_moisture_audit",
-        "build_neighbor_shelter_holds"
+        "build_neighbor_shelter_holds",
+        "historic_pier_beam_foundation_releveling",
+        "lbc_energy_petal"
       ]
     },
     {
@@ -269,15 +262,14 @@
         "building_healthy_materials_screening",
         "building_healthy_materials_swap_install",
         "healthy_materials_swap",
-        "red_list_materials",
         "lead_safe_renovation",
         "lead_safe_paint_stabilization_repair",
-        "aging_in_place_retrofit",
         "epa_landfill_gas_ej_monitoring",
         "lbc_health_petal",
         "lbc_materials_petal",
         "lfa_declare_materials",
-        "lichen_air_quality_bioindication_survey"
+        "lichen_air_quality_bioindication_survey",
+        "home_mold_moisture_audit"
       ]
     },
     {
@@ -332,16 +324,13 @@
         "pfas_screening",
         "green_stormwater_infrastructure",
         "storm_drain_repair_clean",
-        "flood_resilience",
         "gs_water_benefit_source_protection_mrv",
         "gs_water_benefit_wash_verification_mrv",
         "institutional_wash_verification_visit",
         "cistern_first_flush_diverter_install",
-        "arroyo_check_dam_hand_build",
         "cdc_vector_borne_disease_prevention",
         "epa_ms4_stormwater",
         "lbc_water_petal",
-        "sdg6_clean_water",
         "sdg_6_clean_water",
         "acequia_channel_maintenance",
         "acequia_channel_desembanque",
@@ -362,7 +351,16 @@
         "water_loss_non_revenue_audit",
         "canal_and_reservoir_evaporation",
         "public_building_water_fixtures",
-        "build_runoff_kept_out_of_the_drain"
+        "build_runoff_kept_out_of_the_drain",
+        "build_buried_lines_kept_whole",
+        "public_landscape_water_demand",
+        "managed_recharge_and_capture",
+        "rainwater_and_greywater_reuse",
+        "school_garden_drip_irrigation_install",
+        "drought_stage_public_notice",
+        "flood_resilience",
+        "sdg6_clean_water",
+        "rowhouse_areaway_drain_clear_repair"
       ]
     },
     {
@@ -416,7 +414,9 @@
         "electrification_retrofit_readiness",
         "data_center_hourly_power_receipt",
         "solar_array_performance_receipt",
-        "solar_module_soiling_and_cleaning"
+        "solar_module_soiling_and_cleaning",
+        "lfa_zero_energy",
+        "solar_community_access"
       ]
     },
     {
@@ -461,11 +461,8 @@
         ]
       },
       "legacy_standard_ids": [
-        "graffiti_removal_cleanup",
         "alley_bulk_debris_removal",
-        "epa_illegal_dumping_cleanup",
         "post_fire_debris_removal",
-        "demolition_pre_survey",
         "epa_recycling_contamination",
         "epa_food_waste_hierarchy",
         "epa_hhw_ewaste_guidance",
@@ -476,7 +473,7 @@
         "data_center_energy_reuse",
         "data_center_circular_hardware",
         "solar_module_end_of_life_custody",
-        "rainwater_and_greywater_reuse"
+        "epa_illegal_dumping_cleanup"
       ]
     },
     {
@@ -535,14 +532,11 @@
         "street_tree_pit_restoration",
         "soil_health",
         "soil_carbon_baseline",
-        "compost_application",
         "cover_crop_establishment",
         "biodiversity_monitoring",
         "pollinator_habitat_establishment",
         "vacant_lot_stewardship",
-        "greenway_trail_maintenance",
         "contaminated_land",
-        "hazard_tree_removal",
         "urban_heat_island_mitigation",
         "wildfire_recovery",
         "rangeland_grazing_management",
@@ -565,7 +559,6 @@
         "isa_urban_forestry",
         "mulch_irrigation_stewardship_audit",
         "ocean_conservancy_icc_data_card",
-        "lbc_place_petal",
         "sdg15_life_on_land",
         "sdg_15_life_on_land",
         "sdg14_life_below_water",
@@ -574,16 +567,30 @@
         "arbolado_publico_care",
         "arbolado_publico_census",
         "river_reach_stewardship_signboard",
-        "greenway_planning_design_guideline",
         "savory_eov_land_health_monitoring",
         "garden_soil_test_stewardship",
-        "garden_sanitation_crop_rotation_audit",
         "data_center_campus_habitat",
         "solar_ground_cover_habitat",
         "solar_agrivoltaic_grazing",
-        "managed_recharge_and_capture",
         "build_edge_living_ground",
-        "sudden_oak_death_monitoring"
+        "sudden_oak_death_monitoring",
+        "fairy_ring_landscape_fungi_observation",
+        "fungal_diversity_survey_documentation",
+        "tree_decay_fungi_observation",
+        "invasive_plant_mapping",
+        "urban_tree_visual_health_check",
+        "street_tree_inventory_itree_eco",
+        "sdg_11_sustainable_cities",
+        "bumble_bee_watch_photo_survey",
+        "native_bee_nesting_habitat_monitoring",
+        "monarch_larva_milkweed_monitoring",
+        "pollinator_habitat_forage_audit",
+        "household_insect_decline_pressure_audit",
+        "bat_white_nose_syndrome_observation_referral",
+        "plant_disease_scouting_referral",
+        "compost_application",
+        "lbc_place_petal",
+        "arroyo_check_dam_hand_build"
       ]
     },
     {
@@ -638,23 +645,15 @@
       },
       "legacy_standard_ids": [
         "edible_garden_cultivation",
-        "food_sustainability",
-        "food_preservation_kitchen",
         "michelin_ingredient_provenance",
         "michelin_kitchen_craft",
         "michelin_garden_to_plate",
         "michelin_preservation",
         "michelin_star_craft",
-        "michelin_green_star",
         "orchard_gleaning_harvest_run",
         "community_orchard_fruit_tree_pruning",
-        "school_garden_drip_irrigation_install",
         "permitted_kitchen_expansion_build",
-        "pastured_poultry_welfare_management",
-        "regenerative_cattle_welfare_husbandry",
-        "diversified_livestock_welfare_husbandry",
         "mushroom_cultivation_contamination_audit",
-        "plant_disease_scouting_referral",
         "data_center_heat_fed_growing",
         "solar_fed_public_garden_water",
         "ward_mealtime_hosting",
@@ -663,7 +662,11 @@
         "community_dinner_hosting",
         "care_kitchen_service_readiness",
         "jobsite_recovery_shift_end_meal",
-        "jobsite_recovery_station_close_and_leftovers"
+        "jobsite_recovery_station_close_and_leftovers",
+        "garden_sanitation_crop_rotation_audit",
+        "michelin_green_star",
+        "food_preservation_kitchen",
+        "food_sustainability"
       ]
     },
     {
@@ -715,18 +718,19 @@
         "curb_ramp_repair",
         "sidewalk_repair_permeable",
         "civic_safety",
-        "playground_surfacing_repair",
         "public_lighting_install",
-        "vegetation_sightline_clearing",
-        "shade_sail_install_public",
         "porch_railing_safety_repair",
-        "perimeter_fence_gate_repair",
         "civic_pavement_marking",
         "ada_prowag_public_way",
         "sdg11_cpted_environment",
-        "sdg11_public_space",
         "ward_mobility_path_walkthrough",
-        "build_perimeter_public_path"
+        "build_perimeter_public_path",
+        "aging_in_place_retrofit",
+        "greenway_trail_maintenance",
+        "rowhouse_stoop_crack_patch_repair",
+        "rowhouse_stoop_step_rebuild_repair",
+        "vegetation_sightline_clearing",
+        "greenway_planning_design_guideline"
       ]
     },
     {
@@ -776,25 +780,17 @@
       "legacy_standard_ids": [
         "civic_surface_cleaning",
         "civic_biohazard_spot_cleaning",
-        "civic_hard_surface_repair",
         "civic_asset_install",
         "civic_small_structure_build",
         "community_mural_painting",
         "sdg11_waste_blight",
-        "sdg_11_sustainable_cities",
         "kab_litter_index_transect",
-        "invasive_plant_mapping",
-        "street_tree_inventory_itree_eco",
-        "urban_tree_visual_health_check",
-        "tree_decay_fungi_observation",
-        "fairy_ring_landscape_fungi_observation",
-        "fungal_diversity_survey_documentation",
         "data_center_community_boundary",
-        "data_center_community_compute",
-        "solar_community_access",
-        "public_landscape_water_demand",
-        "drought_stage_public_notice",
-        "build_haul_route_street_kept"
+        "graffiti_removal_cleanup",
+        "playground_surfacing_repair",
+        "build_haul_route_street_kept",
+        "shade_sail_install_public",
+        "hazard_tree_removal"
       ]
     },
     {
@@ -855,16 +851,10 @@
         "laying_hen_feather_cover_audit",
         "small_ruminant_famacha_anemia",
         "dairy_small_ruminant_scc_mastitis_screen",
-        "bumble_bee_watch_photo_survey",
-        "native_bee_nesting_habitat_monitoring",
-        "household_insect_decline_pressure_audit",
         "hive_inspection_brood_health",
-        "bat_white_nose_syndrome_observation_referral",
         "overwintering_loss_tracking",
         "small_hive_beetle_wax_moth_monitoring",
         "nosema_disease_sampling_referral",
-        "monarch_larva_milkweed_monitoring",
-        "pollinator_habitat_forage_audit",
         "varroa_mite_wash_monitoring",
         "canine_cognitive_dysfunction_owner_screen",
         "fecal_egg_count_monitoring",
@@ -878,10 +868,70 @@
         "donkey_body_condition_score",
         "catfish_dissolved_oxygen_monitoring",
         "trout_dissolved_oxygen_monitoring",
-        "poultry_mortality_egg_production_surveillance"
+        "poultry_mortality_egg_production_surveillance",
+        "diversified_livestock_welfare_husbandry",
+        "regenerative_cattle_welfare_husbandry",
+        "pastured_poultry_welfare_management"
       ]
     }
   ],
+  "filing_rules": {
+    "why": "How a job is filed under this standard. Written down on 2026-11-11, after three models sorted real jobs against the standard's own words and each disagreement was ruled on. These state rules the standard already followed. They add no condition, no law and no measure.",
+    "rules": [
+      {
+        "id": "measures_decide",
+        "rule": "A job's home is the condition whose own measures the job measures or repairs. The words a job happens to use, and the program it came from, do not decide it."
+      },
+      {
+        "id": "one_home",
+        "rule": "Every job has exactly one home: a condition, a law, or out of scope. When a job touches two conditions, a measure one condition names outright beats the general wording of the other. When both name it, the job's stated purpose decides."
+      },
+      {
+        "id": "survey_is_a_measurement",
+        "rule": "A survey, audit, count or reading of a named property is a measurement of that property's condition. The property is what the reading is taken for, not the instrument: lichens counted to read the air are air_is_clean. Intake, the law start_where_it_is, is only the first walk of an unmeasured place that writes down what is wrong before any condition is chosen."
+      },
+      {
+        "id": "receipt_that_measures",
+        "rule": "A published receipt, baseline or record that is itself the reading of a condition (kilowatt hours, a heat stream's next use, a water budget) is filed under that condition. The law receipt_is_the_certificate binds only work that makes a record true or reachable without reading a property of a place, such as a survey benchmark disk photographed so the record that depends on it can still be found."
+      },
+      {
+        "id": "hazard_control",
+        "rule": "A check or control on how work is done safely (a pre-demolition engineering survey, a heat plan, a jobsite heat audit, a trench inspection) is bound by the law nobody_is_hurt and scores no condition, and so is a notice posted so neighbors keep clear of a hazard (a burn-day sign). A shade sail or shade structure built for anyone to use is not a control on how work is done: it is a shared fixture, the_commons_is_kept. Drinking water set out for anyone is water_is_honest."
+      },
+      {
+        "id": "hauled_or_logged",
+        "rule": "Hauling out what was dumped, and keeping a thing in use or sending it to its next use, is nothing_leaves_as_waste; that includes material taken off intact for reuse, food scraps separated, collected or composted, and the making of compost. Spreading compost on soil is the_ground_is_alive. Edible surplus carried to people is filed by what the run counts: meals reaching people are a_person_is_fed_well, pounds kept out of the bin are nothing_leaves_as_waste. Logging, reporting, counting or cleaning what is broken, tagged or littered on shared ground is the_commons_is_kept, and a litter count is a log wherever it is taken. Litter and debris cleared from a river bank, a shore or a wetland is the_ground_is_alive, because its purpose is the living water."
+      },
+      {
+        "id": "walked_or_driven",
+        "rule": "A defect in the surface a person walks on (a sidewalk, a path, a trail, a boardwalk, a step at a door), a ramp, a handrail, a light or a sightline is everyone_can_get_here; erosion on a trail's tread or edge, and a water bar kept so the tread does not wash out, are defects of that surface, unless the job restores the trail to heal the habitat it scars, which is the_ground_is_alive. A sign or marking that guides a person on foot (a crosswalk, a ramp warning, wayfinding on a path) is everyone_can_get_here. A defect in the surface vehicles use, in the curb, or in a shared fixture is the_commons_is_kept. Shared fixtures include every other sign, a bench, a shade sail, a shade structure or arbor, a cool-down spot, a viewing area or platform, a shared tool store, a pier's rails and line bins, a hydrant, a gate and a boundary fence. A fence, a barrier or a guard set to keep people or animals off something is filed by what it protects: a dune, a tree, a formation or a wild species (a wildlife exclusion fence along a road included) is the_ground_is_alive, a walking route is everyone_can_get_here, a road is the_commons_is_kept, the air is air_is_clean."
+      },
+      {
+        "id": "wild_or_kept",
+        "rule": "Trees, canopy, plantings, soil life and wild species counted, and their habitat read, are the_ground_is_alive; a nest box, a bee block, a martin house, a native pollinator strip and a light shielded so wild species have the dark are habitat for wild species, and a shade tree planted in the ground stays the_ground_is_alive even where it shades a house. A fruit tree, an orchard or a mushroom log grown for food, a community garden made, a food garden's upkeep, the water laid so an orchard lives, and shade planted for a food crop are a_person_is_fed_well; a cover crop sown to build soil stays the_ground_is_alive. Animals a place keeps or hosts (a flock, a herd, a kept hive), their housing, water and welfare, are the_creatures_are_well. Animals put to work on the ground (sheep grazing under a solar array, a herd moved through paddocks by a grazing plan) are filed by what the work is for, unless the job scores the animals. A planting or a ground treatment is air_is_clean only when the job names blowing dust as the harm it stops; a windbreak or hedgerow that holds topsoil, or shelters a field, a yard, a path or a ranch from wind, stays the_ground_is_alive, and native cover planted to restore the ground stays the_ground_is_alive even where it also holds dust."
+      },
+      {
+        "id": "water_by_purpose",
+        "rule": "Work whose stated purpose is to keep, slow, save, clean or reuse water, or to carry rain and flood water where it is meant to go (a storm drain, an inlet, a ditch and a headcut in it, a culvert, a canal, a pond, a septic system, a sump, a channel kept clear, pooled water drained, a gully cut by road runoff, water bars on a road, two wetlands reconnected), or to give people clean water to drink or wash with (a drinking fountain, a bottle filler, a refill point, a handwash station), is water_is_honest, even when the act is planting or digging. Grass seeded or a tree planted is water_is_honest only when the job names recharging an aquifer as its purpose, and a strip only when it is planted to keep runoff or nutrients out of the water; plantings that restore a spring, a seep, a wetland margin or a riverbank are the condition of that living water, the_ground_is_alive, even when they also filter runoff. Erosion healed in open soil (a natural gully or arroyo, a bank, a slope), including a check dam, brush matting or a dry-stone wall set to heal it, and paving taken up so the ground is open again are the_ground_is_alive. Watering, mulching or a basin made so a tree or a planting lives is filed with the planting; work done to use less water is water_is_honest. The condition of open living water (a river, a lake, a spring run) read from its bank is the_ground_is_alive."
+      },
+      {
+        "id": "person_not_place",
+        "rule": "Work that scores a person's own body, health, experience or home life is out of scope. A place's capacity to feed, shelter or admit a person belongs to the place: a hosted meal is a_person_is_fed_well even when the job also checks on the guest, and a home's grab bars, ramps and trip hazards are everyone_can_get_here even when the job names the person who lives there."
+      },
+      {
+        "id": "reading_and_repair_together",
+        "rule": "A repair is filed with the reading it answers, and a reading with the repairs that answer it, because a place climbs one condition at a time. A vacant lot's condition record is filed with the clearing and planting it leads to. A haul route's dust log is filed with the street cleaning run of the same route. A buffer planted where a boundary reading found noise is filed with that reading. A dump-site report is filed with the haul it queues, and a creek channel cleared because an outfall screen found it choked is filed with that screen."
+      },
+      {
+        "id": "fire_by_what_it_protects",
+        "rule": "Fire work is filed by what it protects. Vegetation cleared or audited around a building so fire does not reach it is shelter_holds. A firebreak kept clear on shared ground, and a hydrant kept ready for a fire crew, are the_commons_is_kept. Ladder fuels cleared in a woodland protect the trees, the_ground_is_alive."
+      },
+      {
+        "id": "envelope_or_energy",
+        "rule": "Sealing drafts, insulating, weatherstripping and patching a wall are the envelope, shelter_holds, even when the job speaks of energy; so is whatever keeps sun and heat out at a building's roof or window (a reflective roof coat, a vegetated roof, a radiant barrier, an awning, an exterior shade, a curtain, a vine trained to shade the glass, a screen). Plants on a shared fixture's roof (a bus shelter) are living ground, the_ground_is_alive. Equipment that makes, stores or uses power (solar, a battery, a heat pump, a water heater and its relief line, an evaporative cooler, lighting) is power_is_earned. Mold and moisture found, vented or dried out are air_is_clean, a dryer's vent and a crawlspace vapor barrier included, and so is a gap sealed so a pollutant stays out (a garage-to-house gap). A reflective coating laid on shared paving to cool it is the_commons_is_kept; a seal coat that repairs a path is the walking surface, everyone_can_get_here."
+      }
+    ]
+  },
   "law_bound": [
     {
       "law": "nobody_is_hurt",
@@ -904,7 +954,8 @@
         "sts_crew_supervision",
         "jobsite_recovery_station_set_up",
         "jobsite_recovery_rest_and_rehydration",
-        "jobsite_heat_prevention_log"
+        "jobsite_heat_prevention_log",
+        "demolition_pre_survey"
       ]
     },
     {
@@ -938,7 +989,9 @@
     {
       "law": "start_where_it_is",
       "note": "Intake. Somebody walks a block that nobody has ever measured and writes down what is wrong with it. This scores no condition because at intake there is not yet a condition to score. It is how a place stops being Unread, and it is the single most common piece of work in the whole library.",
-      "ids": []
+      "ids": [
+        "lfa_lbc_petal_practice"
+      ]
     }
   ],
   "cross_cutting_ids": [
@@ -967,6 +1020,122 @@
         "community_fridge_stock_clean": "condition:a_person_is_fed_well",
         "healthy_corner_store_produce_delivery_restock": "condition:a_person_is_fed_well"
       }
+    },
+    {
+      "id": "civic_hard_surface_repair",
+      "note": "Split 2026-11-11. One family held two kinds of repair. A defect in the surface a person walks on (a sidewalk panel, a lifted board, a paver, a tree grate, a path) is a trip hazard, and 'trip hazards, counted and closed' is a measure of everyone_can_get_here. A defect in the surface vehicles use, or in the curb, is an open defect on the shared surface, which the_commons_is_kept measures. Every work_type must be listed. There is deliberately no default.",
+      "by_work_type": {
+        "sidewalk_trip_hazard_grind_repair": "condition:everyone_can_get_here",
+        "sidewalk_panel_remove_replace": "condition:everyone_can_get_here",
+        "sidewalk_tree_root_lift_panel_repair": "condition:everyone_can_get_here",
+        "saw_cut_replace_single_panel_along": "condition:everyone_can_get_here",
+        "prune_tree_root_causing_panel_heave": "condition:everyone_can_get_here",
+        "install_root_barrier_after_pruning_panel": "condition:everyone_can_get_here",
+        "survey_block_missing_sidewalk": "condition:everyone_can_get_here",
+        "survey_photograph_sidewalk_curb_ramp_condition": "condition:everyone_can_get_here",
+        "shoreline_access_path_ada_repair": "condition:everyone_can_get_here",
+        "patch_compact_disturbed_asphalt_pedestrian_path": "condition:everyone_can_get_here",
+        "seal_coat_fog_asphalt_path_surface": "condition:everyone_can_get_here",
+        "prune_cut_back_vegetation_encroaching_clear": "condition:everyone_can_get_here",
+        "inspect_utility_cover_embedded_walking_surface": "condition:everyone_can_get_here",
+        "observe_report_hazardous_loose_misaligned_utility": "condition:everyone_can_get_here",
+        "tighten_replace_fastener_securing_loose_metal": "condition:everyone_can_get_here",
+        "reset_heaved_misaligned_tree_grate_grade": "condition:everyone_can_get_here",
+        "reset_tree_grate_frame_flush_surrounding": "condition:everyone_can_get_here",
+        "reset_loose_sand_set_paver_unit": "condition:everyone_can_get_here",
+        "reset_sand_set_unit_paver_lift": "condition:everyone_can_get_here",
+        "reset_paver_brick_edge_restraint_band": "condition:everyone_can_get_here",
+        "lake_edge_boardwalk_deck_board_repair": "condition:everyone_can_get_here",
+        "replace_rotted_cracked_wood_boardwalk_deck": "condition:everyone_can_get_here",
+        "wetland_boardwalk_repair": "condition:everyone_can_get_here",
+        "quebrada_heritage_public_space_stone_path_repair_maintenance": "condition:everyone_can_get_here",
+        "stoop_repair": "condition:everyone_can_get_here",
+        "inspect_pedestrian_signage_pavement_marking": "condition:everyone_can_get_here",
+        "alley_pavement_patch": "condition:the_commons_is_kept",
+        "alley_pavement_patch_repair": "condition:the_commons_is_kept",
+        "alley_pothole_patch_repair": "condition:the_commons_is_kept",
+        "curb_alley_pavement_patch_repair": "condition:the_commons_is_kept",
+        "curb_and_gutter_spall_repair": "condition:the_commons_is_kept",
+        "curb_face_repair": "condition:the_commons_is_kept",
+        "curb_gutter_spall_repair": "condition:the_commons_is_kept",
+        "cut_out_patch_asphalt_pothole": "condition:the_commons_is_kept",
+        "level_asphalt_low_spot_infrared_patch": "condition:the_commons_is_kept",
+        "measure_document_spalled_surface_area": "condition:the_commons_is_kept",
+        "patch_collar_cracking_radiating_outward_utility": "condition:everyone_can_get_here",
+        "patch_spalled_scaled_concrete_surface_bonding_agent": "condition:the_commons_is_kept",
+        "place_compact_aggregate_base_course": "condition:the_commons_is_kept",
+        "repair_chipped_spalled_section_curb_face": "condition:the_commons_is_kept",
+        "reset_replace_damaged_leaning_bollard_post": "condition:the_commons_is_kept",
+        "restore_pavement_marking_disturbed_within_cut": "condition:the_commons_is_kept",
+        "saw_cut_reconstruct_spalled_driveway_apron": "condition:everyone_can_get_here",
+        "street_asphalt_crack_seal": "condition:the_commons_is_kept",
+        "street_pothole_cold_patch_repair": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "red_list_materials",
+      "note": "Split 2026-11-11. The Red List screen and the healthy-material swap identify and swap out hazardous materials, a measure of air_is_clean. The household device jobs (keep a device working, stage and count what is retired, get it to a certified recycler, run a collection round) give a stream leaving the place its next use, which nothing_leaves_as_waste measures. Every work_type must be listed. There is deliberately no default.",
+      "by_work_type": {
+        "building_audit": "condition:air_is_clean",
+        "swap_healthy_materials": "condition:air_is_clean",
+        "home_battery_electronics_safe_staging_setup": "condition:nothing_leaves_as_waste",
+        "home_desktop_computer_dust_cleaning_maintain": "condition:nothing_leaves_as_waste",
+        "home_desktop_computer_thermal_paste_refresh_repair": "condition:nothing_leaves_as_waste",
+        "home_device_charger_cable_fray_repair_replace": "condition:nothing_leaves_as_waste",
+        "home_device_longevity_habit_setup": "condition:nothing_leaves_as_waste",
+        "home_device_personal_data_removal_factory_reset_document": "condition:nothing_leaves_as_waste",
+        "home_device_protective_case_cover_install": "condition:nothing_leaves_as_waste",
+        "home_electronics_removable_battery_replacement_repair": "condition:nothing_leaves_as_waste",
+        "home_ewaste_certified_recycler_dropoff_deliver": "condition:nothing_leaves_as_waste",
+        "home_ewaste_inventory_count_document_survey": "condition:nothing_leaves_as_waste",
+        "public_building_ewaste_battery_collection_round_setup": "condition:nothing_leaves_as_waste",
+        "public_building_ewaste_round_tally_report_deliver": "condition:nothing_leaves_as_waste"
+      }
+    },
+    {
+      "id": "perimeter_fence_gate_repair",
+      "note": "Split 2026-11-11. One work type in this family is not a gate or a boundary a person passes: a field-edge wind fence is built to cut blowing dust, which is the air. The rest keep the home the family had. Every work_type must be listed. There is deliberately no default.",
+      "by_work_type": {
+        "ag_field_edge_wind_fence_dust_barrier_install": "condition:air_is_clean",
+        "canal_safety_fencing_repair": "condition:the_commons_is_kept",
+        "cattle_guard_repair": "condition:the_commons_is_kept",
+        "living_snow_fence_repair": "condition:the_commons_is_kept",
+        "park_perimeter_fence_gate_repair": "condition:the_commons_is_kept",
+        "snow_fence_install": "condition:the_commons_is_kept",
+        "vacant_lot_fence_secure_install": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "sdg11_public_space",
+      "note": "Split 2026-11-11. Night lighting and wayfinding signs are measures of everyone_can_get_here ('lighting at night, and sightlines'). Clearing litter, painting out a tag, cleaning a frontage and setting or tending public planters keep the shared ground sound and clean, which the_commons_is_kept measures. Every work_type must be listed. There is deliberately no default.",
+      "by_work_type": {
+        "dark_sky_outdoor_lighting_fixture_retrofit_install": "condition:the_ground_is_alive",
+        "canal_town_public_wayfinding_safety_sign_clean_maintain": "condition:the_commons_is_kept",
+        "activate_corner_lot": "condition:the_commons_is_kept",
+        "clean_vacant_frontage": "condition:the_commons_is_kept",
+        "clear_playlot_hazards": "condition:the_commons_is_kept",
+        "downtown_planter_box_install": "condition:the_ground_is_alive",
+        "lake_causeway_public_water_edge_litter_clear_maintain": "condition:the_ground_is_alive",
+        "paint_out_graffiti": "condition:the_commons_is_kept",
+        "plant_tend_bed": "condition:the_ground_is_alive"
+      }
+    },
+    {
+      "id": "winter_access_freeze_protection_maintenance",
+      "note": "Split 2026-11-11. One family held four kinds of winter work. Clearing snow and ice from a sidewalk, a curb ramp or a walking path is everyone_can_get_here. Protecting pipes and water lines from freeze, and clearing a storm inlet, is water_is_honest. Gutters and downspouts are the envelope, shelter_holds. A snow fence is a shared fixture, the_commons_is_kept. Every work_type must be listed. There is deliberately no default.",
+      "by_work_type": {
+        "alley_ice_snow_hazard_deicing_service": "condition:everyone_can_get_here",
+        "alley_snow_ice_safety_clearing": "condition:everyone_can_get_here",
+        "sidewalk_curb_ramp_snow_ice_clear": "condition:everyone_can_get_here",
+        "catch_basin_inlet_snow_ice_clear": "condition:water_is_honest",
+        "storm_drain_repair_clean": "condition:water_is_honest",
+        "pipe_freeze_protection_install": "condition:water_is_honest",
+        "pipe_freeze_protection_wrap_install": "condition:water_is_honest",
+        "post_freeze_water_line_shutoff_drain_maintain": "condition:water_is_honest",
+        "winter_freeze_protection_maintenance": "condition:water_is_honest",
+        "clean_gutters_downspouts": "condition:shelter_holds",
+        "snow_fence_install": "condition:everyone_can_get_here"
+      }
     }
   ],
   "out_of_scope_v0": {
@@ -984,12 +1153,803 @@
       "ward_mobility_path_walkthrough",
       "care_kitchen_service_readiness"
     ],
-    "match_rule": "any standard id present in the health work library and in no condition list above; the ids in homed_place_properties are the declared exceptions (properties of the PLACE, argued in the note), each with exactly one home, and check:science-kingdoms-scope refuses any other homed health standard"
+    "match_rule": "any standard id present in the health work library and in no condition list above; the ids in homed_place_properties are the declared exceptions (properties of the PLACE, argued in the note), each with exactly one home, and check:science-kingdoms-scope refuses any other homed health standard",
+    "families": [
+      "data_center_community_compute"
+    ]
   },
   "unmapped_policy": {
     "rule": "Every standard id used by a shipped work library must map to exactly one condition, to the nobody_is_hurt law, or to the declared out_of_scope_v0 set. An unmapped id is a build failure, not a warning.",
     "why": "A standard that quietly tolerates work it cannot classify is a standard with a hole in it. New work either lands in a condition or forces the standard to be extended on purpose.",
     "enforced_by": "npm run standard:coverage"
   },
-  "generosity_note": "This standard takes from three excellent instruments and points them at a target none of them was built for. The Living Building Challenge is the reason measured performance over real occupied time is non negotiable here. The Michelin Guide is the reason a standing can be lost and the reason craft has its own condition. The Sustainable Development Goals are the reason every condition carries targets a stranger in another country can already read. Nothing here is a criticism of any of them. They point at the building that does not exist yet. This one points at the building you are sitting in."
+  "generosity_note": "This standard takes from three excellent instruments and points them at a target none of them was built for. The Living Building Challenge is the reason measured performance over real occupied time is non negotiable here. The Michelin Guide is the reason a standing can be lost and the reason craft has its own condition. The Sustainable Development Goals are the reason every condition carries targets a stranger in another country can already read. Nothing here is a criticism of any of them. They point at the building that does not exist yet. This one points at the building you are sitting in.",
+  "kind_overrides": [
+    {
+      "id": "flood_resilience",
+      "note": "Filed by kind 2026-11-11 (round three). Flood work is water_is_honest where it reads or carries the water (a ditch, a culvert, a drain, a rain garden, a watermark). A survey of the sediment a flood left is a reading of the soil, the_ground_is_alive, and so is debris cleared or documented on a bank or a shore. A basement wall sealed and a window protected are the envelope, shelter_holds. Storm debris hauled off a property is nothing_leaves_as_waste. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "soil_sampling": "condition:the_ground_is_alive",
+        "flood_debris_strandline_removal_install": "condition:the_ground_is_alive",
+        "resaca_shoreline_litter_debris_removal_install": "condition:the_ground_is_alive",
+        "flood_debris_strandline_document_survey": "condition:the_ground_is_alive",
+        "storm_surge_wrack_line_debris_document_survey": "condition:the_ground_is_alive",
+        "resaca_water_delivery_shoreline_exposure_document_survey": "condition:the_ground_is_alive",
+        "dune_fence_walkover_path_maintenance_repair": "condition:the_ground_is_alive",
+        "home_hurricane_window_protection_document_survey": "condition:shelter_holds",
+        "home_hurricane_shutter_track_install": "condition:shelter_holds",
+        "basement_water_seal_repair": "condition:shelter_holds",
+        "property_debris_haul_cleanup": "condition:nothing_leaves_as_waste",
+        "flood_vent_elevation_install": "condition:shelter_holds",
+        "home_gully_erosion_control_install": "condition:the_ground_is_alive"
+      }
+    },
+    {
+      "id": "epa_illegal_dumping_cleanup",
+      "note": "Filed by kind 2026-11-11 (round three). Hauling out what was dumped, and the report of the dump site that the haul answers, are nothing_leaves_as_waste. Litter cleaned off a roadside, and the weighed cleanup that answers a litter index, are the_commons_is_kept. Litter lifted from a river bank is the_ground_is_alive. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "roadside_litter_removal": "condition:the_commons_is_kept",
+        "community_cleanup_removal_weigh_in": "condition:the_commons_is_kept",
+        "riverbank_litter_cleanup_removal": "condition:the_ground_is_alive"
+      }
+    },
+    {
+      "id": "compost_application",
+      "note": "Filed by kind 2026-11-11 (round three). Spreading compost on soil is the_ground_is_alive. Building a hub or a bin, separating scraps and turning the pile make compost out of a stream that was leaving the place, nothing_leaves_as_waste. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "community_compost_hub_build": "condition:nothing_leaves_as_waste",
+        "set_up_compost": "condition:nothing_leaves_as_waste",
+        "congregation_compost_bin_build": "condition:nothing_leaves_as_waste",
+        "parque_huerta_compost_line_soil_windrow_turn_maintain": "condition:nothing_leaves_as_waste",
+        "kitchen_compost_program_setup": "condition:nothing_leaves_as_waste",
+        "community_compost_tumbler_install": "condition:nothing_leaves_as_waste"
+      }
+    },
+    {
+      "id": "vegetation_sightline_clearing",
+      "note": "Filed by kind 2026-11-11 (round three). A sightline or a walking edge cleared is everyone_can_get_here. A firebreak kept clear on shared ground is neither a path nor a sightline: it is upkeep held on a cadence, the_commons_is_kept. A choked drainage ditch cleared is water_is_honest. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "humedal_delta_firebreak_line_public_access_vegetation_clearing_maintenance": "condition:the_commons_is_kept",
+        "firebreak_perimeter_hand_clearing_maintenance": "condition:the_commons_is_kept",
+        "roadside_ditch_vegetation_debris_clearing": "condition:water_is_honest"
+      }
+    },
+    {
+      "id": "lbc_place_petal",
+      "note": "Filed by kind 2026-11-11 (round three). A sign set in a public place is a shared fixture, the_commons_is_kept. The rest keep the home the family had. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round six (2026-11-11): A pocket park built on a vacant lot is shared ground made sound, the_commons_is_kept, as the civic safety family files it.",
+      "by_work_type": {
+        "historic_park_interpretive_signage_install": "condition:the_commons_is_kept",
+        "canal_town_water_edge_stone_step_weed_clear_maintain": "condition:the_commons_is_kept",
+        "pocket_park_build": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "historic_pier_beam_foundation_releveling",
+      "note": "Filed by kind 2026-11-11 (round three). A sign set in a historic park is a shared fixture, the_commons_is_kept; it is no part of a building's envelope. The rest keep the home the family had. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "historic_park_interpretive_signage_install": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "greenway_planning_design_guideline",
+      "note": "Filed by kind 2026-11-11 (round three). The greenway's surface and edge are walked, everyone_can_get_here. A board built at its entry is a shared fixture, the_commons_is_kept. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "trailhead_kiosk_build": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "lbc_energy_petal",
+      "note": "Filed by kind 2026-11-11 (round three). The family was filed whole under shelter, and most of it is power: solar on the roof, a battery, a heat pump in place of a gas furnace, lighting measured before and after, and the energy audit are measures of power_is_earned by name. Finding and sealing drafts, and insulating the envelope, are shelter_holds (the three-ladders jobs declare it so). The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "led_lighting_retrofit": "condition:power_is_earned",
+        "heat_pump_install": "condition:power_is_earned",
+        "rooftop_solar_install": "condition:power_is_earned",
+        "battery_storage_install": "condition:power_is_earned",
+        "building_audit": "condition:power_is_earned",
+        "electrification_retrofit_readiness_survey": "condition:power_is_earned",
+        "ev_charger_install": "condition:power_is_earned"
+      }
+    },
+    {
+      "id": "sdg6_clean_water",
+      "note": "Filed by kind 2026-11-11 (round three). 'The condition of the nearest living water' is a measure of the_ground_is_alive, so a river or a lake read from its bank is filed there. A rain garden keeps rain on the parcel, water_is_honest. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "parana_river_public_water_observation_field_round": "condition:the_ground_is_alive"
+      }
+    },
+    {
+      "id": "michelin_green_star",
+      "note": "Filed by kind 2026-11-11 (round three). Setting up compost sends scraps to their next use, nothing_leaves_as_waste. The kitchen audit and the surplus-food run to a pantry stay a_person_is_fed_well. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "set_up_compost": "condition:nothing_leaves_as_waste"
+      }
+    },
+    {
+      "id": "food_preservation_kitchen",
+      "note": "Filed by kind 2026-11-11 (round three). Food kept, cooked, stored or carried to people is a_person_is_fed_well. Scraps separated and composted are a stream given its next use, nothing_leaves_as_waste. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "food_waste_diversion_setup": "condition:nothing_leaves_as_waste",
+        "set_up_compost": "condition:nothing_leaves_as_waste",
+        "kitchen_compost_program_setup": "condition:nothing_leaves_as_waste",
+        "community_compost_tumbler_install": "condition:nothing_leaves_as_waste",
+        "community_composting_windrow_build": "condition:nothing_leaves_as_waste"
+      }
+    },
+    {
+      "id": "food_sustainability",
+      "note": "Filed by kind 2026-11-11 (round three). Food sourced, cooked, stored, shared or carried to people is a_person_is_fed_well. Scraps, plate waste and used cooking oil separated, logged, composted or collected are a stream given its next use, nothing_leaves_as_waste. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): A shade structure at a market is a shared fixture, the_commons_is_kept. Tracing a supplier to its source stays a_person_is_fed_well: how far each ingredient travelled is its own measure.",
+      "by_work_type": {
+        "food_waste_diversion_setup": "condition:nothing_leaves_as_waste",
+        "set_up_compost": "condition:nothing_leaves_as_waste",
+        "school_cafeteria_tray_return_sort_station_run": "condition:nothing_leaves_as_waste",
+        "school_cafeteria_plate_waste_category_log_maintain": "condition:nothing_leaves_as_waste",
+        "school_cafeteria_diversion_compost_hauler_route_install": "condition:nothing_leaves_as_waste",
+        "street_food_cart_grease_recycling_setup": "condition:nothing_leaves_as_waste",
+        "used_cooking_oil_recycling_collection_setup": "condition:nothing_leaves_as_waste",
+        "county_fair_compost_build": "condition:nothing_leaves_as_waste",
+        "olive_mill_pomace_compost_windrow_build": "condition:nothing_leaves_as_waste",
+        "renter_portable_compost_caddy_setup": "condition:nothing_leaves_as_waste",
+        "compost_application": "condition:nothing_leaves_as_waste",
+        "farmers_market_shade_structure_build": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "watershed_health",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). The condition of living water, its banks and its habitat is the_ground_is_alive. A ditch, a drain, a culvert, a canal, a pond, a septic system and a berm that keeps manure or wash water out of the water are water_is_honest. A sign is a shared fixture and a litter count is a log, the_commons_is_kept. Steps at an access point are everyone_can_get_here. Vegetation set to hold dust on a dry lakebed is air_is_clean. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): A canal, a recharge basin, a road crossing's runoff, an inflow debris rack and a creek channel choked so it no longer flows are water kept and carried, water_is_honest (the creek is cleared because the outfall screen, filed as water, found it choked). Dust-barrier plants watered and replanted are air_is_clean with their survey. A subsidence benchmark disk photographed keeps a survey record reachable without reading the ground itself, the law receipt_is_the_certificate. Three advisory signs are installed where round four filed their upkeep, the_commons_is_kept.",
+      "by_work_type": {
+        "acequia_ditch_clean": "condition:water_is_honest",
+        "agricultural_drainage_tailwater_recovery_pond_repair": "condition:water_is_honest",
+        "beaver_impacted_trail_culvert_water_debris_clearing": "condition:water_is_honest",
+        "canal_lateral_seepage_liner_repair": "condition:water_is_honest",
+        "constr_site_concrete_washout_haul_pump_maintain": "condition:water_is_honest",
+        "constr_site_concrete_washout_pit_liner_build": "condition:water_is_honest",
+        "crossing_cross_drain_outlet_clear_maintain": "condition:water_is_honest",
+        "defunct_field_drain_pipe_removal": "condition:water_is_honest",
+        "feedlot_manure_containment_berm_repair": "condition:water_is_honest",
+        "field_edge_drainage_ditch_nutrient_document_survey": "condition:water_is_honest",
+        "nutrient_runoff_buffer_strip_planting": "condition:water_is_honest",
+        "freestone_row_ditch_headcut_condition_document_survey": "condition:water_is_honest",
+        "freestone_row_ditch_headcut_grade_control_install": "condition:water_is_honest",
+        "groundwater_recharge_basin_debris_document_survey": "condition:water_is_honest",
+        "irrigation_ditch_headgate_repair": "condition:water_is_honest",
+        "manure_lagoon_perimeter_document_survey": "condition:water_is_honest",
+        "recharge_divide_road_runoff_gully_condition_document_survey": "condition:water_is_honest",
+        "recharge_divide_road_runoff_water_bar_diversion_install": "condition:water_is_honest",
+        "roadside_ditch_debris_clearing": "condition:water_is_honest",
+        "septic_drainfield_boundary_protection_marking_install": "condition:water_is_honest",
+        "septic_drainfield_stormwater_diversion_install": "condition:water_is_honest",
+        "septic_household_fixture_leak_load_reduction_repair": "condition:water_is_honest",
+        "septic_maintenance_record_binder_compile_deliver": "condition:water_is_honest",
+        "septic_pump_out_service_schedule_maintain": "condition:water_is_honest",
+        "septic_system_site_sketch_locate_document_survey": "condition:water_is_honest",
+        "stock_dugout_pond_repair": "condition:water_is_honest",
+        "stock_pond_sediment_clear": "condition:water_is_honest",
+        "storm_drain_repair_clean": "condition:water_is_honest",
+        "storm_drain_stencil_install": "condition:water_is_honest",
+        "sugarcane_region_public_water_channel_trash_rack_debris_clearing_maintenance": "condition:water_is_honest",
+        "watershed_outfall_screen": "condition:water_is_honest",
+        "wetland_water_control_structure_repair": "condition:water_is_honest",
+        "crayfish_burrow_chimney_wet_zone_advisory_signage_maintain": "condition:the_commons_is_kept",
+        "instream_wood_habitat_advisory_signage_maintain": "condition:the_commons_is_kept",
+        "milam_river_access_mussel_conservation_signage_maintain": "condition:the_commons_is_kept",
+        "litter_transect_survey": "condition:the_commons_is_kept",
+        "riverbank_public_water_access_litter_transect_count_walk": "condition:the_commons_is_kept",
+        "creek_access_point_erosion_step_repair_install": "condition:everyone_can_get_here",
+        "exposed_lakebed_dust_suppression_vegetation_install": "condition:air_is_clean",
+        "playa_dust_barrier_vegetation_condition_survey": "condition:air_is_clean",
+        "canal_perimeter_vegetation_maintenance": "condition:water_is_honest",
+        "irrigation_canal_perimeter_debris_document_survey": "condition:water_is_honest",
+        "crossing_approach_water_bar_rolling_dip_install": "condition:water_is_honest",
+        "groundwater_recharge_basin_vegetation_maintenance": "condition:water_is_honest",
+        "reservoir_inflow_stormwater_debris_rack_clearing_maintain": "condition:water_is_honest",
+        "storm_debris_removal_creek": "condition:water_is_honest",
+        "playa_dust_barrier_vegetation_maintenance": "condition:air_is_clean",
+        "land_subsidence_benchmark_condition_document_survey": "law:receipt_is_the_certificate",
+        "crayfish_burrow_chimney_wet_zone_advisory_signage_install": "condition:the_commons_is_kept",
+        "instream_wood_habitat_advisory_signage_install": "condition:the_commons_is_kept",
+        "milam_river_access_mussel_conservation_signage_install": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "civic_safety",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). The family was filed whole under access and holds many kinds of work. A sign, a bench, a fence, a gate, a bike stand, a dog waste station and a play feature are shared fixtures, and litter logged or cleaned and a tag painted out are upkeep of shared ground: the_commons_is_kept. Ditches and storm drains are water_is_honest. A burn-day notice and its roster are hazard controls, the law nobody_is_hurt. Field dust logged is air_is_clean. A fish die-off logged is the_ground_is_alive. Debris hauled is nothing_leaves_as_waste. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): A shared tool store is a shared fixture, and hazard trees and wind damage logged on public ground are defects logged: the_commons_is_kept. Road dust documented is air_is_clean. A burn-day sign is the notice its packet and roster already are, the law nobody_is_hurt. A pocket park built on a vacant lot is shared ground made sound, the_commons_is_kept. Wildlife exclusion fencing along a road is filed by what it protects, the_ground_is_alive, its survey with it. Burned-parcel debris status is the reading of the haul that clears it, nothing_leaves_as_waste.",
+      "by_work_type": {
+        "canal_safety_fencing_repair": "condition:the_commons_is_kept",
+        "community_bike_repair_stand_install": "condition:the_commons_is_kept",
+        "community_cleanup_removal_weigh_in": "condition:the_commons_is_kept",
+        "derelict_gate_hardware_removal": "condition:the_commons_is_kept",
+        "dog_waste_station_bin_liner_removal_route_maintain": "condition:the_commons_is_kept",
+        "dog_waste_station_dispenser_initial_stock_install": "condition:the_commons_is_kept",
+        "dog_waste_station_seasonal_condition_refresh_maintain": "condition:the_commons_is_kept",
+        "dog_waste_station_walking_route_site_install": "condition:the_commons_is_kept",
+        "hurricane_evacuation_route_signage_document_survey": "condition:the_commons_is_kept",
+        "lake_causeway_public_bench_repair_maintain": "condition:the_commons_is_kept",
+        "litter_transect_survey": "condition:the_commons_is_kept",
+        "obsolete_trail_signage_post_removal": "condition:the_commons_is_kept",
+        "playground_nature_play_build": "condition:the_commons_is_kept",
+        "remove_graffiti_repaint_surface": "condition:the_commons_is_kept",
+        "school_zone_pedestrian_signage_gap_document_survey": "condition:the_commons_is_kept",
+        "vacant_lot_fence_secure_install": "condition:the_commons_is_kept",
+        "wildlife_crossing_signage_condition_document_survey": "condition:the_commons_is_kept",
+        "wildlife_crossing_signage_reflectivity_refresh_install": "condition:the_commons_is_kept",
+        "constr_site_public_row_poststorm_sediment_track_document_survey": "condition:water_is_honest",
+        "roadside_ditch_flow_capacity_document_survey": "condition:water_is_honest",
+        "roadside_ditch_vegetation_debris_clearing": "condition:water_is_honest",
+        "storm_drain_catch_basin_capacity_document_survey": "condition:water_is_honest",
+        "water_fountain_condition_log": "condition:water_is_honest",
+        "cross_timbers_prescribed_fire_neighbor_notification_packet_prepare_deliver": "law:nobody_is_hurt",
+        "cross_timbers_prescribed_fire_smoke_sensitive_neighbor_roster_build": "law:nobody_is_hurt",
+        "ag_dust_exposure_document_survey": "condition:air_is_clean",
+        "shoreline_fish_dieoff_document_survey": "condition:the_ground_is_alive",
+        "public_parking_lot_row_restripe_planting_strip_proposal_design_deliver": "condition:the_ground_is_alive",
+        "residential_debris_haul_removal": "condition:nothing_leaves_as_waste",
+        "community_tool_bank_build": "condition:the_commons_is_kept",
+        "community_toolshare_kiosk_build": "condition:the_commons_is_kept",
+        "tool_library_setup": "condition:the_commons_is_kept",
+        "hazard_tree_document_survey": "condition:the_commons_is_kept",
+        "zonda_wind_damage_hazard_survey": "condition:the_commons_is_kept",
+        "unpaved_road_dust_document_survey": "condition:air_is_clean",
+        "cross_timbers_prescribed_fire_advisory_signage_post_install": "law:nobody_is_hurt",
+        "pocket_park_build": "condition:the_commons_is_kept",
+        "wildlife_exclusion_fencing_condition_document_survey": "condition:the_ground_is_alive",
+        "wildlife_exclusion_fencing_repair_install": "condition:the_ground_is_alive",
+        "fire_debris_document_survey": "condition:nothing_leaves_as_waste"
+      }
+    },
+    {
+      "id": "biodiversity_monitoring",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Wild species counted and their habitat read stay the_ground_is_alive, a nest box and a martin house included. A viewing area, an overlook, an auto-tour pullout, a cemetery fence and a trailhead sign are shared fixtures, and a firebreak kept clear is upkeep of shared ground: the_commons_is_kept. A platform rail, a trail edge and a walking path are everyone_can_get_here. An irrigation canal turnout is water_is_honest. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): A sign is a shared fixture wherever it stands, and a firebreak kept clear on shared ground is upkeep: the_commons_is_kept (the signs' condition surveys moved in round four). A wildlife guzzler's catchment and its water source are water kept and carried, water_is_honest. Material from a removal job diverted into a habitat pile instead of hauled off is a stream given its next use, nothing_leaves_as_waste, and so is abandoned barbed wire rolled up and hauled out.",
+      "by_work_type": {
+        "bat_emergence_viewing_area_amenity_repair_install": "condition:the_commons_is_kept",
+        "bat_emergence_viewing_area_condition_document_survey": "condition:the_commons_is_kept",
+        "bridge_bat_roost_condition_document_survey": "condition:the_commons_is_kept",
+        "cemetery_perimeter_fence_gate_hardware_repair": "condition:the_commons_is_kept",
+        "post_oak_savanna_firebreak_line_condition_document_survey": "condition:the_commons_is_kept",
+        "post_oak_savanna_firebreak_line_debris_clearing_install": "condition:the_commons_is_kept",
+        "refuge_auto_tour_route_condition_document_survey": "condition:the_commons_is_kept",
+        "refuge_auto_tour_route_pullout_amenity_repair_install": "condition:the_commons_is_kept",
+        "refuge_public_observation_point_amenity_repair_install": "condition:the_commons_is_kept",
+        "sam_houston_nf_trailhead_pine_straw_fuel_reduction_raking_install": "condition:the_commons_is_kept",
+        "sphagnum_bog_trailhead_signage_condition_document_survey": "condition:the_commons_is_kept",
+        "brazos_bend_observation_platform_trail_edge_barrier_signage_install": "condition:everyone_can_get_here",
+        "brazos_bend_observation_platform_trail_edge_condition_document_survey": "condition:everyone_can_get_here",
+        "cemetery_path_surface_erosion_debris_clearing_maintain": "condition:everyone_can_get_here",
+        "irrigation_canal_turnout_bank_debris_clearing_repair": "condition:water_is_honest",
+        "irrigation_canal_turnout_condition_document_survey": "condition:water_is_honest",
+        "bridge_bat_roost_disturbance_prevention_signage_install": "condition:the_commons_is_kept",
+        "sphagnum_bog_trailhead_signage_install": "condition:the_commons_is_kept",
+        "sam_houston_nf_firebreak_control_line_maintenance_install": "condition:the_commons_is_kept",
+        "guzzler_apron_catchment_debris_clearing_install": "condition:water_is_honest",
+        "guzzler_water_source_condition_document_survey": "condition:water_is_honest",
+        "debris_removal_arisings_habitat_pile_divert_build": "condition:nothing_leaves_as_waste",
+        "barbed_wire_fence_line_removal": "condition:nothing_leaves_as_waste"
+      }
+    },
+    {
+      "id": "edible_garden_cultivation",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). The growing bed and what is planted in it stay a_person_is_fed_well. A kept flock's coop, bedding and water are the_creatures_are_well, and the ground its run rests on is the_ground_is_alive. Litter, leaves and scraps composted or moved to their next use are nothing_leaves_as_waste. A path between plots is everyone_can_get_here. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): A garden's shared tool store is a shared fixture, the_commons_is_kept. Compost spread on a bed is the_ground_is_alive, by the rule's own words. A native pollinator strip is wild habitat, the_ground_is_alive. The no-dig bed's mulch and roots, the mushroom logs and the yerba shade canopy stay with the food they grow.",
+      "by_work_type": {
+        "backyard_flock_deep_litter_carbon_bedding_install": "condition:the_creatures_are_well",
+        "backyard_flock_predator_proof_hardware_cloth_apron_install": "condition:the_creatures_are_well",
+        "backyard_flock_shade_water_station_install": "condition:the_creatures_are_well",
+        "backyard_flock_run_rotation_second_paddock_build": "condition:the_ground_is_alive",
+        "backyard_flock_run_rotation_shift_maintain": "condition:the_ground_is_alive",
+        "backyard_flock_litter_compost_bin_build": "condition:nothing_leaves_as_waste",
+        "backyard_flock_litter_curing_interval_maintain": "condition:nothing_leaves_as_waste",
+        "community_garden_leaf_mold_corral_load_establish": "condition:nothing_leaves_as_waste",
+        "congregation_compost_bin_build": "condition:nothing_leaves_as_waste",
+        "home_gutter_cleared_leaf_litter_garden_bed_mulch_relocate": "condition:nothing_leaves_as_waste",
+        "school_leaf_collection_learning_garden_mulch_relocate": "condition:nothing_leaves_as_waste",
+        "community_food_plot_path_weed_clear_maintain": "condition:everyone_can_get_here",
+        "community_garden_toolshed_build": "condition:the_commons_is_kept",
+        "community_toolshed_build": "condition:the_commons_is_kept",
+        "community_plot_shared_tool_store_repair_maintenance": "condition:the_commons_is_kept",
+        "backyard_flock_cured_litter_compost_garden_bed_apply": "condition:the_ground_is_alive",
+        "edible_hedge_planting": "condition:the_ground_is_alive"
+      }
+    },
+    {
+      "id": "soil_health",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Soil read, built and planted stays the_ground_is_alive. A ditch bottom, a grassed waterway, a brush dam, a bioretention cell, a stormwater structure and a spring box carry, slow or soak in runoff: water_is_honest. A trail tread, a sidewalk edge and a path edge are everyone_can_get_here. A windbreak planted to stop dust, and a vapor barrier over crawlspace soil, are air_is_clean. Gin trash composted is nothing_leaves_as_waste. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): Work that names blowing dust as its purpose is air_is_clean: a dust-control segment and its survey, a windbreak, native grass planted to stop dust, a playa surveyed for dust control. Grass seeded so rain recharges an aquifer is water_is_honest, its survey with it. The Gorman Falls descent trail's erosion is a defect in a walked surface, everyone_can_get_here: round four moved one section, and its survey and other section move with it, as does a decomposed-granite park trail and its survey.",
+      "by_work_type": {
+        "backfill_engineered_bioretention_soil": "condition:water_is_honest",
+        "clear_vegetation_repair_erosion_around_spring": "condition:water_is_honest",
+        "freestone_row_ditch_bottom_compaction_condition_document_survey": "condition:water_is_honest",
+        "freestone_row_ditch_bottom_infiltration_scarify_install": "condition:water_is_honest",
+        "freestone_row_embankment_compaction_surface_keyline_install": "condition:water_is_honest",
+        "inspect_stormwater_structure_displacement_after_flow": "condition:water_is_honest",
+        "public_road_shoulder_grassed_waterway_install": "condition:water_is_honest",
+        "recharge_divide_bare_rock_interspace_brush_dam_install": "condition:water_is_honest",
+        "cut_restore_eroded_mow_strip_edge": "condition:everyone_can_get_here",
+        "gorman_falls_descent_trail_cable_section_erosion_control_install": "condition:everyone_can_get_here",
+        "install_repair_rigid_edge_restraint_sidewalk": "condition:everyone_can_get_here",
+        "install_temporary_asphalt_patch_compacted_backfill": "condition:everyone_can_get_here",
+        "seal_longitudinal_edge_between_curbless_path": "condition:everyone_can_get_here",
+        "upland_pine_hardwood_erosion_control_install": "condition:everyone_can_get_here",
+        "hedgerow_windbreak_planting": "condition:air_is_clean",
+        "home_sand_windbreak_hedgerow_planting_install": "condition:air_is_clean",
+        "shelterbelt_windbreak_plant": "condition:air_is_clean",
+        "install_vapor_barrier_exposed_crawlspace_soil": "condition:air_is_clean",
+        "cotton_gin_trash_compost_windrow_build": "condition:nothing_leaves_as_waste",
+        "dallam_county_wind_erosion_dust_control_document_survey": "condition:air_is_clean",
+        "dallam_county_wind_erosion_dust_control_install": "condition:air_is_clean",
+        "high_desert_windbreak_plant": "condition:air_is_clean",
+        "home_native_grass_dust_stabilization_planting": "condition:air_is_clean",
+        "salt_basin_playa_saltflat_condition_document_survey": "condition:air_is_clean",
+        "pecos_county_aquifer_contributing_zone_grassland_restoration_document_survey": "condition:water_is_honest",
+        "pecos_county_aquifer_contributing_zone_grassland_restoration_install": "condition:water_is_honest",
+        "gorman_falls_descent_trail_condition_document_survey": "condition:everyone_can_get_here",
+        "gorman_falls_descent_trail_upper_approach_erosion_control_install": "condition:everyone_can_get_here",
+        "desert_dust_control_surface_stabilization_install": "condition:air_is_clean",
+        "decomposed_granite_trail_erosion_control_document_survey": "condition:everyone_can_get_here",
+        "decomposed_granite_trail_erosion_control_install": "condition:everyone_can_get_here"
+      }
+    },
+    {
+      "id": "green_stormwater_infrastructure",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Stormwater carried, slowed and soaked in stays water_is_honest. Paving taken up so ground is open again is 'permeable ground against sealed ground', a measure of the_ground_is_alive, and so are a stream bank stabilized, a slope held and a creek outlet cleared. Gutters are the envelope, shelter_holds. A curb face is the_commons_is_kept. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): Paving taken up so the ground is open again is the_ground_is_alive. Swept leaves moved to mulch are a stream given its next use, nothing_leaves_as_waste, as round four filed every leaf relocation. Erosion at a boardwalk trail's edge is a defect in the surface a person walks on, everyone_can_get_here, its survey with it.",
+      "by_work_type": {
+        "constr_site_slope_erosion_blanket_pin_install": "condition:the_ground_is_alive",
+        "creek_daylighting_site_prep_clear": "condition:the_ground_is_alive",
+        "decompact_soil_around_established_pit": "condition:the_ground_is_alive",
+        "install_streambank_stabilization_structure_eroding_bank": "condition:the_ground_is_alive",
+        "lake_brownwood_watershed_tributary_buffer_restoration_document_survey": "condition:the_ground_is_alive",
+        "park_lake_trash_boom_install": "condition:the_ground_is_alive",
+        "public_parking_lot_row_restripe_planting_strip_build": "condition:the_ground_is_alive",
+        "schoolyard_depave_greening": "condition:the_ground_is_alive",
+        "schoolyard_depave_pocket_green_build": "condition:the_ground_is_alive",
+        "spring_fed_trail_erosion_condition_document_survey": "condition:the_ground_is_alive",
+        "street_median_depave": "condition:the_ground_is_alive",
+        "clear_gutters_downspouts": "condition:shelter_holds",
+        "gutter_downspout_clean_repair": "condition:shelter_holds",
+        "repair_spalled_curb_face_concrete_gutter": "condition:the_commons_is_kept",
+        "depave_yard_parking_strip": "condition:the_ground_is_alive",
+        "transit_plaza_depave_planting": "condition:the_ground_is_alive",
+        "curbside_swept_leaf_litter_rain_garden_mulch_relocate": "condition:nothing_leaves_as_waste",
+        "swamp_boardwalk_trail_edge_condition_document_survey": "condition:everyone_can_get_here",
+        "swamp_boardwalk_trail_edge_erosion_control_install": "condition:everyone_can_get_here"
+      }
+    },
+    {
+      "id": "energy_efficiency",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Equipment that makes, stores or uses power stays power_is_earned. Insulating, air sealing, weatherstripping and patching the wall are the envelope, shelter_holds, as the three-ladders jobs declare. Filters changed and ducts serviced are air_is_clean. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): Whatever keeps sun and heat out at the roof or a window is the envelope, shelter_holds: a reflective roof coat, a radiant barrier and its survey, an awning, an exterior shade, a curtain, a vine trained to shade the glass, a screen, a vegetated roof. A porch light shielded so fireflies have the dark is wild habitat, the_ground_is_alive. A cool coating on a public lot is a treatment of a shared surface, the_commons_is_kept. Round six (2026-11-11): A washing machine's load-size setting sets how much water fills the tub; matching it to the load is work done to use less water, water_is_honest.",
+      "by_work_type": {
+        "attic_insulation_install": "condition:shelter_holds",
+        "attic_radiant_barrier_install": "condition:shelter_holds",
+        "blower_door_directed_air_seal_insulate_retrofit": "condition:shelter_holds",
+        "building_envelope_patch_repair": "condition:shelter_holds",
+        "storefront_weatherstrip_seal_install": "condition:shelter_holds",
+        "weatherstrip_install": "condition:shelter_holds",
+        "hvac_duct_sealing_efficiency_repair": "condition:air_is_clean",
+        "attic_radiant_barrier_readiness_survey": "condition:shelter_holds",
+        "cool_roof_coating_flat": "condition:shelter_holds",
+        "cool_roof_install": "condition:shelter_holds",
+        "exterior_window_shade_install": "condition:shelter_holds",
+        "window_exterior_fabric_awning_install": "condition:shelter_holds",
+        "window_exterior_fabric_awning_seasonal_retract_maintain": "condition:shelter_holds",
+        "window_interior_thermal_curtain_install": "condition:shelter_holds",
+        "window_interior_thermal_curtain_seasonal_operate_maintain": "condition:shelter_holds",
+        "window_screen_door_repair": "condition:shelter_holds",
+        "window_shade_deciduous_vine_frame_install": "condition:shelter_holds",
+        "window_shade_deciduous_vine_frame_prune_maintain": "condition:shelter_holds",
+        "home_porch_light_shield_reaim_install": "condition:the_ground_is_alive",
+        "home_porch_light_shield_reaim_maintain": "condition:the_ground_is_alive",
+        "cool_pavement_coating": "condition:the_commons_is_kept",
+        "green_roof_install": "condition:shelter_holds",
+        "washing_machine_load_size_setting_match_run": "condition:water_is_honest"
+      }
+    },
+    {
+      "id": "wetland_condition",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). The wetland read and restored stays the_ground_is_alive. A boardwalk, its boards and handrail, a viewing platform and a levee-top trail are walked, everyone_can_get_here. A sign and a road shoulder are the_commons_is_kept. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): A prairie pothole pair reconnected so water moves between them is water carried where it is meant to go, water_is_honest, its survey with it. A bird viewing platform is a viewing area, a shared fixture, the_commons_is_kept.",
+      "by_work_type": {
+        "brazos_bend_oxbow_lake_margin_invasive_plant_removal_install": "condition:everyone_can_get_here",
+        "peat_trail_boardwalk_plank_repair": "condition:everyone_can_get_here",
+        "saline_lagoon_bird_viewing_platform_repair_maintain": "condition:the_commons_is_kept",
+        "wetland_boardwalk_handrail_repair": "condition:everyone_can_get_here",
+        "wetland_boardwalk_repair": "condition:everyone_can_get_here",
+        "wetland_park_boardwalk_anti_slip_safety_surface_restore_maintain": "condition:everyone_can_get_here",
+        "wetland_park_boardwalk_deck_board_repair_maintain": "condition:everyone_can_get_here",
+        "wetland_park_boardwalk_handrail_repair_maintain": "condition:everyone_can_get_here",
+        "wetland_park_interpretive_sign_clean_maintenance": "condition:the_commons_is_kept",
+        "chenier_ridge_shell_substrate_erosion_control_install": "condition:the_commons_is_kept",
+        "chenier_ridge_shell_substrate_stability_document_survey": "condition:the_commons_is_kept",
+        "prairie_pothole_hydrologic_reconnection_condition_document_survey": "condition:water_is_honest",
+        "prairie_pothole_hydrologic_reconnection_swale_install": "condition:water_is_honest"
+      }
+    },
+    {
+      "id": "alley_bulk_debris_removal",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Dumped debris hauled out of an alley stays nothing_leaves_as_waste. Eight kinds filed here are not alley debris at all: a drain grate, a trash screen, a capture basket, a bioswale check dam, a filter and a cistern hatch are water_is_honest, and a seasonal hazard logged is everyone_can_get_here. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "clear_debris_bioswale_check_dam_rock": "condition:water_is_honest",
+        "clear_debris_off_trash_grate_screen": "condition:water_is_honest",
+        "clear_debris_underpass_floor_drain_grate": "condition:water_is_honest",
+        "empty_reset_trash_capture_net_basket": "condition:water_is_honest",
+        "inspect_trash_grate_screen_debris_accumulation": "condition:water_is_honest",
+        "replace_filter_screen_disc_stack_element": "condition:water_is_honest",
+        "reseal_replace_cracked_gapped_cistern_access": "condition:water_is_honest",
+        "log_temporary_seasonal_hazard": "condition:everyone_can_get_here"
+      }
+    },
+    {
+      "id": "building_envelope_exterior_maintenance",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). The envelope repaired stays shelter_holds. Roofing, flooring and door hardware taken off intact for reuse, and debris hauled, are 'material recovered from repair and demolition', nothing_leaves_as_waste. A stair tread and a doorway threshold are everyone_can_get_here. A flue referred to a professional is a hazard control, the law nobody_is_hurt. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "exterior_debris_junk_haul_cleanup": "condition:nothing_leaves_as_waste",
+        "pry_finish_roofing_unit_tile_slate": "condition:nothing_leaves_as_waste",
+        "pry_tongue_groove_finish_flooring_board": "condition:nothing_leaves_as_waste",
+        "strip_sort_door_hardware_remove": "condition:nothing_leaves_as_waste",
+        "repair_spalled_concrete_sidewalk_doorway_threshold": "condition:everyone_can_get_here",
+        "replace_single_damaged_stair_tread_like": "condition:everyone_can_get_here",
+        "document_refer_combustion_appliance_vent_flue": "law:nobody_is_hurt"
+      }
+    },
+    {
+      "id": "residential_envelope_exterior_maintenance",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Yard and perimeter debris hauled away is nothing_leaves_as_waste. The rest keep the home the family had. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "exterior_debris_junk_haul_cleanup": "condition:nothing_leaves_as_waste"
+      }
+    },
+    {
+      "id": "civic_surface_cleaning",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Shared surfaces cleaned stay the_commons_is_kept. Pavers re-pointed and re-sanded, a stairway swept and a riverside walk cleared are the surface a person walks on, everyone_can_get_here. A drain trap and a rain barrel screen are water_is_honest. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round six (2026-11-11): A drinking fountain's basin and drain cleared of debris and algae is drinking water kept clean, water_is_honest.",
+      "by_work_type": {
+        "point_mortar_joint_between_set_brick": "condition:everyone_can_get_here",
+        "point_mortar_joint_between_set_flagstone": "condition:everyone_can_get_here",
+        "public_stairway_sweep_clean": "condition:everyone_can_get_here",
+        "riverside_park_flood_cycle_debris_removal_maintenance": "condition:everyone_can_get_here",
+        "sand_joint_set_unit_paver_polymeric": "condition:everyone_can_get_here",
+        "replace_entire_accessible_trap_assembly": "condition:water_is_honest",
+        "rinse_refit_leaf_screen_rain_barrel": "condition:water_is_honest",
+        "clear_debris_scrub_algae_growth_drinking": "condition:water_is_honest"
+      }
+    },
+    {
+      "id": "graffiti_removal_cleanup",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Graffiti removed stays the_commons_is_kept. Seven kinds filed here are not graffiti work: salvage taken off intact and sorted is nothing_leaves_as_waste, a sediment depth and a valve are water_is_honest, a planting strip restored is the_ground_is_alive, and traffic control around a work zone is a hazard control, the law nobody_is_hurt. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "cut_seal_lift_countertop_off_base": "condition:nothing_leaves_as_waste",
+        "score_paint_line_pry_trim_millwork": "condition:nothing_leaves_as_waste",
+        "sort_stage_salvaged_material_type_condition": "condition:nothing_leaves_as_waste",
+        "measure_sediment_depth_basin_against_marker": "condition:water_is_honest",
+        "replace_failed_valve_solenoid": "condition:water_is_honest",
+        "restore_adjacent_planting_strip_tree_well": "condition:the_ground_is_alive",
+        "set_pedestrian_channelization_traffic_control_around": "law:nobody_is_hurt"
+      }
+    },
+    {
+      "id": "irrigation_efficiency",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Irrigation made to use less water stays water_is_honest. A watering basin formed and an establishment watering checked are filed with the planting, the_ground_is_alive. Sap, resin and paint drips cleaned off street furniture, and a derelict standpipe removed, are the_commons_is_kept. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): A drip system laid so a community orchard's young trees live is filed with the orchard, a_person_is_fed_well.",
+      "by_work_type": {
+        "check_irrigation_fed_planting_establishment_watering": "condition:the_ground_is_alive",
+        "form_watering_basin_around_newly_planted": "condition:the_ground_is_alive",
+        "abandoned_irrigation_standpipe_removal": "condition:the_commons_is_kept",
+        "dissolve_wipe_hardened_tree_sap_resin": "condition:the_commons_is_kept",
+        "dissolve_wipe_hardened_tree_sap_resin_painted": "condition:the_commons_is_kept",
+        "strip_cured_paint_drip_painted_coated": "condition:the_commons_is_kept",
+        "community_orchard_irrigation_install": "condition:a_person_is_fed_well"
+      }
+    },
+    {
+      "id": "civic_asset_install",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). A used-oil and antifreeze recycling station gives a stream its next use, nothing_leaves_as_waste. Benches and signs stay shared fixtures. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "used_oil_antifreeze_recycling_station_install": "condition:nothing_leaves_as_waste"
+      }
+    },
+    {
+      "id": "civic_small_structure_build",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). A fridge shelter, a free pantry box and a seed library are the place's capacity to feed a person, a_person_is_fed_well (the food family already files them so). A firewood dry store built to cut smoke is air_is_clean. A boardwalk is everyone_can_get_here. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "community_fridge_shelter_build": "condition:a_person_is_fed_well",
+        "community_seed_library_build": "condition:a_person_is_fed_well",
+        "little_free_pantry_box_build": "condition:a_person_is_fed_well",
+        "firewood_dry_store_rack_smoke_reduction_build": "condition:air_is_clean",
+        "park_trail_boardwalk_build": "condition:everyone_can_get_here"
+      }
+    },
+    {
+      "id": "heat_illness_prevention",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). A heat plan and how work is done in heat stay the law nobody_is_hurt. Weatherstripping a home's doors is the envelope, shelter_holds. A water-bottle refill station is water_is_honest. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): How work is done in heat stays the law nobody_is_hurt (the jobsite audits, the rest points, the water and ice stations). A shade sail, a shade shelter at a pickup corner, a field-edge canopy on a public right of way and a misting spot are shared fixtures built for anyone, the_commons_is_kept. An evaporative cooler is equipment that uses power, power_is_earned.",
+      "by_work_type": {
+        "weatherstrip_install": "condition:shelter_holds",
+        "water_bottle_refill_station_install": "condition:water_is_honest",
+        "build_shade_sail_structure": "condition:the_commons_is_kept",
+        "farmworker_field_shade_canopy_install": "condition:the_commons_is_kept",
+        "misting_cooling_station_install": "condition:the_commons_is_kept",
+        "shade_structure_install": "condition:the_commons_is_kept",
+        "evap_cooler_pad_swap": "condition:power_is_earned"
+      }
+    },
+    {
+      "id": "indoor_air_quality",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Attic bypasses sealed are the envelope, shelter_holds. A community hall deep-cleaned is upkeep, the_commons_is_kept. The rest keep the home the family had. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "attic_bypass_foam_air_seal_install": "condition:shelter_holds",
+        "community_hall_custodial_deep_cleaning": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "weatherization_readiness",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). A dehumidifier and a damp crawlspace dried out are 'mold and moisture, found and remediated', air_is_clean. A water heater's setpoint and tank are what the place burns, power_is_earned. The rest stay the envelope. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): Attic and crawlspace ventilation and a crawlspace vapor barrier manage moisture, air_is_clean, as the families next door file them. An evaporative cooler and a water heater's relief line are equipment that uses power, power_is_earned. Pipes protected against freezing are water_is_honest.",
+      "by_work_type": {
+        "dehumidifier_ventilation_install": "condition:air_is_clean",
+        "moisture_source_repair_dry_out": "condition:air_is_clean",
+        "gas_water_heater_thermostat_setpoint_annual_confirm_maintain": "condition:power_is_earned",
+        "gas_water_heater_thermostat_setpoint_turn_down_run": "condition:power_is_earned",
+        "water_heater_tank_annual_sediment_clean": "condition:power_is_earned",
+        "attic_crawlspace_ventilation_install": "condition:air_is_clean",
+        "water_heater_relief_valve_discharge_pipe_clearance_maintain": "condition:power_is_earned",
+        "west_texas_evaporative_cooler_pad_filter_service_document_survey": "condition:power_is_earned",
+        "west_texas_evaporative_cooler_pad_filter_service_install": "condition:power_is_earned",
+        "home_swamp_cooler_maintenance_readiness_document_survey": "condition:power_is_earned",
+        "pipe_freeze_protection_install": "condition:water_is_honest",
+        "crawlspace_moisture_vapor_barrier_install": "condition:air_is_clean"
+      }
+    },
+    {
+      "id": "building_weatherization_installation",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Attic and crawlspace ventilation and a dehumidifier manage moisture, air_is_clean. The rest stay the envelope. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): Heat tape on pipes against freezing is water_is_honest, as the winter family files it; the one job of the pipe-freeze install kind here protects a building from storm and weather and stays the envelope. An evaporative cooler is equipment that uses power, power_is_earned.",
+      "by_work_type": {
+        "attic_crawlspace_ventilation_install": "condition:air_is_clean",
+        "dehumidifier_ventilation_install": "condition:air_is_clean",
+        "pipe_freeze_protection_heat_tape_install": "condition:water_is_honest",
+        "evap_cooler_pad_swap": "condition:power_is_earned",
+        "west_texas_evaporative_cooler_pad_filter_service_install": "condition:power_is_earned"
+      }
+    },
+    {
+      "id": "healthy_home_assessment",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Wall cracks patched and drafts sealed are the envelope, shelter_holds. Porch stairs rebuilt are everyone_can_get_here. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "envelope_crack_seal_patch": "condition:shelter_holds",
+        "weatherstrip_seal_home": "condition:shelter_holds",
+        "porch_stair_structural_repair": "condition:everyone_can_get_here"
+      }
+    },
+    {
+      "id": "pastured_poultry_welfare_management",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). The flock's welfare stays the_creatures_are_well. Forage planted on the resting range is the_ground_is_alive. Eggs collected, graded and kept cold are a_person_is_fed_well. A mortality compost bin is nothing_leaves_as_waste. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "pastured_poultry_forage_range_planting": "condition:the_ground_is_alive",
+        "poultry_egg_cold_chain_handling_maintain": "condition:a_person_is_fed_well",
+        "poultry_mortality_compost_establish": "condition:nothing_leaves_as_waste"
+      }
+    },
+    {
+      "id": "rangeland_grazing_management",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). The range itself stays the_ground_is_alive. A herd's water trough and mineral station are the_creatures_are_well. Collapsed panels hauled out are nothing_leaves_as_waste. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): An interpretive sign is a shared fixture, the_commons_is_kept. The range it explains stays the_ground_is_alive.",
+      "by_work_type": {
+        "heat_wave_livestock_water_trough_refill_maintain": "condition:the_creatures_are_well",
+        "livestock_mineral_lick_station_maintain": "condition:the_creatures_are_well",
+        "derelict_livestock_panel_removal": "condition:nothing_leaves_as_waste",
+        "shackelford_fenceline_contrast_interpretive_signage_install": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "urban_canopy",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Trees and canopy stay the_ground_is_alive. Leaf bags diverted and dumped debris cleared are nothing_leaves_as_waste. A root barrier set so a sidewalk panel stops lifting is everyone_can_get_here. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): A shade arbor is a built shared fixture, the_commons_is_kept. A community fruit orchard is grown for food, a_person_is_fed_well. Shade trees stay the_ground_is_alive.",
+      "by_work_type": {
+        "apartment_complex_curbside_leaf_bag_diversion_common_bed_mulch_relocate": "condition:nothing_leaves_as_waste",
+        "illegal_dumping_removal": "condition:nothing_leaves_as_waste",
+        "sidewalk_tree_root_barrier_install": "condition:everyone_can_get_here",
+        "outdoor_classroom_shade_arbor_build": "condition:the_commons_is_kept",
+        "community_orchard_planting": "condition:a_person_is_fed_well"
+      }
+    },
+    {
+      "id": "tree_planting_establishment",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). A hedgerow or a windbreak row planted to stop drift and dust is air_is_clean. Every other planting stays the_ground_is_alive. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): A windbreak planted against blowing dust is air_is_clean, its dust survey with it. An oak planted so rain recharges an overdrafted basin is water_is_honest. Ranch windbreaks that name no dust stay the_ground_is_alive.",
+      "by_work_type": {
+        "field_drift_buffer_hedgerow_planting": "condition:air_is_clean",
+        "high_desert_windbreak_plant": "condition:air_is_clean",
+        "permian_basin_public_road_row_windbreak_dust_mitigation_document_survey": "condition:air_is_clean",
+        "permian_basin_public_road_row_windbreak_dust_mitigation_install": "condition:air_is_clean",
+        "shelterbelt_tree_row_planting": "condition:air_is_clean",
+        "rangeland_oak_recharge_planting": "condition:water_is_honest"
+      }
+    },
+    {
+      "id": "greenway_trail_maintenance",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Matting pinned on a bare hillside heals the soil, the_ground_is_alive. The trail itself stays everyone_can_get_here. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "park_erosion_matting_install": "condition:the_ground_is_alive"
+      }
+    },
+    {
+      "id": "gs_water_benefit_source_protection_mrv",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). A spring run's bank documented and restored is the condition of living water, the_ground_is_alive (the reading and its repair move together). The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "san_felipe_springs_spring_run_condition_document_survey": "condition:the_ground_is_alive",
+        "san_felipe_springs_spring_run_restoration_install": "condition:the_ground_is_alive"
+      }
+    },
+    {
+      "id": "harbor_shoreline_maintenance",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Derelict marina structure removed and a dock fender repaired are shared fixtures, the_commons_is_kept. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "derelict_marina_infrastructure_removal": "condition:the_commons_is_kept",
+        "harbor_dock_bumper_fender_repair": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "sdg12_5_waste_management",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). A floor drain grate cleared and a handwash tap repaired at a sorting station are water_is_honest. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): A sign is a shared fixture wherever it stands, the_commons_is_kept, the sorting station's category signs included.",
+      "by_work_type": {
+        "four_category_sorting_station_floor_drain_grate_clear_maintenance": "condition:water_is_honest",
+        "four_category_sorting_station_handwash_tap_repair_maintenance": "condition:water_is_honest",
+        "four_category_sorting_station_signage_legibility_restore_maintenance": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "sidewalk_repair_permeable",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Permeable paving refilled so rain soaks in, and a parking bay converted to permeable paving, are 'rain that infiltrates on the parcel', water_is_honest. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "karst_sponge_permeable_paver_joint_soil_media_refill_maintain": "condition:water_is_honest",
+        "permeable_parking_retrofit": "condition:water_is_honest"
+      }
+    },
+    {
+      "id": "urban_heat_island_mitigation",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Heat film on a window is the glazing, shelter_holds. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): Shade sails and shade structures are shared fixtures, and a cool coating is a treatment of a shared surface: the_commons_is_kept. A reflective roof coat is the envelope, shelter_holds. A vacant lot made into a community garden is growing ground, a_person_is_fed_well.",
+      "by_work_type": {
+        "install_window_heat_film": "condition:shelter_holds",
+        "build_shade_sail_structure": "condition:the_commons_is_kept",
+        "shade_structure_install": "condition:the_commons_is_kept",
+        "cool_pavement_coating_install": "condition:the_commons_is_kept",
+        "cool_roof_reflective_coating_apply": "condition:shelter_holds",
+        "vacant_lot_to_community_garden_conversion_build": "condition:a_person_is_fed_well"
+      }
+    },
+    {
+      "id": "wildfire_defensible_space_readiness",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). A public firebreak and a shaded fuel break kept clear on shared ground are the_commons_is_kept (fire is filed by what it protects). Vegetation around a home stays shelter_holds. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): Ladder fuels cleared in an oak woodland protect the trees, the_ground_is_alive (fire is filed by what it protects).",
+      "by_work_type": {
+        "public_firebreak_line_vegetation_hand_maintenance": "condition:the_commons_is_kept",
+        "shaded_fuel_break_vegetation_maintenance": "condition:the_commons_is_kept",
+        "wui_ladder_fuel_hand_clearing": "condition:the_ground_is_alive"
+      }
+    },
+    {
+      "id": "civic_pavement_marking",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). A 'drains to the bay' stencil at a storm drain is about clean water, water_is_honest. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "storm_drain_stencil_install": "condition:water_is_honest"
+      }
+    },
+    {
+      "id": "curb_ramp_repair",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). An alley apron is the surface vehicles use, the_commons_is_kept. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "alley_curb_apron_pavement_patch": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "diy_weatherization_sealing",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Water pipes wrapped against freeze are water_is_honest, as the winter family already files them. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "home_pipe_freeze_wrap_install": "condition:water_is_honest"
+      }
+    },
+    {
+      "id": "duwamish_river_superfund_shoreline_stewardship",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). An accessible path to the overlook is everyone_can_get_here. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "shoreline_access_path_ada_repair": "condition:everyone_can_get_here"
+      }
+    },
+    {
+      "id": "pollinator_habitat_establishment",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). A kept apiary's hive health is 'colony, hive and flock health counted', the_creatures_are_well. Wild pollinator habitat stays the_ground_is_alive. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "apiary_hive_health_and_forage_habitat_establish": "condition:the_creatures_are_well"
+      }
+    },
+    {
+      "id": "regenerative_cattle_welfare_husbandry",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). A tree row planted in pasture is a planting, the_ground_is_alive. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "silvopasture_tree_row_establish": "condition:the_ground_is_alive"
+      }
+    },
+    {
+      "id": "sdg11_waste_blight",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Dumped debris hauled out of an alley is nothing_leaves_as_waste. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "clear_alley_dumping": "condition:nothing_leaves_as_waste"
+      }
+    },
+    {
+      "id": "silica_dust_exposure",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Wind-blown dust from a vacant lot, documented, is a reading of the air a neighborhood breathes, air_is_clean. Silica controls on a job stay the law nobody_is_hurt. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "unpaved_lot_dust_document_survey": "condition:air_is_clean"
+      }
+    },
+    {
+      "id": "street_tree_pit_restoration",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). A tree-pit cover reset to close a trip gap is 'trip hazards, counted and closed', everyone_can_get_here. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "street_plane_tree_pit_permeable_cover_repair_maintain": "condition:everyone_can_get_here"
+      }
+    },
+    {
+      "id": "water_efficiency",
+      "note": "Filed by kind 2026-11-11 (round four, the every-kind check). Watering in a new planting is filed with the planting, the_ground_is_alive. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round five (2026-11-11): The building walk filed here reads drafts, heat loss and stale air, not water; it is filed as the same walk is in the weatherization family, shelter_holds. A drip line laid so a community orchard's young trees live is filed with the orchard, a_person_is_fed_well.",
+      "by_work_type": {
+        "native_hedgerow_water": "condition:the_ground_is_alive",
+        "building_audit": "condition:shelter_holds",
+        "community_orchard_irrigation_install": "condition:a_person_is_fed_well"
+      }
+    },
+    {
+      "id": "civic_water_fixture_service",
+      "note": "Filed by kind 2026-11-11 (round five, the every-kind check). A hydrant is exercised so a fire crew is not kept waiting; it protects the whole block, a shared fixture kept on a cadence, the_commons_is_kept, and a misting cool-down spot is a shared fixture as the heat family files it. Fountains, bottle fillers and water stations stay water_is_honest. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "fire_hydrant_valve_exercise_maintenance": "condition:the_commons_is_kept",
+        "misting_cooling_station_install": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "coastal_dune_fence_repair",
+      "note": "Filed by kind 2026-11-11 (round five, the every-kind check). The walkover over the dune is the surface a person walks on, everyone_can_get_here. The sand fence stays with the dune it holds. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "dune_fence_walkover_path_maintenance_repair": "condition:everyone_can_get_here"
+      }
+    },
+    {
+      "id": "coastal_habitat",
+      "note": "Filed by kind 2026-11-11 (round five, the every-kind check). A litter transect is a count, and a litter count is a log wherever it is taken, the_commons_is_kept. Recovered fishing line shipped to a recycler is a stream given its next use, nothing_leaves_as_waste. Fish-cleaning scraps bagged and hauled on a route are a stream sent to its next use, nothing_leaves_as_waste. Matting at a bluff trail's eroding edge repairs the walked surface, everyone_can_get_here. Litter lifted off the shore stays the_ground_is_alive. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round six (2026-11-11): A pier's fishing-line bins built and emptied on a route, and line and hooks cleared off its pilings, rails and deck, are upkeep of a shared fixture, the_commons_is_kept.",
+      "by_work_type": {
+        "litter_transect_survey": "condition:the_commons_is_kept",
+        "pier_recovered_monofilament_recycler_shipment_prepare_deliver": "condition:nothing_leaves_as_waste",
+        "pier_fish_cleaning_station_scrap_bin_route_maintain": "condition:nothing_leaves_as_waste",
+        "bluff_trail_erosion_matting_install": "condition:everyone_can_get_here",
+        "pier_monofilament_recovery_receptacle_build_install": "condition:the_commons_is_kept",
+        "pier_monofilament_receptacle_route_empty_maintain": "condition:the_commons_is_kept",
+        "pier_piling_rail_deck_snagged_line_hook_reach_tool_remove": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "residential_envelope_maintenance",
+      "note": "Filed by kind 2026-11-11 (round five, the every-kind check). A dryer's vent carries moisture out of the house; lint cleared, a crushed duct reshaped and a stuck hood flap freed are moisture vented, air_is_clean. A sump pump drains pooled water, water_is_honest. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "dryer_vent_lint_clean": "condition:air_is_clean",
+        "dryer_vent_duct_crush_reshape_restore": "condition:air_is_clean",
+        "dryer_exterior_vent_hood_flap_free_repair": "condition:air_is_clean",
+        "sump_pump_install_repair": "condition:water_is_honest"
+      }
+    },
+    {
+      "id": "sdg14_life_below_water",
+      "note": "Filed by kind 2026-11-11 (round five, the every-kind check). Cigarette butts collected and counted on city streets are a litter count, a log, the_commons_is_kept. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "collect_cigarette_butts": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "sdg15_life_on_land",
+      "note": "Filed by kind 2026-11-11 (round five, the every-kind check). A shrub row planted as a windbreak against blowing dust is air_is_clean. A trail restored to heal the habitat it scars stays the_ground_is_alive, as the anchored three-ladders jobs declare. The family keeps its one home; only the kinds of work listed here are filed elsewhere. Round six (2026-11-11): A tree row planted where the job names the spring dust as the harm it stops is air_is_clean, as the tree planting family files the same kind.",
+      "by_work_type": {
+        "steppe_habitat_native_shrub_row_planting_install": "condition:air_is_clean",
+        "shelterbelt_tree_row_planting": "condition:air_is_clean"
+      }
+    },
+    {
+      "id": "solar_ground_cover_habitat",
+      "note": "Filed by kind 2026-11-11 (round five, the every-kind check). A sign is a shared fixture wherever it stands, the_commons_is_kept. The seeded ground under the array stays the_ground_is_alive. The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "array_no_mow_zone_signage_install": "condition:the_commons_is_kept"
+      }
+    },
+    {
+      "id": "home_defensible_space_zone1_maintenance",
+      "note": "Filed by kind 2026-11-11 (round six, the every-kind check). A low-fuel strip raked on public trails between a forest and the houses is a firebreak kept clear on shared ground, the_commons_is_kept (fire is filed by what it protects). The family keeps its one home; only the kinds of work listed here are filed elsewhere.",
+      "by_work_type": {
+        "interface_fuel_break_hand_rake_maintenance": "condition:the_commons_is_kept"
+      }
+    }
+  ]
 }
