@@ -368,7 +368,7 @@
     {
       "id": "no-dispute-referee",
       "gap": "Vealth does not referee a disagreement about a payment, and no lawyer has reviewed the funding terms.",
-      "why_it_matters": "Vealth does not referee a disagreement about a payment. A refund or a card dispute goes through the payer's own card, bank or wallet, never through Vealth. No lawyer has reviewed the funding terms. Who decides: a person accepts every proof, and the worker never approves their own. Whoever offered to pay decides for themselves, and pays the worker only when they accept the proof. On the jobs Vealth wrote from its own library, Vealth's own review records the board's decision today, as evidence the parties read. No outside reviewer is named yet.",
+      "why_it_matters": "Vealth does not referee a disagreement about a payment. A refund or a card dispute goes through the payer's own card, bank or wallet, never through Vealth. No lawyer has reviewed the funding terms. Who decides: a person accepts every proof, and the worker never approves their own. On a job a person posted, that person accepts or returns the proof from their own wallet. On a job Vealth wrote from its own library, Vealth's own review records the board's decision today, as evidence the parties read: no outside reviewer is named yet. A payer whose offer covers the full posted price decides the proof only once the poster names them to, with one signed call: then only that payer's wallet decides, not the poster and not Vealth.",
       "independently_verifiable": false
     },
     {

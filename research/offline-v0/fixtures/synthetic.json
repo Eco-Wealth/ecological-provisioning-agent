@@ -1,0 +1,105 @@
+{
+  "format": "ecowealth-offline-research-v0",
+  "constitution": {
+    "identifier": "ECOWEALTH-CONSTITUTION-v1",
+    "sha256": "fa5d86dcaf9eb54ecfe68588752c2ddfb3387532c0adcba47e1c5c794e892cdd"
+  },
+  "provenance": {
+    "source": "fictional-lifecycle-fixture",
+    "exportedAt": "2026-11-14T12:00:00Z"
+  },
+  "referents": [
+    {
+      "id": "synthetic-place",
+      "boundary": "fictional site, no real access or authority"
+    },
+    {
+      "id": "synthetic-condition",
+      "boundary": "fictional observed condition"
+    }
+  ],
+  "attestations": [
+    {
+      "scopeReferent": "synthetic-place",
+      "localId": "observation",
+      "actor": "SYNTHETIC_ACTOR",
+      "concerns": [
+        "synthetic-condition"
+      ],
+      "role": "observation",
+      "assertedAt": "2026-01-01T00:00:00Z",
+      "effectiveAt": "2026-01-01T00:00:00Z",
+      "method": "fictional record",
+      "authority": {
+        "claimedBasis": "not validated"
+      },
+      "evidenceRefs": [
+        "note"
+      ],
+      "relations": [],
+      "claim": "erosion alleged"
+    },
+    {
+      "scopeReferent": "synthetic-place",
+      "localId": "obligation",
+      "actor": "SYNTHETIC_ACTOR",
+      "concerns": [
+        "synthetic-place"
+      ],
+      "role": "obligation_admission",
+      "assertedAt": "2026-01-02T00:00:00Z",
+      "effectiveAt": "2026-01-02T00:00:00Z",
+      "method": "fictional admission",
+      "authority": null,
+      "evidenceRefs": [],
+      "relations": []
+    },
+    {
+      "scopeReferent": "synthetic-place",
+      "localId": "disposition",
+      "actor": "SYNTHETIC_ACTOR",
+      "concerns": [
+        "synthetic-place"
+      ],
+      "role": "disposition",
+      "assertedAt": "2026-01-03T00:00:00Z",
+      "effectiveAt": "2026-01-03T00:00:00Z",
+      "method": "fictional closure claim",
+      "authority": null,
+      "evidenceRefs": [],
+      "relations": [
+        {
+          "kind": "disposes",
+          "to": {
+            "scopeReferent": "synthetic-place",
+            "localId": "obligation"
+          }
+        }
+      ],
+      "effect": "close"
+    },
+    {
+      "scopeReferent": "synthetic-place",
+      "localId": "payment",
+      "actor": "SYNTHETIC_ACTOR",
+      "concerns": [
+        "synthetic-place"
+      ],
+      "role": "payment",
+      "assertedAt": "2026-01-04T00:00:00Z",
+      "effectiveAt": "2026-01-04T00:00:00Z",
+      "method": "fictional payment claim",
+      "authority": null,
+      "evidenceRefs": [],
+      "relations": []
+    }
+  ],
+  "evidence": [
+    {
+      "id": "note",
+      "access": "inline",
+      "text": "SYNTHETIC observation: erosion reported, not verified",
+      "sha256": "f4c7abacbe4466d8b5f77dae0c267329d9b4ae2871a93620b27886bf45d41d6f"
+    }
+  ]
+}

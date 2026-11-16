@@ -1,0 +1,25 @@
+{
+  "format": "ecowealth-measurement-conformance-v0",
+  "note": "Synthetic mutation vectors; each references one separately defined field in fictional bundles.",
+  "vectors": [
+    {"id":"baseline","mutation":"none","ruleId":"MV003","status":"PASS"},
+    {"id":"wrong-version","mutation":"wrong-format","ruleId":"MV001","status":"FAIL"},
+    {"id":"unsupported-unit","mutation":"unit-kilograms","ruleId":"MV003","status":"FAIL"},
+    {"id":"negative-uncertainty","mutation":"negative-uncertainty","ruleId":"MV003","status":"FAIL"},
+    {"id":"nan-not-json","mutation":"missing-result-value","ruleId":"MV003","status":"FAIL"},
+    {"id":"boundary-drift","mutation":"alter-boundary-digest","ruleId":"MV002","status":"FAIL"},
+    {"id":"sampling-time-reversal","mutation":"reverse-times","ruleId":"MV004","status":"FAIL"},
+    {"id":"missing-method","mutation":"missing-method-version","ruleId":"MV005","status":"FAIL"},
+    {"id":"fabricated-evidence-hash","mutation":"alter-evidence-bytes","ruleId":"MV006","status":"FAIL"},
+    {"id":"uncertain-evidence","mutation":"restricted-evidence","ruleId":"MV006","status":"UNKNOWN"},
+    {"id":"unrecognized-extension","mutation":"unrecognized-field","ruleId":"MV010","status":"WARN"},
+    {"id":"contest-locator-malformed","mutation":"malformed-contest","ruleId":"MV009","status":"FAIL"},
+    {"id":"unverified-science","mutation":"none","ruleId":"MV008","status":"UNKNOWN"}
+  ],
+  "exchangeVectors": [
+    {"id":"disjoint","mutation":"none","ruleId":"XC003","status":"WARN"},
+    {"id":"overlap","mutation":"overlapping-result","ruleId":"XC003","status":"UNKNOWN"},
+    {"id":"changed-scope","mutation":"different-feature-boundary","ruleId":"XC002","status":"UNKNOWN"},
+    {"id":"wrong-head","mutation":"different-journal-head","ruleId":"XC001","status":"FAIL"}
+  ]
+}
