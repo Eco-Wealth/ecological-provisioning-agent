@@ -131,7 +131,7 @@ It does **not** protect profit, and it does not stop someone else from closing t
 
   At 0.006 to 0.007 gwei, a dust-size try costs roughly a third of a US cent to two cents.
 - **The largest gaps on 2026-11-09:** `vvv:buy-net` +4.69%, `axlregen:buy-net` +2.94% and `mft:buy-net` +2.44%. None paid after gas, because the pools are too shallow to carry a size where the gap beats the gas. Gaps open when NET, ECO, ZORA, MfT, axlREGEN or VVV move. EcoWealth buys NET regularly in small amounts.
-- **NET's price is set by EcoWealth's own buying** until an outside trade confirms it. The NET/WETH pool's ratio implies about $1.8M per NET, against $34 of ETH. What any holder can take out of a pool is its reserve, never the quoted price.
+- **NET's price is mostly EcoWealth's own buying** and is no sign of demand. The NET/WETH pool's ratio implies about $1.8M per NET, against $34 of ETH. What any holder can take out of a pool is its reserve, never the quoted price.
 
 ## EcoWealth's interest, disclosed
 
