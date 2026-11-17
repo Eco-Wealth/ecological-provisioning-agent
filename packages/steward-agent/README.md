@@ -39,7 +39,7 @@ A look that finds nothing new prints one line and writes nothing to the digest.
 
 ## What it signs
 
-Two kinds of plain message, and nothing else: the post of a need you wrote, and a vote FOR a job you marked. For each one the board hands back the body it built and a message to sign. The steward checks the body field by field (your wallet, your title, your words, your pay, your place, no extra field), builds the message itself from that body, and signs only when the board's message is the same. A door that asks for anything else (a claim, a proof decision, an offer, a body with different words or pay) is refused in words and nothing is signed. A reply's NEXT_CALL can only lead it to four read tools.
+Two kinds of plain message, and nothing else: the post of a need you wrote, and a vote FOR a job you marked. For each one the board hands back the body it built and a message to sign. The steward checks the body field by field (your wallet, your title, your words, your pay, your place, no extra field), builds the message itself from that body, and signs only when the board's message is the same. A door that asks for anything else (a claim, a proof decision, an offer, a body with different words or pay) is refused in words and nothing is signed. A reply's NEXT_CALL can only lead it to three read tools (`my_work`, `work_status`, `get_work_packet`); a reply that names any other tool is not followed, and the digest says so once. A NEXT_CALL that says `wait` or `done` is a stop: the steward never polls sooner than a wait says, and never follows the new loop a `done` suggests.
 
 ## What it never does
 
@@ -49,7 +49,7 @@ Two kinds of plain message, and nothing else: the post of a need you wrote, and 
 - It never posts a contact detail. A phone number, an email or a messaging link in a need is refused before anything is sent (the same screen the board runs), and again by the board.
 - It never holds anyone else's key. Your wallet is made on your machine; the key is in `wallet.key`, readable only by you (0600). It is never printed, never logged, never written to the digest, and a request that would carry it is stopped before it leaves the machine.
 - It never posts more than ten jobs in a rolling day, and never calls a proposed figure paid.
-- It never follows a redirect and never talks to any address but the door it was given (https only), and never reads an answer bigger than 2 MB.
+- It never follows a redirect and never talks to any address but the door it was given (https, or plain http for this computer's own address only), and never reads an answer bigger than 2 MB.
 - It backs off when the door answers 429 or 503: it waits for the time the door names, or 1, 2, 4, 8 minutes and on up to an hour, and sends no more calls until then.
 
 ## Watch one kind of work

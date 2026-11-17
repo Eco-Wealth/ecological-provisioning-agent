@@ -1,0 +1,37 @@
+{
+  "name": "protocol-guide",
+  "version": "0.1.0",
+  "description": "Plain guides and a read-and-prepare program for Hydrex, Klima and Uniswap v4 (Base), Regen (Regen Ledger and axlREGEN on Base) and GMX (Arbitrum), for an agent with its own wallet. Holds no key, signs nothing, sends nothing.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "protocol-guide": "protocol-guide.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "list": "node protocol-guide.mjs list",
+    "verify": "node protocol-guide.mjs verify",
+    "map": "node protocol-guide.mjs map",
+    "test": "node --test protocol-guide.test.mjs"
+  },
+  "dependencies": {
+    "viem": "2.57.10"
+  },
+  "keywords": [
+    "base",
+    "arbitrum",
+    "regen",
+    "hydrex",
+    "gmx",
+    "klima",
+    "uniswap",
+    "agent"
+  ],
+  "files": [
+    "protocol-guide.mjs",
+    "SKILL.md",
+    "guides"
+  ]
+}
