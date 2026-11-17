@@ -1,6 +1,6 @@
 ---
 name: protocol-guide
-description: Plain guides and one program for using Hydrex, Klima and Uniswap v4 (Base), Regen (Regen Ledger, plus axlREGEN on Base) and GMX (Arbitrum) with your own wallet. `map` reads, live, the five protocols, their tokens and the roads between them. Each act reads the live state it needs, simulates as your address, and prints ONE unsigned step or the exact Regen message for you to sign. Holds no key, signs nothing, sends nothing. Refuses anything it does not know.
+description: Plain guides and one program for using Hydrex, Klima and Uniswap v4 (Base), Regen (Regen Ledger, plus axlREGEN on Base) and GMX (Arbitrum, reached from Base through GMX's own GMX Account) with your own wallet. `map` reads, live, the five protocols, their tokens and the roads between them, and points at the agent programs at vealth.net/mcp; `recipes` gives short complete recipes a bot can run on a timer. Each act reads the live state it needs, simulates as your address, and prints ONE unsigned step or the exact Regen message for you to sign. Holds no key, signs nothing, sends nothing. Refuses anything it does not know.
 ---
 
 # Protocol guide: Hydrex, Regen, GMX, Klima, Uniswap
@@ -17,12 +17,15 @@ You bring a wallet. The program never sees a key. It reads the chain or an API, 
 node protocol-guide.mjs map          # the five protocols, their tokens, the roads between them, read live
 ```
 
-One read answers "where can a holding go next, and which command prepares that step". It lists each protocol with its token and chain (Hydrex: HYDX and HYDROC on Base; Regen: REGEN on Regen Ledger and axlREGEN on Base; GMX: USDC collateral on Arbitrum; Klima: kVCM on Base; Uniswap v4: ETH, ECO and NET on Base), then every pool the kit knows, read live, as open, thin, none or unread. A missing pool is "no road", and a road that crosses chains (Base to Arbitrum, Base to Regen Ledger) is named as a bridge that is not in this kit. A pool this kit does not hold the key for is not read, so a pair missing from the map is not proof that no pool exists. NET has five hookless pools on Base, paired with ETH, WETH, ECO, VVV and HYDROC; this kit reads the four with no VVV, and the sibling kit `skills/net-circle` quotes the four with no HYDROC. NET: the buying in NET's pools is the house's own. Each row that names ECO, kVCM or HYDROC says that EcoWealth holds it. The map prints no price. Add `--json` for a machine reading.
+One read answers "where can a holding go next, and which command prepares that step". It opens with a first step, **make your own** (a coin of your own, the way the house made NET: the buying in NET's pools is the house's own), then lists each protocol with its token and chain (Hydrex: HYDX and veHYDX on Base; Regen: REGEN on Regen Ledger and axlREGEN on Base; GMX: USDC collateral on Arbitrum, and USDC or ETH from Base into a GMX Account; Klima: kVCM on Base; Uniswap v4: ETH, ECO and NET on Base), then every pool the kit knows, read live, as open, thin, none or unread. A missing pool is "no road". A road that crosses chains is named, and it is not always a missing road: Base to a GMX Account is GMX's own multichain path (the map reads live that the Stargate USDC pool GMX names on Base still names Base USDC), and Base to Regen Ledger is a bridge that is not in this kit. It also lists the capital loops and sinks the kit knows: capital that goes out through a protocol and comes back, as a path with its costs and never a profit (every leg has fees, a loop can return less than it took, and the map prints no price), and the paths that end the capital by design, such as a retirement on Klima or Regen. A pool this kit does not hold the key for is not read, so a pair missing from the map is not proof that no pool exists. NET has five hookless pools on Base, paired with ETH, WETH, ECO, VVV and HYDROC; this kit reads the four with no VVV, and the sibling kit `skills/net-circle` quotes the four with no HYDROC. NET: the buying in NET's pools is the house's own. Each row that names ECO, kVCM or HYDROC says that EcoWealth holds it. The map also lists which tool at https://vealth.net/mcp answers which need among the NET programs (the buying in NET's pools is the house's own). The map prints no price. Add `--json` for a machine reading.
 
 ## Which guide, which act
 
 | You want to | Guide | Program |
 |---|---|---|
+| **Make your own**: a coin of your own, the way the house made NET (the buying in NET's pools is the house's own) | the section "The agent programs at vealth.net/mcp" below | `prepare_net_workers_coin_plan`, then `net_workers_coin_status`, at https://vealth.net/mcp. A dry plan only, built and not switched on, and not yet served there on 2026-11-17 |
+| Find the NET program that fits what you want to do (the buying in NET's pools is the house's own) | the section "The agent programs at vealth.net/mcp" below | `net_programs`, then `net_mechanism`, at https://vealth.net/mcp |
+| Run a capital loop on a timer from the acts below (a path with its costs, never a profit), or see which paths are sinks | `guides/bots.md` | `recipes` |
 | Understand Hydrex, read its pools, epoch, proposals | `guides/hydrex.md` | `hydrex epoch`, `pools`, `proposals` |
 | See your veHYDX locks, votes and what you could claim | `guides/hydrex.md` section 4 and 5 | `hydrex locks`, `hydrex claimable` |
 | Claim Hydrex fees and bribes | `guides/hydrex.md` section 5 | `hydrex prepare claim` |
@@ -33,7 +36,8 @@ One read answers "where can a holding go next, and which command prepares that s
 | Retire credits you hold | `guides/regen.md` section 5 | `regen prepare retire` |
 | Bridge REGEN, buy credits on the marketplace | `guides/regen.md` sections 3 and 4 | guide text only |
 | Understand GMX, read markets, prices, positions, orders | `guides/gmx.md` | `gmx markets`, `prices`, `positions`, `orders` |
-| Open or close a GMX position | `guides/gmx.md` sections 2 and 3 | `gmx prepare open`, `gmx prepare close` |
+| Trade GMX from Base: what a GMX Account is, how funds get there, Express orders and subaccounts, what it costs and what can go wrong | `guides/gmx.md`, "Trading GMX from Base" | guide text only; GMX's own kit (github.com/gmx-io/gmx-ai) prepares it, and `gmx fund-account` and `gmx express` exit 2 |
+| Open or close a GMX position with USDC in your own Arbitrum wallet (a Classic order, not a GMX Account balance) | `guides/gmx.md` sections 2 and 3 | `gmx prepare open`, `gmx prepare close` |
 | Provide liquidity or claim on GMX | `guides/gmx.md` sections 4 and 5 | guide text only |
 | Understand Klima, read its carbon classes, credits and a quote | `guides/klima.md` | `klima classes`, `klima credits`, `klima quote`, `klima balances` |
 | Retire carbon with kVCM you hold (EcoWealth holds some kVCM) | `guides/klima.md` section on the acts | `klima prepare retire`, then `klima prepare revoke` for the leftover approval |
@@ -48,6 +52,18 @@ One read answers "where can a holding go next, and which command prepares that s
 
 Run `node protocol-guide.mjs list` for every act, what it needs, and what it can cost you.
 
+## The agent programs at vealth.net/mcp: which tool answers which need
+
+The NET programs are the agent doors at https://vealth.net/mcp (the buying in NET's pools is the house's own). They are built, and as read on 2026-11-17 none is switched on: `net_programs` showed every program as built (dry-executable) and none as deployed. A program that is off records nothing, and its reads stay open. Treat none as live until `net_programs` or the program's own status read says so. Every tool named here is in EcoWealth's published tool list. A prepare tool returns what you sign with your own wallet and its submit tool takes your signature, so you never hand over a key.
+
+| You want to | Tool | State |
+|---|---|---|
+| Make a coin of your own, the way the house made NET (the buying in NET's pools is the house's own) | `prepare_net_workers_coin_plan`, then `net_workers_coin_status` | A dry plan only. It launches nothing, the house holds, signs, buys and sells nothing for you, and today the plan is refused because the priced read of ECO it needs is not built (EcoWealth created ECO, holds it and gains if it rises). Both tools were written into the tool list and were not yet served by vealth.net/mcp on 2026-11-17: read its `tools/list` before you call. |
+| Find the program that fits what you want to do | `net_programs`, then `net_mechanism` | Free and read-only. |
+| Read the specialist tasks agents have posted, or act on one | `net_open_tasks`; then `prepare_net_order` and `submit_net_order`; `net_order_status` follows it | Built, not switched on. |
+| Earn by accepted work, hold for a later obligation, or act in another program | that program's own prepare and submit pair (for example `prepare_net_earn` then `submit_net_earn`) and its status read (for example `net_earn_status`); `net_programs` names the program | Built, not switched on. |
+| Trade in NET's pools yourself (the buying in NET's pools is the house's own) | the sibling kit `skills/net-circle`, run with your own wallet | It needs no switch. It prepares one unsigned transaction that reverts unless its floor holds. |
+
 ## Install and run
 
 Node 20 or newer.
@@ -57,11 +73,12 @@ npm ci                                   # installs viem from the lockfile; this
 npm test                                 # offline tests, no network, no key
 node protocol-guide.mjs list             # every act, what it needs, what it can cost you
 node protocol-guide.mjs map              # the five protocols, their tokens and the roads between them, read live
-node protocol-guide.mjs verify           # live check of every address the guides name, all five protocols
+node protocol-guide.mjs recipes          # short complete recipes a bot can run on a timer, from these acts (a read, offline)
+node protocol-guide.mjs verify           # live check of every address the guides name, all five protocols (gmx reads Arbitrum and Base)
 node protocol-guide.mjs --help
 ```
 
-Pick the node with `--rpc <url>`, or `BASE_RPC_URL` and `ARBITRUM_RPC_URL`. Defaults: `https://mainnet.base.org` and `https://arb1.arbitrum.io/rpc`. For Regen Ledger use `--lcd <url>` or `REGEN_LCD_URL` (https only; default `https://rest.cosmos.directory/regen`). Use nodes you trust: a node can lie about prices and simulations.
+Pick the node with `--rpc <url>` (for `verify gmx` it picks the Arbitrum node, and the Base side reads `BASE_RPC_URL` or the default), or `BASE_RPC_URL` and `ARBITRUM_RPC_URL`. Defaults: `https://mainnet.base.org` and `https://arb1.arbitrum.io/rpc`. For Regen Ledger use `--lcd <url>` or `REGEN_LCD_URL` (https only; default `https://rest.cosmos.directory/regen`). Use nodes you trust: a node can lie about prices and simulations.
 
 Add `--json` for machine output. A prepare act prints `{ "sendable": true|false, "prepared": {...} }`.
 
@@ -124,9 +141,9 @@ if (sendable) {
 
 ## Acts it will not prepare
 
-It exits with code 2 and says why. These are described in the guides, so you can build and simulate them with your own tools: a Hydrex swap, liquidity or lock, or delegation to a conduit; a Regen bridge or marketplace buy; a GMX deposit, withdrawal or claim; Klima staking, locks, or swapping credits in for kVCM; Uniswap v4 liquidity. A request it does not know also exits with code 2.
+It exits with code 2 and says why. These are described in the guides, so you can build and simulate them with your own tools: a Hydrex swap, liquidity or lock, or delegation to a conduit; a Regen bridge or marketplace buy; a GMX deposit, withdrawal or claim, including funding a GMX Account from Base (`gmx fund-account`) and Express orders (`gmx express`); Klima staking, locks, or swapping credits in for kVCM; Uniswap v4 liquidity. A request it does not know also exits with code 2.
 
-For the Regen bridge, which this kit does not prepare, our MCP server at https://vealth.net/mcp has `prepare_bridge` and `bridge_status`. GMX publishes its own agent kit at github.com/gmx-io/gmx-ai (MIT).
+For the Regen bridge, which this kit does not prepare, our MCP server at https://vealth.net/mcp has `prepare_bridge` and `bridge_status`. GMX publishes its own agent kit at github.com/gmx-io/gmx-ai (MIT). It prepares what this kit does not for GMX: funding a GMX Account from Base, and Express orders. `guides/gmx.md` says what a GMX Account is, what it costs and what can go wrong.
 
 ## What EcoWealth holds, disclosed
 
@@ -141,6 +158,6 @@ EcoWealth gains if these tokens rise. Nothing here takes your funds, holds your 
 
 ## Where the facts come from
 
-Every address and call shape in the guides was read on 2026-11-16 from the chain, from each protocol's own docs and published interfaces, or from its public API. `verify` re-reads the addresses and the live shapes. Prices, depth, fees and yields change, so the guides give none: read them live.
+Every address and call shape in the guides was read on 2026-11-16 from the chain, from each protocol's own docs and published interfaces, or from its public API. The GMX Account section of `guides/gmx.md` and the tool states in this page were read on 2026-11-17, and each line there says how. `verify` re-reads the addresses and the live shapes. Prices, depth, fees and yields change, so the guides give none: read them live.
 
 Licensed Apache-2.0, as is the rest of this repository (see its root `LICENSE`).
