@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // protocol-guide: reads and prepared steps for Hydrex (Base), Regen (Regen Ledger and axlREGEN on Base), GMX
-// (Arbitrum), Klima (Base) and Uniswap v4 (Base), for an agent that uses its OWN wallet. Holds no key, signs nothing,
-// sends nothing: every act prints the unsigned transaction (or the exact Regen Ledger message) for you to sign yourself,
-// after a simulation, with a guard stated per act. Anything it does not know, it refuses (exit 2).
+// (Arbitrum; a person on Base, Ethereum or BNB reaches it through GMX's own GMX Account), Klima (Base) and Uniswap v4
+// (Base), for an agent that uses its OWN wallet. Holds no key, signs nothing, sends nothing: every act prints the unsigned
+// transaction (or the exact Regen Ledger message) for you to sign yourself, after a simulation, with a guard stated per act.
+// Anything it does not know, it refuses (exit 2).
 //
 //   node protocol-guide.mjs list                              every act, what it needs, what it can cost you
 //   node protocol-guide.mjs map                               the five protocols, their tokens, and the roads between them, read live
-//   node protocol-guide.mjs verify [hydrex|regen|gmx|klima|uniswap]   live check of every address the guides name
+//   node protocol-guide.mjs recipes [id]                      short complete recipes a bot can run on a timer from these acts (a read, offline)
+//   node protocol-guide.mjs verify [hydrex|regen|gmx|klima|uniswap]   live check of every address the guides name (gmx reads Base and Arbitrum)
 //   node protocol-guide.mjs hydrex epoch | pools | proposals | locks --address 0x.. | claimable --address 0x..
 //   node protocol-guide.mjs hydrex prepare claim --from 0x.. [--kind fees|bribes|both] [--include-equity]
 //   node protocol-guide.mjs hydrex prepare vote --from 0x.. --vote 0xPOOL:5000 --vote 0xPOOL:5000
@@ -102,6 +104,24 @@ export const GMX = {
 };
 /** GMX's interface repo has listed a newer router than its docs page; verify reports both, the program uses the docs'. */
 export const GMX_INTERFACE_ROUTER = "0x6776c2b52179BC737193DE3bc75262681006AA27";
+/**
+ * GMX's own multichain path, a GMX Account: on Arbitrum the contracts that hold and credit it, and the Stargate pools that move USDC
+ * and ETH in. Read on 2026-11-17 from GMX's agent kit address list (github.com/gmx-io/gmx-ai, snapshot of 2026-10-13) and GMX's SDK
+ * config (github.com/gmx-io/gmx-interface, sdk/src/configs/multichainTokens.ts). `verify gmx` reads each one. This program prepares
+ * nothing with them: funding a GMX Account from Base is GMX's own tooling (see NOT_PREPARED "gmx fund-account").
+ */
+export const GMX_ACCOUNT = {
+  MultichainTransferRouter: "0x3f6772B95423fC03264adf90Efb8A9922B6C8c6e",
+  MultichainVault: "0xCeaadFAf6A8C489B250e407987877c5fDfcDBE6E",
+  LayerZeroProvider: "0x0B33EBA531e5a5A331a3Ff9F418B8205F01C2869",
+  StargateUsdcArbitrum: "0xe8CDF27AcD73a434D661C84887215F7598e7d0d3",
+  StargateEthArbitrum: "0xA45B5130f36CDcA45667738e2a258AB09f4A5f7F",
+};
+/** The two Stargate pools GMX's SDK config lists on Base for the tokens a GMX Account takes from Base (USDC and ETH). */
+export const GMX_ACCOUNT_BASE = {
+  StargateUsdcBase: "0x27a16dc786820B16E5c9028b75B99F6f604b5d26",
+  StargateEthBase: "0xdc181Bd607330aeeBEF6ea62e03e5e1Fb4B6F7C7",
+};
 /** Klima (Base). These three are the ones the retire act touches: the token, Klima's retirement aggregator, and its asset manager. */
 export const KLIMA = {
   kVCM: "0x00fBAC94Fec8D4089d3fe979F39454F48c71A65d",
@@ -167,6 +187,7 @@ export const ALL_ADDRESSES = {
   hydrex: HYDREX,
   regen: { ...REGEN, BaseUSDC: BASE_USDC },
   gmx: { ...GMX, InterfaceRouter: GMX_INTERFACE_ROUTER },
+  gmxAccount: { ...GMX_ACCOUNT, ...GMX_ACCOUNT_BASE },
   klima: { ...KLIMA, ...KLIMA_PUBLISHED, Settlement: KLIMA_SETTLEMENT, HydrexConduitV2: HYDREX_CONDUIT_V2 },
   uniswap: { ...UNISWAP, ...TOKENS },
   pools: Object.fromEntries(OTHER_POOLS.map((p) => [p.id, p.address])),
@@ -217,6 +238,8 @@ export const NOT_PREPARED = {
   "regen buy-credits": "not prepared here: the marketplace buy message carries a buyer fee cap this program cannot read. The Regen guide gives the message fields.",
   "gmx deposit": "not prepared here: GM and GLV deposits have no calldata we have seen run onchain. The GMX guide points at GMX's own pages.",
   "gmx claim": "not prepared here: see the GMX guide for the claim calls.",
+  "gmx fund-account": "not prepared here: funding a GMX Account from Base goes through Stargate (it moves the USDC or ETH) and LayerZero (the message that credits your account on Arbitrum). A simulation on Base can prove only the Base half, and this program does not hand you a transaction it cannot prove end to end. GMX's own kit prepares it: github.com/gmx-io/gmx-ai (MIT). The GMX guide says what a GMX Account is, what it costs and what can go wrong. This program's gmx prepare acts spend USDC in your own Arbitrum wallet, not a GMX Account balance.",
+  "gmx express": "not prepared here: Express orders are typed data you sign and GMX's relay broadcasts, and a GMX Account is traded only this way. This program prepares Classic orders, sent by your own wallet. GMX's own kit prepares Express orders: github.com/gmx-io/gmx-ai (MIT).",
   "klima stake": "not prepared here: staking kVCM, K2 or LP tokens on Klima needs an identity check (zkMe) in Klima's published code. The Klima guide says where; this program does not prepare it.",
   "klima lock": "not prepared here: kVCM locks have no calldata we have seen run onchain. The Klima guide names the contract; build and simulate it yourself.",
   "klima swap-in": "not prepared here: swapping carbon credits in for kVCM changes the supply and needs the credit and the class checked by you. The Klima guide gives the entry point.",
@@ -648,6 +671,7 @@ const READER_ABI = parseAbi([
   "function getAccountOrders(address dataStore,address account,uint256 start,uint256 end) view returns ((bytes32 orderKey,((address account,address receiver,address cancellationReceiver,address callbackContract,address uiFeeReceiver,address market,address initialCollateralToken,address[] swapPath) addresses,(uint8 orderType,uint8 decreasePositionSwapType,uint256 sizeDeltaUsd,uint256 initialCollateralDeltaAmount,uint256 triggerPrice,uint256 acceptablePrice,uint256 executionFee,uint256 callbackGasLimit,uint256 minOutputAmount,uint256 uiFeeFactor,uint256 updatedAtTime,uint256 validFromTime,uint256 srcChainId) numbers,(bool isLong,bool shouldUnwrapNativeToken,bool isFrozen,bool autoCancel) flags,bytes32[] _dataList) order)[])",
 ]);
 const ROLE_ABI = parseAbi(["function hasRole(address account, bytes32 roleKey) view returns (bool)"]);
+const STARGATE_ABI = parseAbi(["function token() view returns (address)"]);
 export const CONTROLLER_ROLE = keccak256(enc("string", ["CONTROLLER"]));
 export const ORDER_TYPE = { MarketIncrease: 2, MarketDecrease: 4 };
 /** GMX validates the execution fee against live gas; the unused part is refunded to the account when the order executes. */
@@ -997,7 +1021,7 @@ export async function quoteSwapPool(client, { pool, amountInWei }) {
 export const MAP_PROTOCOLS = [
   { protocol: "Hydrex", chain: "Base", tokens: `HYDX, oHYDX, veHYDX; HYDROC (${HYDROC_DISCLOSURE})`, guide: "guides/hydrex.md" },
   { protocol: "Regen", chain: "Regen Ledger (regen-1) and Base", tokens: "REGEN on Regen Ledger; axlREGEN on Base", guide: "guides/regen.md" },
-  { protocol: "GMX", chain: "Arbitrum", tokens: "USDC as collateral, on Arbitrum", guide: "guides/gmx.md" },
+  { protocol: "GMX", chain: "Arbitrum (a GMX Account reaches it from Base)", tokens: "USDC as collateral, on Arbitrum; from Base, USDC or ETH into a GMX Account", guide: "guides/gmx.md" },
   { protocol: "Klima", chain: "Base", tokens: `kVCM (${KVCM_DISCLOSURE})`, guide: "guides/klima.md" },
   { protocol: "Uniswap v4", chain: "Base", tokens: `ETH, ECO (${ECO_DISCLOSURE}), NET (${NET_DISCLOSURE})`, guide: "guides/uniswap.md" },
 ];
@@ -1008,11 +1032,16 @@ export const MAP_STEPS = [
   { command: "klima prepare retire", moves: "kVCM to retired carbon on Base, for good" },
   { command: "regen prepare retire", moves: "Regen credits you hold to retired credits on Regen Ledger, for good" },
   { command: "hydrex prepare claim | vote", moves: "no tokens leave you: it claims fees and bribes, or votes your veHYDX lock" },
-  { command: "gmx prepare open | close", moves: "USDC already on Arbitrum into a position, and back out" },
+  { command: "gmx prepare open | close", moves: "USDC in your own Arbitrum wallet into a Classic position, and back out (not a GMX Account balance)" },
 ];
-/** Roads that cross chains. They are named so nothing is invented: no pool, a bridge, and not in this kit. */
+/**
+ * Roads that cross chains. They are named so nothing is invented: no pool, and not prepared by this kit. The first one is GMX's own
+ * multichain path (a GMX Account, read 2026-11-17 from GMX's docs and SDK config), not a missing road: GMX's own kit prepares it.
+ * `id` marks the one road `map` also reads live.
+ */
 export const MAP_BRIDGES = [
-  { from: "USDC on Base", to: "USDC on Arbitrum (GMX collateral)", road: "bridge, not in this kit" },
+  { id: "usdc-base-to-gmx-account", from: "USDC or ETH on Base", to: "a GMX Account on Arbitrum (GMX collateral)", road: "GMX's own multichain path (Stargate moves the tokens, LayerZero the message; GMX's docs list Base as a source chain for USDC and ETH); not prepared by this kit, GMX's own kit prepares it (github.com/gmx-io/gmx-ai); a GMX Account is traded with Express orders, which this kit does not prepare" },
+  { from: "USDC on Base", to: "USDC in your own Arbitrum wallet (what this kit's gmx acts spend)", road: "any bridge you choose, not prepared here; this is not a GMX Account" },
   { from: "axlREGEN on Base", to: "REGEN on Regen Ledger", road: "bridge (Axelar, route read from Skip), not in this kit; prepare_bridge at vealth.net/mcp prepares it" },
   { from: "HYDX on Base", to: "veHYDX, a lock", road: "guide text only; lock creation is not prepared here" },
 ];
@@ -1020,9 +1049,59 @@ export const MAP_BRIDGES = [
 export const MAP_STATIC_EDGES = [
   { from: "kVCM", to: "carbon retired for good (Klima)", prepared: "klima prepare retire" },
   { from: "Regen credits", to: "credits retired for good (Regen Ledger)", prepared: "regen prepare retire" },
-  { from: "USDC on Arbitrum", to: "a GMX position, and back", prepared: "gmx prepare open | close" },
+  { from: "USDC on Arbitrum", to: "a GMX Classic position funded from your wallet, and back", prepared: "gmx prepare open | close" },
   { from: "veHYDX lock", to: "its votes, its claimable fees and bribes", prepared: "hydrex prepare vote | claim" },
 ];
+/**
+ * The first step of the map and the router, and the NET programs at https://vealth.net/mcp: which tool answers which need. The tool names
+ * are the ones in EcoWealth's published tool list; the levels were read from `net_programs` on 2026-11-17. This is static text:
+ * `net_programs` and each program's status read are the live truth, and a test pins every name here to the published list.
+ */
+export const MAKE_YOUR_OWN = {
+  need: "make a coin of your own, the way the house made NET",
+  tools: "prepare_net_workers_coin_plan, then net_workers_coin_status",
+  state: "a dry plan only. The program is built and not switched on. It launches nothing, and the house holds, signs, buys and sells nothing for you. Today the plan is refused, because the priced read of ECO it needs is not built (ECO is EcoWealth's own token). Both tools are written into EcoWealth's tool list and were not yet served by vealth.net/mcp on 2026-11-17: read its tools/list before you call",
+};
+export const MAP_NET_DOORS = [
+  { need: "find which NET program fits what you want to do", tools: "net_programs (say what you want in plain words), then net_mechanism (one program in full)", state: "free and read-only; each program's level is read from evidence, and on 2026-11-17 every program read as built (dry-executable) and none as deployed" },
+  { need: "read the specialist tasks agents have posted, or act on one", tools: "net_open_tasks to read the open ones; prepare_net_order then submit_net_order to act with your own signature; net_order_status to follow it", state: "built and not switched on: its doors record nothing until it is switched on; reads stay open" },
+  { need: "earn by accepted work, hold for a later obligation, or act in another NET program", tools: "that program's own prepare and submit pair (for example prepare_net_earn then submit_net_earn) and its status read (for example net_earn_status); net_programs names the program", state: "built and not switched on, the same way" },
+  { need: "trade in NET's pools yourself", tools: "the sibling kit skills/net-circle, run with your own wallet (it prepares one unsigned transaction that reverts unless its floor holds)", state: "a program you run, not a NET program, and it needs no switch" },
+];
+/**
+ * Capital loops and sinks the kit knows: capital that goes out through a protocol and comes back, written as a path. A path is never a
+ * promise: every leg has fees, the map prints no price, and a loop can return less than it took. Each id in `legs` is a pool the map
+ * already reads (its state is shown); a loop with no pool leg is made of prepared acts. A SINK ends the capital by design. This is
+ * structure only: it prices nothing, and the kit builds no loop pricing tool.
+ */
+export const MAP_LOOPS = [
+  { id: "kvcm-two-venues", kind: "loop", path: "USDC to kVCM on one venue and back to USDC on the other (the two pools that hold kVCM against USDC, one on Hydrex and one on Aerodrome)", legs: ["hydrex-kvcm-usdc", "aero-kvcm-usdc"], prepared: null, note: "both venues are for your own tools" },
+  { id: "eth-axlregen-two-pools", kind: "loop", path: "ETH to axlREGEN on Uniswap v4, and axlREGEN back to WETH (then ETH) through a V2 style pool", legs: ["eth-axlregen", "v2-axlregen-weth"], prepared: "uniswap prepare swap --pool eth-axlregen (the way out only)", note: "the way back is not prepared here" },
+  { id: "gmx-position", kind: "loop", path: "USDC in your own Arbitrum wallet into a GMX Classic position, and back to USDC when you close", legs: [], prepared: "gmx prepare open, then gmx prepare close", note: "what comes back is the collateral less fees, plus or minus the position's result; a liquidation can take all of it" },
+  { id: "net-circle", kind: "loop", path: "ETH through NET's pools and back to ETH in one transaction (NET/WETH, then NET/ETH)", legs: ["net-weth", "net-eth"], prepared: "skills/net-circle", note: "the transaction reverts unless at least the input plus gas comes back" },
+  { id: "hydrex-lock", kind: "loop", path: "your veHYDX lock votes in an epoch, and the fees and bribes of the pools you voted in come back to you to claim", legs: [], prepared: "hydrex prepare vote, then hydrex prepare claim", note: "the locked HYDX does not leave: what loops is the lock's reward, and it can be zero" },
+  { id: "klima-retire", kind: "sink", path: "kVCM to carbon retired for good on Klima", legs: [], prepared: "klima prepare retire", note: "a retirement ends the capital by design: it does not come back" },
+  { id: "regen-retire", kind: "sink", path: "Regen credits to credits retired for good on Regen Ledger", legs: [], prepared: "regen prepare retire", note: "a retirement ends the capital by design: it does not come back" },
+];
+/** What a loop's pool legs read, in a few words. Pure. */
+export function loopReading(legStates) {
+  if (!legStates.length) return "no pool to read: it is made of prepared acts";
+  if (legStates.some((l) => l.state === "unread")) return "a pool leg could not be read";
+  if (legStates.some((l) => l.state === "none")) return "a pool leg has no road, so there is no loop today";
+  if (legStates.some((l) => l.state === "thin")) return "every pool leg exists, and one is thin";
+  return "every pool leg holds liquidity";
+}
+/**
+ * The standing lines for every token a text names: NET, ECO, kVCM, HYDROC. A token whose line the text already carries gets none.
+ * With a `seen` set, ECO, kVCM and HYDROC are disclosed where the text first points at them and not again; NET is disclosed on
+ * every mention, always. Pure apart from the set.
+ */
+export function standingLinesFor(text, seen) {
+  const own = { NET: NET_DISCLOSURE, ECO: ECO_DISCLOSURE, kVCM: KVCM_DISCLOSURE, HYDROC: HYDROC_DISCLOSURE };
+  const names = Object.keys(own).filter((t) => new RegExp(`\\b${t}\\b`).test(String(text)) && !String(text).includes(own[t]) && !(seen && t !== "NET" && seen.has(t)));
+  if (seen) for (const t of names) seen.add(t);
+  return names.length ? pairDisclosure(names.join("/")) : null;
+}
 /** From each token, every open or thin pool read leads somewhere. A prepared command is shown only for the direction it prepares. Pure. */
 export function holdingsFrom(roads, statics = []) {
   const out = {};
@@ -1064,13 +1143,25 @@ export async function readOtherPools(client, pools = OTHER_POOLS) {
     return { ...base, ...v2RoadState({ reserve0: r0, reserve1: r1, token0: p.token0, token1: p.token1 }), liquidityUnits: `${r0} / ${r1} (raw reserves)` };
   });
 }
+/** The one cross-chain road the map reads live: the Stargate USDC pool GMX's SDK lists on Base must still name Base USDC as its token. "named" is not a liquidity or a price reading. */
+export async function readGmxBaseRoad(client) {
+  const [r] = await multi(client, [{ address: GMX_ACCOUNT_BASE.StargateUsdcBase, abi: STARGATE_ABI, functionName: "token" }]);
+  if (r.status !== "success") return { state: "unread", reason: "a read failed" };
+  return sameAddress(r.result, BASE_USDC) ? { state: "named", reason: null } : { state: "unread", reason: "the pool's token is not Base USDC" };
+}
 export async function readMap(client) {
-  const [v4, other] = await Promise.all([readV4Pools(client), readOtherPools(client)]);
+  const [v4, other, gmxRoad] = await Promise.all([readV4Pools(client), readOtherPools(client), readGmxBaseRoad(client)]);
   const roads = [...v4, ...other];
-  return { protocols: MAP_PROTOCOLS, roads, holdings: holdingsFrom(roads, MAP_STATIC_EDGES), steps: MAP_STEPS, notInKit: MAP_BRIDGES, notChecked: "Pools behind hooks this kit does not hold the key for are not read. A pair missing here is not proof that no pool exists, only that none exists at the keys this kit knows.", disclosure: `NET: ${NET_DISCLOSURE}. ECO: ${ECO_DISCLOSURE}. kVCM: ${KVCM_DISCLOSURE}. HYDROC: ${HYDROC_DISCLOSURE}. Open means the pool holds liquidity, not that a trade of your size fits: quote first. Nothing here is a price.` };
+  const notInKit = MAP_BRIDGES.map((b) => (b.id === "usdc-base-to-gmx-account" ? { ...b, read: gmxRoad } : b));
+  const loops = MAP_LOOPS.map((l) => {
+    const legStates = l.legs.map((id) => { const r = roads.find((x) => x.id === id); return { id, pair: r?.pair ?? id, venue: r?.venue ?? "?", state: r?.state ?? "unread" }; });
+    return { ...l, legStates, reading: loopReading(legStates) };
+  });
+  return { protocols: MAP_PROTOCOLS, makeYourOwn: MAKE_YOUR_OWN, roads, holdings: holdingsFrom(roads, MAP_STATIC_EDGES), loops, steps: MAP_STEPS, netDoors: MAP_NET_DOORS, notInKit, notChecked: "Pools behind hooks this kit does not hold the key for are not read. A pair missing here is not proof that no pool exists, only that none exists at the keys this kit knows.", disclosure: `NET: ${NET_DISCLOSURE}. ECO: ${ECO_DISCLOSURE}. kVCM: ${KVCM_DISCLOSURE}. HYDROC: ${HYDROC_DISCLOSURE}. Open means the pool holds liquidity, not that a trade of your size fits: quote first. Nothing here is a price.` };
 }
 export function renderMap(m) {
-  const lines = ["PROTOCOLS (token, chain)"];
+  const stand = (line) => { const s = standingLinesFor(line); return s ? `${line} (${s})` : line; };
+  const lines = ["FIRST STEP: MAKE YOUR OWN", stand(`  ${m.makeYourOwn.need}: ${m.makeYourOwn.tools}`), stand(`    ${m.makeYourOwn.state}`), "", "PROTOCOLS (token, chain)"];
   for (const p of m.protocols) lines.push(`  ${p.protocol.padEnd(11)} ${p.chain.padEnd(32)} ${p.tokens}  [${p.guide}]`);
   lines.push("", "ROADS: pools that exist today, read live (open = holds liquidity, thin = near empty, none = no road, unread = a read failed)");
   for (const r of m.roads) lines.push(`  ${r.state.padEnd(7)} ${r.pair.padEnd(15)} ${r.venue.padEnd(21)} ${r.disclosure ? `(${r.disclosure}) ` : ""}${r.state === "open" || r.state === "thin" ? `liquidity ${r.liquidityUnits}` : r.reason || ""}${r.prepared ? `  -> ${r.prepared}` : ""}`.trimEnd());
@@ -1080,21 +1171,163 @@ export function renderMap(m) {
     const standing = pairDisclosure([from, ...edges.map((e) => e.to)].join("/"));
     lines.push(`  ${from.padEnd(8)} -> ${text}${standing ? ` (${standing})` : ""}`);
   }
+  lines.push("", "CAPITAL LOOPS AND SINKS (capital that goes out through a protocol and comes back, as a path with its costs: every leg has fees, the map prints no price, and a loop can return less than it took; a SINK ends the capital by design)");
+  for (const l of m.loops) {
+    const legs = l.legStates.length ? ` [${l.legStates.map((s) => `${s.pair} on ${s.venue}: ${s.state}`).join("; ")}]` : "";
+    lines.push(stand(`  ${l.kind === "sink" ? "SINK" : "LOOP"} ${l.path}${legs}`), stand(`    ${l.reading}${l.prepared ? `; prepared by: ${l.prepared}` : "; this kit prepares no step on it"}; ${l.note}`));
+  }
   lines.push("", "STEPS THIS KIT PREPARES");
   for (const s of m.steps) lines.push(`  ${s.command.padEnd(52)} ${s.moves}`);
-  lines.push("", "NOT IN THIS KIT (no pool; a bridge or guide text)");
-  for (const b of m.notInKit) lines.push(`  ${b.from} -> ${b.to}: ${b.road}`);
+  lines.push("", stand("THE NET PROGRAMS AT vealth.net/mcp: WHICH TOOL ANSWERS WHICH NEED (built, and none switched on as read on 2026-11-17; net_programs reads each program's level live)"));
+  for (const d of m.netDoors) lines.push(stand(`  ${d.need}: ${d.tools}`), stand(`    ${d.state}`));
+  lines.push("", "ROADS THAT CROSS CHAINS (not pools; this kit prepares none of them)");
+  for (const b of m.notInKit) lines.push(`  ${b.from} -> ${b.to}: ${b.road}${b.read ? ` [read live: ${b.read.state === "named" ? "the Stargate USDC pool GMX names on Base reads, and its token is Base USDC" : `unread, ${b.read.reason}`}]` : ""}`);
   lines.push("", m.notChecked, m.disclosure);
   return lines.join("\n");
 }
 
 // =====================================================================================================================
+// RECIPES: short complete recipes an agent can run on a timer from the acts above. Instructions and reads only: this program adds no
+// signing, no key handling and no scheduler. The agent runs each command itself, branches on its exit code, and sends each printed
+// transaction (or signs each printed message) with its OWN signer. No recipe trades for EcoWealth. guides/bots.md carries the same
+// commands in prose, and a test checks that every command here is in that page and parses as a real act (no network).
+// =====================================================================================================================
+/** The branches every step shares. A step lists only the exit codes it adds or changes. */
+export const RECIPE_STANDARD_EXITS = {
+  1: "a read failed and nothing was decided: wait, run the same command again, and stop the recipe after three failures in a row",
+  2: "bad arguments, or an act this program does not know: stop the recipe and fix the command; never run it again unchanged",
+  3: "your node is on the wrong chain: stop and fix the RPC setting",
+};
+export const RECIPES = [
+  {
+    id: "gmx-trader",
+    title: "A GMX trader starter: one small Classic position, read first, closed by your own rule",
+    shape: { kind: "loop", path: "USDC in your own Arbitrum wallet goes into a GMX Classic position and comes back to USDC when you close, less fees. It is a path with its costs, not a return: it can come back as less, and a liquidation can take all of it." },
+    signer: "Your own signer on Arbitrum. This program never sees a key: you send each printed tx with your own wallet. Fund an Arbitrum wallet with ETH (gas and the execution fee) and native USDC yourself. These acts spend USDC in your own Arbitrum wallet, not a GMX Account balance (guides/gmx.md says how funds get there from Base).",
+    steps: [
+      { run: "node protocol-guide.mjs verify gmx", on: { 0: "every address checks out: go on", 4: "a check failed, so GMX may have moved an address: stop and do not trade" } },
+      { run: "node protocol-guide.mjs gmx markets", on: { 0: "choose one market from the list by your own rule; this recipe names none" } },
+      { run: "node protocol-guide.mjs gmx prices --market ETH", on: { 0: "the oracle's min and max price now; the kit gives no view of where it goes" } },
+      { run: "node protocol-guide.mjs gmx positions --address 0xYOU --json", on: { 0: "if the list already holds a position on that market and side, skip to the close step; never open a second one" } },
+      { run: "node protocol-guide.mjs gmx prepare open --from 0xYOU --market ETH --side long --collateral 5 --leverage 2 --json", on: { 0: "branch on prepared.step: approve means send that exact-amount approval with your own wallet, wait for it to land, then run this same command once more; order means send the order and go on", 10: "nothing sendable: read prepared.reason (a balance too low, a price out of reach), do nothing this cycle and look again next cycle" } },
+      { run: "node protocol-guide.mjs gmx orders --address 0xYOU", on: { 0: "an order stays in this list until a keeper fills it a moment later: wait until the list is empty before the next step; if it is still there after several minutes, stop and look at it on Arbiscan" } },
+      { run: "node protocol-guide.mjs gmx positions --address 0xYOU", on: { 0: "the position is open: hold it until your own rule says close" } },
+      { run: "node protocol-guide.mjs gmx prepare close --from 0xYOU --market ETH --side long --json", on: { 0: "send it: it closes the whole position, and what comes back lands when a keeper fills it", 10: "no open position on that market and side, or not sendable: read prepared.reason" } },
+    ],
+    caps: "Collateral at most 5 USDC and leverage 1 to 10, enforced by the program. Slippage 100 basis points by default, at most 500. One position per market and side. The example values are not advice. The program has no loss budget: set your own in your agent.",
+    cost: "Up to the collateral you name (a liquidation can take all of it), GMX's position fee when you open and close, borrowing and funding fees while the position is open, the execution fee you send (the unused part is refunded), and gas on Arbitrum.",
+    stop: "Stop when any step exits 2 or 4, when your own loss budget is spent, or when an order has not filled after several minutes. To get out, run the close step first. Never open a second position while one is open or an order is pending.",
+  },
+  {
+    id: "net-circle-runner",
+    title: "A NET circle runner: quote both directions, send only when the floor passes",
+    shape: { kind: "loop", path: "ETH goes through NET's pools and comes back to ETH in one transaction, which reverts unless at least the input plus gas comes back. It is a path with its costs, not a return: the pools are tiny and other bots race you." },
+    signer: "Your own signer on Base. The sibling kit net-circle prepares one unsigned transaction; you send it with your own wallet before its deadline. Run npm ci once in skills/net-circle.",
+    steps: [
+      { run: "node ../net-circle/net-circle.mjs pools", on: { 0: "every NET pool's liquidity and its burned founding positions" } },
+      { run: "node ../net-circle/net-circle.mjs", on: { 0: "every loop quoted in both directions (buy-net and sell-net): a loop says PAYS x at y in only when a size pays after gas, and otherwise says no size pays after gas" } },
+      { run: "node ../net-circle/net-circle.mjs prepare --from 0xYOU --size 0.0001 --json", on: { 0: "sendable is true: send prepared.tx exactly as printed, with its fee fields, before prepared.deadline", 10: "nothing is worth sending now: wait for your next cycle" } },
+    ],
+    caps: "Size at most 1 ETH, enforced by net-circle; the example uses 0.0001 ETH. --min-profit-wei raises the floor above input plus gas (raise it if your wallet's bundler charges a fee). Do not run it faster than once every 10 seconds.",
+    cost: "Gas on every try, including a revert: a lost race or a price that moved reverts the whole transaction and costs its gas. The pools are tiny, so what comes back is cents at most, and other bots watch the same pools. The zora loops send part of the coin pool's fee back to EcoWealth as ECO's creator.",
+    stop: "Stop after three reverts in a row, when the gas you have spent passes your own budget, or on exit 2 or 3. The program makes no promise that any size pays.",
+  },
+  {
+    id: "regen-retire",
+    title: "A Regen retire step: retire credits you already hold",
+    shape: { kind: "sink", path: "A retirement ends the capital by design: the credits you retire do not come back. This is a sink, not a loop." },
+    signer: "Your own wallet on Regen Ledger. The program prints the exact message; you sign it with your own Regen tooling and pay gas in REGEN. The credits must already be in your account: this kit does not buy credits.",
+    steps: [
+      { run: "node protocol-guide.mjs regen balances --regen regen1YOU --json", on: { 0: "find a batch whose tradable amount is above zero" } },
+      { run: "node protocol-guide.mjs regen prepare retire --owner regen1YOU --batch C01-001-20150101-20151231-001 --amount 1 --jurisdiction US-CA --reason \"retired by my agent\" --json", on: { 0: "sendable: sign prepared.message with your own Regen Ledger tooling and broadcast it", 10: "not sendable, usually because the tradable balance is below the amount: do nothing" } },
+      { run: "node protocol-guide.mjs regen balances --regen regen1YOU --json", on: { 0: "the batch's retired amount went up by what you retired: that is your proof. If it did not, wait and read again before you retry; never retire twice for one purpose" } },
+    ],
+    note: "Buying axlREGEN on Base (regen prepare buy-regen) gives you a token on Base, not credits. Turning it into credits takes a bridge (prepare_bridge at vealth.net/mcp) and a marketplace buy on Regen Ledger, both outside this kit.",
+    caps: "The program checks every field's format and your tradable balance. The amount is yours to set: put a per-run amount in your agent. The reason is cleaned and cut to 200 characters.",
+    cost: "The credits you name are retired for good, by design. Gas in REGEN. The reason and your address are public and permanent.",
+    stop: "One retirement per cycle, and only after the balances read confirms the last one. Stop when the batch's tradable amount reaches zero, or on exit 2.",
+  },
+  {
+    id: "klima-retire",
+    title: "A Klima retire step: quote, approve the exact amount, retire, revoke",
+    shape: { kind: "sink", path: "A retirement ends the capital by design: the kVCM it spends does not come back. This is a sink, not a loop. The loop of USDC to kVCM on one venue and back on another is on the map, and this kit prepares no swap on either venue." },
+    signer: "Your own signer on Base, with kVCM and ETH in your wallet.",
+    steps: [
+      { run: "node protocol-guide.mjs klima classes", on: { 0: "choose a class by your own rule; Klima changes the list, and some classes do not retire through this kit (guides/klima.md)" } },
+      { run: "node protocol-guide.mjs klima credits --class 0xCLASS", on: { 0: "choose a registered credit and its token id" } },
+      { run: "node protocol-guide.mjs klima quote --class 0xCLASS --credit 0xCREDIT --tonnes 0.01 --json", on: { 0: "Klima's own quote in kVCM for this moment; it moves", 10: "no quote for that class or credit: choose another, or stop" } },
+      { run: "node protocol-guide.mjs klima balances --address 0xYOU", on: { 0: "you must hold at least the printed maximum (the quote plus slippage)" } },
+      { run: "node protocol-guide.mjs klima prepare retire --from 0xYOU --class 0xCLASS --credit 0xCREDIT --tonnes 0.01 --beneficiary-name \"my agent\" --json", on: { 0: "branch on prepared.step: approve means send that exact-amount kVCM approval with your own wallet, wait for it to land, then run this same command once more; retire means send the retirement", 10: "nothing sendable: read prepared.reason" } },
+      { run: "node protocol-guide.mjs klima prepare revoke --from 0xYOU --json", on: { 0: "send it: it sets your kVCM approval to Klima's asset manager back to zero", 10: "nothing to revoke" } },
+    ],
+    caps: "0.001 to 0.1 tonnes per retirement and at most 100 kVCM spent per retirement, enforced by the program. In your agent: one retirement per cycle, only after the last one's receipt is confirmed, and a total kVCM budget you set.",
+    cost: "The kVCM the retirement spends (Klima's quote at the moment it lands) is gone, and the carbon is retired for good. Gas on Base. The unspent part of the approval stays on Klima's asset manager, which Klima's admin Safe can upgrade, until you revoke it. Your beneficiary name is public and permanent.",
+    stop: "Stop when your kVCM budget is spent, when a quote is far above the last one, or on exit 2. Always run the revoke step after a retirement.",
+  },
+  {
+    id: "hydrex-lock-keeper",
+    title: "A Hydrex lock keeper for your OWN lock: claim, then vote, once per epoch",
+    shape: { kind: "loop", path: "Your lock votes, and the fees and bribes of the pools you voted in come back to you to claim. The locked HYDX stays locked, so what loops is the lock's reward, and it can be zero. It is a path with its costs, not a return." },
+    signer: "Your own signer on Base, for a veHYDX lock you already hold. This kit creates no lock (guide text only) and delegates nothing. EcoWealth holds a veHYDX position.",
+    steps: [
+      { run: "node protocol-guide.mjs hydrex epoch --json", on: { 0: "secondsToFlip says when the epoch flips (Thursday 00:00 UTC): run the rest once per epoch, after the flip" } },
+      { run: "node protocol-guide.mjs hydrex locks --address 0xYOU --json", on: { 0: "no lock in the list means stop; otherwise read your votes, which do not carry over to the new epoch" } },
+      { run: "node protocol-guide.mjs hydrex claimable --address 0xYOU", on: { 0: "what you could claim in the pools you vote in now" } },
+      { run: "node protocol-guide.mjs hydrex prepare claim --from 0xYOU --json", on: { 0: "one step per reward contract: send each tx exactly as printed", 10: "nothing earned yet, or a claim that reverts: read prepared.reason and the problem lines" } },
+      { run: "node protocol-guide.mjs hydrex pools --limit 15", on: { 0: "the pools and their gauges; the kit names none to vote for and gives no view, so pick by your own rule, and judge a pool by last epoch's weight, never the live figure (guides/hydrex.md)" } },
+      { run: "node protocol-guide.mjs hydrex prepare vote --from 0xYOU --vote 0xPOOL:10000 --json", on: { 0: "send the vote: it replaces your previous vote, and the basis points must sum to exactly 10000", 10: "no lock, no live gauge for a pool, or the vote reverts: read prepared.reason" } },
+    ],
+    caps: "At most 10 pools in one vote. A claim covers only the pools you vote in now: pass an older pool to your own tool.",
+    cost: "Gas only. A new vote replaces the last one, so a careless vote can drop votes you meant to keep.",
+    stop: "Run once per epoch. Stop when no lock is found, or on exit 2.",
+  },
+  {
+    id: "where-next",
+    title: "A where-next loop: read the map's capital loops and sinks, then pick your next recipe",
+    shape: { kind: "reads", path: "It reads the capital loops and sinks the kit knows, with the state of each pool leg, and moves nothing." },
+    signer: "None: this recipe only reads. It moves nothing. Each next step is another recipe or act, with your own signer.",
+    steps: [
+      { run: "node protocol-guide.mjs map --json", on: { 0: "loops lists the capital loops and sinks the kit knows, each with the state of its pool legs; holdings lists, for each token, the roads that are open or thin and the command that prepares the step, if this kit has one; prepared is null when it does not, and then the step is guide text or your own tool" } },
+      { run: "node protocol-guide.mjs list", on: { 0: "what each prepared act needs and can cost you: read it before you pick one" } },
+      { run: "node protocol-guide.mjs verify", on: { 0: "all five protocols check out", 4: "a check failed: do not act on a road through that protocol" } },
+    ],
+    caps: "None needed: these are free reads.",
+    cost: "Nothing. These are free reads and they move no funds.",
+    stop: "Once per cycle. Never act on the map alone: open means a pool holds liquidity, not that your size fits, and the map prints no price, so quote with the act's own read first. NET roads carry the line that the buying in NET's pools is the house's own.",
+  },
+];
+export const RECIPES_INTRO = "Recipes for a bot on a timer. Instructions and reads only: this program adds no signing, no key handling and no scheduler. You run each command, branch on its exit code and send each printed transaction (or sign each printed message) with your own signer. No recipe trades for EcoWealth, and none is advice or an offer. Where a recipe is a capital loop (capital that goes out through a protocol and comes back) it says so and describes a path with its costs, never a profit, and no recipe promises a return. Where it is a sink, because a retirement ends the capital by design, it says that. Run `recipes <id>` for one, `recipes all` for every one, add --json for a machine reading.";
+export function pickRecipes(id) {
+  if (id === undefined) return RECIPES;
+  if (id === "all") return RECIPES;
+  const r = RECIPES.find((x) => x.id === id);
+  if (!r) throw new ArgError(`no recipe named ${clean(id, 40)}; the recipes are: ${RECIPES.map((x) => x.id).join(", ")}`);
+  return [r];
+}
+export function renderRecipes(list, { index = false } = {}) {
+  let seen = new Set();
+  const stand = (line) => { const s = standingLinesFor(line, seen); return s ? `${line} (${s})` : line; };
+  if (index) return [RECIPES_INTRO, "", ...RECIPES.map((r) => { seen = new Set(); return stand(`  ${r.id.padEnd(20)} [${r.shape.kind}] ${r.title}`); })].join("\n");
+  const out = [];
+  for (const r of list) {
+    seen = new Set();
+    out.push(stand(`RECIPE ${r.id}: ${r.title}`), stand(`  ${r.shape.kind.toUpperCase()}: ${r.shape.path}`), stand(`  who signs: ${r.signer}`));
+    out.push(`  every step: exit 1 = ${RECIPE_STANDARD_EXITS[1]}; exit 2 = ${RECIPE_STANDARD_EXITS[2]}; exit 3 = ${RECIPE_STANDARD_EXITS[3]}`);
+    r.steps.forEach((s, i) => { out.push(stand(`  ${i + 1}. ${s.run}`)); for (const [code, text] of Object.entries(s.on)) out.push(stand(`       exit ${code}: ${text}`)); });
+    if (r.note) out.push(stand(`  note: ${r.note}`));
+    out.push(stand(`  caps: ${r.caps}`), stand(`  can cost you: ${r.cost}`), stand(`  stop when: ${r.stop}`), "");
+  }
+  return out.join("\n").trimEnd();
+}
+
+// =====================================================================================================================
 // verify: one live read per address the guides name; the output is the evidence behind the guides' CHECKED lines
 // =====================================================================================================================
-export async function verifyProtocol(protocol, { client, lcd, fetcher } = {}) {
+export async function verifyProtocol(protocol, { client, baseClient, lcd, fetcher } = {}) {
   const rows = [];
   const add = (name, ok, detail = "") => rows.push({ name, ok, detail: clean(detail, 120) });
-  const codeOf = async (name, address) => { const c = (await client.getCode({ address })) || "0x"; add(`${name} has code`, c !== "0x", `${address}, ${(c.length - 2) / 2} bytes`); };
+  const codeOn = async (c, name, address) => { const code = (await c.getCode({ address })) || "0x"; add(`${name} has code`, code !== "0x", `${address}, ${(code.length - 2) / 2} bytes`); };
+  const codeOf = (name, address) => codeOn(client, name, address);
   if (protocol === "hydrex") {
     for (const [name, a] of Object.entries(HYDREX)) await codeOf(name, a);
     const [period, pay] = await multi(client, [{ address: HYDREX.Minter, abi: MINTER_ABI, functionName: "active_period" }, { address: HYDREX.oHYDX, abi: parseAbi(["function paymentToken() view returns (address)"]), functionName: "paymentToken" }]);
@@ -1117,6 +1350,18 @@ export async function verifyProtocol(protocol, { client, lcd, fetcher } = {}) {
     add("Reader.getAccountPositions decodes", !probe, probe ? String(probe.shortMessage || probe.message) : "");
     const markets = await getJson(`${GMX_API}/markets`, { fetcher }).then((m) => m.markets, () => null);
     add("GMX's REST /markets answers", Array.isArray(markets), Array.isArray(markets) ? `${markets.length} markets` : "");
+    // GMX's own multichain path (a GMX Account): the Arbitrum contracts, the Stargate pools on both chains, and the tokens they name
+    const tokenOf = (c, address) => c.readContract({ address, abi: STARGATE_ABI, functionName: "token" }).then((t) => String(t), () => null);
+    for (const [name, a] of Object.entries(GMX_ACCOUNT)) await codeOf(`${name} (GMX Account, Arbitrum)`, a);
+    const arbUsdc = await tokenOf(client, GMX_ACCOUNT.StargateUsdcArbitrum), arbEth = await tokenOf(client, GMX_ACCOUNT.StargateEthArbitrum);
+    add("the Stargate USDC pool on Arbitrum names the USDC this program uses", Boolean(arbUsdc) && sameAddress(arbUsdc, GMX.USDC), String(arbUsdc));
+    add("the Stargate ETH pool on Arbitrum is the native ETH pool (token is the zero address)", Boolean(arbEth) && sameAddress(arbEth, ZERO), String(arbEth));
+    if (baseClient) {
+      for (const [name, a] of Object.entries(GMX_ACCOUNT_BASE)) await codeOn(baseClient, `${name} (GMX Account, Base)`, a);
+      const baseUsdc = await tokenOf(baseClient, GMX_ACCOUNT_BASE.StargateUsdcBase), baseEth = await tokenOf(baseClient, GMX_ACCOUNT_BASE.StargateEthBase);
+      add("the Stargate USDC pool on Base names Base USDC", Boolean(baseUsdc) && sameAddress(baseUsdc, BASE_USDC), String(baseUsdc));
+      add("the Stargate ETH pool on Base is the native ETH pool (token is the zero address)", Boolean(baseEth) && sameAddress(baseEth, ZERO), String(baseEth));
+    }
   } else if (protocol === "klima") {
     for (const [name, a] of Object.entries(KLIMA)) await codeOf(name, a);
     for (const [name, a] of Object.entries(KLIMA_PUBLISHED)) await codeOf(`${name} (Klima's published config)`, a);
@@ -1200,7 +1445,8 @@ Holds no key, signs nothing, sends nothing. Never an offer or advice, no return 
 
   list                                    every act, what it needs, what it can cost you
   map                                     the five protocols, their tokens, and the roads between them, read live
-  verify [hydrex|regen|gmx|klima|uniswap] live check of every address the guides name
+  recipes [id|all]                        short complete recipes a bot can run on a timer from these acts (a read, offline)
+  verify [hydrex|regen|gmx|klima|uniswap] live check of every address the guides name (gmx reads Base and Arbitrum)
   hydrex epoch | pools [--limit N] [--include-equity] | proposals [--limit N] | locks --address 0x | claimable --address 0x
   hydrex prepare claim --from 0x [--kind fees|bribes|both] [--include-equity]
   hydrex prepare vote --from 0x --vote 0xPOOL:BPS [--vote 0xPOOL:BPS ...]     (BPS sum to 10000)
@@ -1271,11 +1517,18 @@ export async function main(argv, io = { fetcher: globalThis.fetch }) {
   const [protocol, verb, act] = words;
   if (!protocol || protocol === "help" || argv.includes("--help") || argv.includes("-h")) { console.log(HELP); return 0; }
   try {
-    if (protocol === "list") { show(flags, ACTS, () => ACTS.map((a) => `${a.protocol.padEnd(7)} ${a.act.padEnd(18)} ${a.kind.padEnd(8)} needs: ${a.needs}\n${" ".repeat(7)} can cost you: ${a.loss}`).join("\n") + "\n\nNot prepared here (guide text only):\n" + Object.entries(NOT_PREPARED).map(([k, v]) => `  ${k}: ${v}`).join("\n")); return 0; }
+    if (protocol === "list") { show(flags, ACTS, () => ACTS.map((a) => `${a.protocol.padEnd(7)} ${a.act.padEnd(18)} ${a.kind.padEnd(8)} needs: ${a.needs}\n${" ".repeat(7)} can cost you: ${a.loss}`).join("\n") + "\n\nNot prepared here (guide text only):\n" + Object.entries(NOT_PREPARED).map(([k, v]) => `  ${k}: ${v}`).join("\n") + "\n\nRecipes for a bot on a timer, built from these acts: node protocol-guide.mjs recipes"); return 0; }
     if (protocol === "map") {
       const client = makeClient("base", flags.rpc); await assertChain(client, "base");
       const m = await readMap(client);
       show(flags, m, () => renderMap(m));
+      return 0;
+    }
+    if (protocol === "recipes") {
+      if (act !== undefined) throw new ArgError("recipes takes one word: an id, or all");
+      const list = pickRecipes(verb);
+      if (flags.json) console.log(bigJson({ intro: RECIPES_INTRO, standardExits: RECIPE_STANDARD_EXITS, recipes: list.map((r) => ({ ...r, disclosure: standingLinesFor(JSON.stringify(r)) })) }));
+      else console.log(renderRecipes(list, { index: verb === undefined }));
       return 0;
     }
     if (protocol === "verify") {
@@ -1287,7 +1540,10 @@ export async function main(argv, io = { fetcher: globalThis.fetch }) {
         const chainKey = w === "gmx" ? "arbitrum" : "base";
         const client = makeClient(chainKey, flags.rpc);
         await assertChain(client, chainKey);
-        const rows = await verifyProtocol(w, { client, lcd: flags.lcd || process.env.REGEN_LCD_URL || DEFAULT_LCD, fetcher: io.fetcher });
+        // GMX is read on two chains: --rpc picks the Arbitrum node (as before), and the Base side reads BASE_RPC_URL or the default node
+        let baseClient;
+        if (w === "gmx") { baseClient = makeClient("base"); await assertChain(baseClient, "base"); }
+        const rows = await verifyProtocol(w, { client, baseClient, lcd: flags.lcd || process.env.REGEN_LCD_URL || DEFAULT_LCD, fetcher: io.fetcher });
         bad += rows.filter((r) => !r.ok).length;
         show(flags, { protocol: w, rows }, () => `${w}\n` + rows.map((r) => `  ${r.ok ? "ok  " : "FAIL"} ${r.name}${r.detail ? `: ${r.detail}` : ""}`).join("\n"));
       }
