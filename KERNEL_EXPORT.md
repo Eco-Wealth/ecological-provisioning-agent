@@ -1,6 +1,6 @@
 # Kernel export
 
-Files below are copied verbatim from the private Vealth repository by `scripts/publish/kernel-export.sh` at that repo's commit `a7d4a53b918caf95915699d9d921fac976deef41` on 2026-11-17T15:32:46Z.
+Files below are copied verbatim from the private Vealth repository by `scripts/publish/kernel-export.sh` at that repo's commit `932f1621131b2963e065e4082a86d029c2fb1fcc` on 2026-11-17T16:41:54Z.
 Most of them are also served live at https://vealth.net (the standard at /labor/standard, the tool list at /mcp, the client at /vealth-agent.mjs), and the live site stays the authority for those. The constitution, the worker sidecar and the packet-review skill are not served there; they are published here. This copy gives every file a home with history.
 
 | Path | sha256 |
@@ -76,15 +76,16 @@ Most of them are also served live at https://vealth.net (the standard at /labor/
 | `research/offline-v0/signed-exchange.mjs` | `b0266e77b55d65c53e152c9a0e9956072facf9b4765539ccf8ee4f0b35d2d5a4` |
 | `research/offline-v0/signed_exchange_check.py` | `d290084be44926c59c6947114c589f8d1d82a9eee90ccfd43dfb8f947cc3e6c7` |
 | `tests/offline-signed-exchange.test.mjs` | `4c76d602adc5b65d42d977523fb78648d1e1bcb60b7d5343fb4bddbecdf6cf5e` |
-| `skills/protocol-guide/SKILL.md` | `4ea5df04639046a157ec2d08bfecd2862034029748e78db0c6dc9cbd6cb802bd` |
-| `skills/protocol-guide/protocol-guide.mjs` | `f9a3b88d9543016ff20ba4bad2bba7d068ac5479491eb3b5cb213529dd716ebd` |
-| `skills/protocol-guide/protocol-guide.test.mjs` | `77c9862909c8c5181e0e006b08d3fb2a9ff14607a4725c2406da3e5aad5d5457` |
+| `skills/protocol-guide/SKILL.md` | `3e236296d1cb7ef3db8f84242250dbb4c721d7690b9fd6d57bc98dd63b93963e` |
+| `skills/protocol-guide/protocol-guide.mjs` | `cef334e3b6b750672e8f3a22a05b86eb6fa37608129d7da2656db64ca622e5af` |
+| `skills/protocol-guide/protocol-guide.test.mjs` | `7960ada29f77d8dec4f58b56a4151d106c40db61a97ea204737e821fc0b44684` |
 | `skills/protocol-guide/package.json` | `c60144f5506dba463acda23b9f85a032e94d598e2574bb0af9fc51c9381bb305` |
 | `skills/protocol-guide/package-lock.json` | `fc186919b6abdaa537ac236fdbf09c6fbfdda92d23f1df61dfb23f582b02eae5` |
 | `skills/protocol-guide/guides/hydrex.md` | `8371b30e9dc954188e9a205c4a60aa1f97ffdc4c158559ed5eb646de340ab081` |
 | `skills/protocol-guide/guides/regen.md` | `b3db18ff3817c3ffc18b08393973e29ea844e387f59c9c1bf4e39dd3026119c1` |
-| `skills/protocol-guide/guides/gmx.md` | `bb112c6c9372214fffd265225d5b04c9a51982ebbb7c127c764cccac04159b0a` |
+| `skills/protocol-guide/guides/gmx.md` | `d4e5f6267c53aa996a0a5d0d61febff638a6bdb59667d880c874e8a6b31b7b71` |
 | `skills/protocol-guide/guides/klima.md` | `591e106f3afa411bbad0e6bba7f4e977ab946b912a3dc20567b56c88d3bb1d82` |
 | `skills/protocol-guide/guides/uniswap.md` | `690282b6905a40a5e4d269e1fc4ad02a192f8dd594cbe03deeb15fb1e8ad585c` |
+| `skills/protocol-guide/guides/bots.md` | `eaf1cb5850fe1ce328e816367ff47ba1efb9bf90e2e875471e1892ca7117aeff` |
 
 Verify a file: fetch it from vealth.net and compare the hash, or diff it against this repo. Nothing here is a promise of funding, certification or completed work; see docs/truth-boundaries.md.

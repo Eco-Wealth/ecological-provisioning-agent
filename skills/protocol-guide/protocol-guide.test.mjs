@@ -75,12 +75,28 @@ describe("registry and refusals", () => {
   });
 
   it("an act it does not prepare, or does not know, exits 2 before any network call", () => {
-    for (const args of [["hydrex", "swap"], ["hydrex", "prepare", "swap"], ["regen", "bridge"], ["regen", "prepare", "buy-credits"], ["gmx", "deposit"], ["gmx", "prepare", "claim"], ["bogus"], ["hydrex", "bogus"], ["gmx", "prepare", "bogus", "--from", FROM],
+    for (const args of [["hydrex", "swap"], ["hydrex", "prepare", "swap"], ["regen", "bridge"], ["regen", "prepare", "buy-credits"], ["gmx", "deposit"], ["gmx", "fund-account"], ["gmx", "prepare", "fund-account", "--from", FROM], ["gmx", "express"], ["gmx", "prepare", "claim"], ["bogus"], ["hydrex", "bogus"], ["gmx", "prepare", "bogus", "--from", FROM],
       ["klima", "stake"], ["klima", "prepare", "stake"], ["klima", "lock"], ["klima", "swap-in"], ["hydrex", "conduit"], ["uniswap", "liquidity"], ["uniswap", "bogus"], ["klima", "bogus"], ["verify", "bogus"]]) {
       const r = run(args);
       assert.equal(r.code, 2, args.join(" "));
     }
     assert.match(run(["regen", "bridge"]).err, /not prepared here/);
+  });
+
+  it("funding a GMX Account from Base is not prepared, and the refusal says why and points at GMX's own kit; no prepared act exists for the Base origin", () => {
+    for (const args of [["gmx", "fund-account"], ["gmx", "prepare", "fund-account", "--from", FROM]]) {
+      const r = run(args);
+      assert.equal(r.code, 2, args.join(" "));
+      assert.match(r.err, /Stargate/);
+      assert.match(r.err, /LayerZero/);
+      assert.match(r.err, /only the Base half/);
+      assert.match(r.err, /github\.com\/gmx-io\/gmx-ai/);
+      assert.match(r.err, /not a GMX Account balance/);
+    }
+    assert.match(run(["gmx", "express"]).err, /Express orders are typed data/);
+    assert.ok(!pg.ACTS.some((a) => /fund|deposit|express/i.test(a.act)), "no act funds a GMX Account or sends an Express order");
+    assert.ok(Object.keys(pg.NOT_PREPARED).includes("gmx fund-account"));
+    assert.match(run(["list"]).out, /gmx fund-account: not prepared here/);
   });
 
   it("bad arguments exit 2 before any network call", () => {
@@ -827,7 +843,8 @@ describe("uniswap", () => {
 describe("the map", () => {
   const poolOf = (id) => pg.OTHER_POOLS.find((p) => p.id === id);
   const idOf = (id) => pg.poolIdOf(pg.V4_POOLS.find((p) => p.id === id).key);
-  const mapWorld = ({ liquidityOf = () => 10n ** 15n, slot0Fails = () => false, algebraLiquidity = 5n, reserves = [10n ** 22n, 5_000_000_000n, 0n], wrongTokens = false } = {}) => stub({ calls: {
+  const mapWorld = ({ liquidityOf = () => 10n ** 15n, slot0Fails = () => false, algebraLiquidity = 5n, reserves = [10n ** 22n, 5_000_000_000n, 0n], wrongTokens = false, stargateToken = pg.BASE_USDC } = {}) => stub({ calls: {
+    token: () => { if (stargateToken === null) throw new Error("rate limited"); return stargateToken; },
     getSlot0: (c) => { if (slot0Fails(c.args[0])) throw new Error("rate limited"); return [2n ** 96n, 0, 0, 10000]; },
     getLiquidity: (c) => liquidityOf(c.args[0]),
     token0: (c) => (wrongTokens ? pg.ZERO : poolOf(pg.OTHER_POOLS.find((p) => lower(p.address) === lower(c.address)).id).token0),
@@ -885,7 +902,8 @@ describe("the map", () => {
     const m = await pg.readMap(mapWorld());
     const text = pg.renderMap(m);
     for (const word of ["Hydrex", "Regen", "GMX", "Klima", "Uniswap v4", "HYDX", "HYDROC", "kVCM", "axlREGEN", "Arbitrum"]) assert.ok(text.includes(word), word);
-    assert.match(text, /USDC on Base -> USDC on Arbitrum \(GMX collateral\): bridge, not in this kit/);
+    assert.match(text, /USDC or ETH on Base -> a GMX Account on Arbitrum \(GMX collateral\): GMX's own multichain path/);
+    assert.ok(!/USDC on Base -> USDC on Arbitrum \(GMX collateral\): bridge, not in this kit/.test(text), "GMX is not shown as a missing road from Base");
     assert.match(text, /axlREGEN on Base -> REGEN on Regen Ledger: bridge/);
     assert.match(text, /not proof that no pool exists/);
     assert.match(text, /Nothing here is a price/);
@@ -917,6 +935,73 @@ describe("the map", () => {
     assert.ok(!/\bindex\b/i.test(text) && !text.includes(EM_DASH));
   });
 
+  it("the map opens with 'make your own', and shows the road from Base to GMX as GMX's own multichain path, read live, never as no road", async () => {
+    const m = await pg.readMap(mapWorld());
+    const text = pg.renderMap(m);
+    assert.ok(text.startsWith("FIRST STEP: MAKE YOUR OWN"), "the first step is make your own");
+    assert.match(text, /prepare_net_workers_coin_plan, then net_workers_coin_status/);
+    for (const phrase of [/a dry plan only/, /built and not switched on/, /launches nothing/, /the priced read of ECO it needs is not built/, /not yet served by vealth\.net\/mcp on 2026-11-17/]) assert.match(text, phrase);
+    const road = m.notInKit.find((b) => b.id === "usdc-base-to-gmx-account");
+    assert.equal(road.read.state, "named");
+    assert.match(text, /\[read live: the Stargate USDC pool GMX names on Base reads, and its token is Base USDC\]/);
+    // a failed read, or a pool whose token is not Base USDC, is never read as named
+    const failed = await pg.readMap(mapWorld({ stargateToken: null }));
+    assert.equal(failed.notInKit.find((b) => b.id === "usdc-base-to-gmx-account").read.state, "unread");
+    const moved = await pg.readMap(mapWorld({ stargateToken: pg.ZERO }));
+    assert.equal(moved.notInKit.find((b) => b.id === "usdc-base-to-gmx-account").read.state, "unread");
+    assert.match(pg.renderMap(moved), /unread, the pool's token is not Base USDC/);
+    assert.match(m.protocols.find((p) => p.protocol === "GMX").chain, /GMX Account reaches it from Base/);
+    assert.ok(!/far chain|no road from Base|no road to GMX/i.test(text));
+    assert.match(text, /\(not a GMX Account balance\)/, "the kit's gmx acts are not shown as spending a GMX Account balance");
+    assert.match(text, /USDC on Base -> USDC in your own Arbitrum wallet \(what this kit's gmx acts spend\): any bridge you choose, not prepared here; this is not a GMX Account/);
+  });
+
+  it("the map lists capital loops and sinks as paths with their costs, reads each pool leg live, calls a retirement a sink, and prices nothing", async () => {
+    const m = await pg.readMap(mapWorld({ liquidityOf: (id) => (id === idOf("net-weth") ? 0n : 10n ** 15n) }));
+    assert.deepEqual(m.loops.map((l) => `${l.kind}:${l.id}`), ["loop:kvcm-two-venues", "loop:eth-axlregen-two-pools", "loop:gmx-position", "loop:net-circle", "loop:hydrex-lock", "sink:klima-retire", "sink:regen-retire"]);
+    for (const l of m.loops) for (const leg of l.legs) assert.ok(m.roads.some((r) => r.id === leg), `${l.id} names a pool the map reads: ${leg}`);
+    const by = (id) => m.loops.find((l) => l.id === id);
+    assert.match(by("kvcm-two-venues").reading, /every pool leg holds liquidity/);
+    assert.match(by("eth-axlregen-two-pools").reading, /one is thin/);
+    assert.match(by("net-circle").reading, /no road, so there is no loop today/, "a leg with no liquidity is no loop");
+    assert.match(by("gmx-position").reading, /made of prepared acts/);
+    assert.equal(by("kvcm-two-venues").prepared, null, "no swap is prepared on either kVCM venue");
+    const text = pg.renderMap(m);
+    const start = text.indexOf("CAPITAL LOOPS AND SINKS"), end = text.indexOf("STEPS THIS KIT PREPARES");
+    const block = text.slice(start, end);
+    assert.ok(start > 0 && end > start);
+    assert.match(block, /every leg has fees, the map prints no price, and a loop can return less than it took; a SINK ends the capital by design/);
+    assert.match(block, /SINK kVCM to carbon retired for good on Klima/);
+    assert.match(block, /SINK Regen credits to credits retired for good on Regen Ledger/);
+    assert.equal((block.match(/a retirement ends the capital by design: it does not come back/g) ?? []).length, 2);
+    assert.match(block, /LOOP ETH to axlREGEN on Uniswap v4, and axlREGEN back to WETH/);
+    assert.match(block, /LOOP USDC in your own Arbitrum wallet into a GMX Classic position, and back to USDC when you close/);
+    assert.match(block, /LOOP your veHYDX lock votes in an epoch, and the fees and bribes of the pools you voted in come back to you to claim/);
+    assert.match(block, /LOOP ETH through NET's pools and back to ETH in one transaction/);
+    for (const l of block.split("\n").filter((x) => /\bNET\b/.test(x))) assert.ok(l.includes(pg.NET_DISCLOSURE), l);
+    for (const l of block.split("\n").filter((x) => /\bkVCM\b/.test(x))) assert.ok(l.includes(pg.KVCM_DISCLOSURE), l);
+    assert.ok(!/\bAPR\b|\bAPY\b|guaranteed|profitable|will earn|\bindex\b/i.test(block), "no return is promised, nothing is priced");
+    assert.ok(!/HYDROC/.test(block), "HYDROC is not part of any loop the map names");
+    assert.ok(!/HYDROC/.test(text.slice(0, text.indexOf("PROTOCOLS (token, chain)"))), "HYDROC is not the first step");
+  });
+
+  it("the NET programs block of the map names only the tools the kit expects, says each is built and not switched on, and carries the standing lines", async () => {
+    const m = await pg.readMap(mapWorld());
+    const named = new Set(JSON.stringify([m.makeYourOwn, m.netDoors]).match(/\b(?:prepare|submit)_[a-z0-9_]+|\bnet_[a-z0-9_]+/g));
+    assert.deepEqual([...named].sort(), ["net_earn_status", "net_mechanism", "net_open_tasks", "net_order_status", "net_programs", "net_workers_coin_status", "prepare_net_earn", "prepare_net_order", "prepare_net_workers_coin_plan", "submit_net_earn", "submit_net_order"]);
+    const text = pg.renderMap(m);
+    const block = text.slice(text.indexOf("FIRST STEP: MAKE YOUR OWN"), text.indexOf("PROTOCOLS (token, chain)")) + text.slice(text.indexOf("THE NET PROGRAMS AT"), text.indexOf("ROADS THAT CROSS CHAINS"));
+    for (const l of block.split("\n").filter((x) => /\bNET\b/.test(x))) assert.ok(l.includes(pg.NET_DISCLOSURE), l);
+    for (const l of block.split("\n").filter((x) => /\bECO\b/.test(x))) assert.ok(l.includes(pg.ECO_DISCLOSURE), l);
+    for (const d of m.netDoors) assert.match(d.state, /not switched on|free and read-only|needs no switch/, d.need);
+    assert.ok(!/switched on and live|is live|now live|are live/i.test(block), "no program is called live");
+    assert.ok(!/\bindex\b/i.test(text));
+    // the standing-line helper adds a line only for a token the text names and has not already explained
+    assert.equal(pg.standingLinesFor("nothing here"), null);
+    assert.equal(pg.standingLinesFor(`NET ${pg.NET_DISCLOSURE}`), null);
+    assert.equal(pg.standingLinesFor("NET and ECO"), `${pg.NET_DISCLOSURE}; ${pg.ECO_DISCLOSURE}`);
+  });
+
   it("the other pools are each read from the chain with their two tokens checked, and none is a house wallet", () => {
     assert.equal(pg.OTHER_POOLS.length, 5);
     for (const p of pg.OTHER_POOLS) assert.ok(pg.KNOWN_ADDRESSES.has(lower(p.address)), p.id);
@@ -934,6 +1019,24 @@ describe("verify", () => {
     assert.equal(iface.ok, true);
     assert.match(iface.detail, /false/);
   });
+  it("gmx also reads the GMX Account contracts on Arbitrum and the Stargate pools on both chains, and a pool that names the wrong token fails", async () => {
+    const world = (tokens) => stub({ calls: { hasRole: () => true, getAccountPositions: () => [], token: (c) => tokens[lower(c.address)] ?? pg.ZERO }, getCode: async () => "0x6080" });
+    const arbTokens = { [lower(pg.GMX_ACCOUNT.StargateUsdcArbitrum)]: pg.GMX.USDC };
+    const baseTokens = { [lower(pg.GMX_ACCOUNT_BASE.StargateUsdcBase)]: pg.BASE_USDC };
+    const fetcher = fetcherFor({ "/markets": { markets: [{ a: 1 }] } });
+    const good = await pg.verifyProtocol("gmx", { client: world(arbTokens), baseClient: world(baseTokens), fetcher });
+    for (const name of Object.keys(pg.GMX_ACCOUNT)) assert.ok(good.some((r) => r.name.startsWith(`${name} (GMX Account, Arbitrum)`) && r.ok), name);
+    for (const name of Object.keys(pg.GMX_ACCOUNT_BASE)) assert.ok(good.some((r) => r.name.startsWith(`${name} (GMX Account, Base)`) && r.ok), name);
+    assert.ok(good.every((r) => r.ok), good.filter((r) => !r.ok).map((r) => r.name).join("; "));
+    assert.equal(good.filter((r) => /Stargate/.test(r.name) && /names|native ETH/.test(r.name)).length, 4);
+    const wrongBase = await pg.verifyProtocol("gmx", { client: world(arbTokens), baseClient: world({ [lower(pg.GMX_ACCOUNT_BASE.StargateUsdcBase)]: pg.ZERO }), fetcher });
+    assert.equal(wrongBase.find((r) => /USDC pool on Base names Base USDC/.test(r.name)).ok, false);
+    const wrongArb = await pg.verifyProtocol("gmx", { client: world({}), baseClient: world(baseTokens), fetcher });
+    assert.equal(wrongArb.find((r) => /USDC pool on Arbitrum names the USDC/.test(r.name)).ok, false);
+    const noBase = await pg.verifyProtocol("gmx", { client: world(arbTokens), fetcher });
+    assert.ok(!noBase.some((r) => /GMX Account, Base/.test(r.name)), "with no Base client the Base rows are skipped, as before");
+    assert.ok(Object.values(pg.GMX_ACCOUNT).concat(Object.values(pg.GMX_ACCOUNT_BASE)).every((a) => pg.KNOWN_ADDRESSES.has(lower(a))));
+  });
   it("a gmx router that lost its controller role fails verify", async () => {
     const c = stub({ calls: { hasRole: () => false, getAccountPositions: () => [] }, getCode: async () => "0x6080" });
     const rows = await pg.verifyProtocol("gmx", { client: c, fetcher: fetcherFor({ "/markets": { markets: [] } }) });
@@ -945,7 +1048,7 @@ describe("verify", () => {
 describe("the guides", () => {
   const dir = join(HERE, "guides");
   const files = readdirSync(dir).filter((f) => f.endsWith(".md")).sort();
-  it("there is one guide per protocol", () => assert.deepEqual(files, ["gmx.md", "hydrex.md", "klima.md", "regen.md", "uniswap.md"]));
+  it("there is one guide per protocol, and one for bots", () => assert.deepEqual(files, ["bots.md", "gmx.md", "hydrex.md", "klima.md", "regen.md", "uniswap.md"]));
   for (const f of files) {
     const text = readFileSync(join(dir, f), "utf8");
     it(`${f} carries the house line, no em dash, no key words, and only addresses the program verifies`, () => {
@@ -959,8 +1062,8 @@ describe("the guides", () => {
     });
   }
   const read = (rel) => readFileSync(join(HERE, rel), "utf8");
-  it("every line in the Klima and Uniswap guides and the router that names NET also says the buying in NET's pools is the house's own, and none uses the word index", () => {
-    for (const rel of ["guides/klima.md", "guides/uniswap.md", "SKILL.md"]) {
+  it("every line in the Klima, Uniswap, GMX and bots guides and the router that names NET also says the buying in NET's pools is the house's own, and none uses the word index", () => {
+    for (const rel of ["guides/klima.md", "guides/uniswap.md", "guides/gmx.md", "guides/bots.md", "SKILL.md"]) {
       const text = read(rel);
       for (const line of text.split("\n").filter((l) => /\bNET\b/.test(l))) assert.ok(line.includes(pg.NET_DISCLOSURE), `${rel}: ${line.slice(0, 100)}`);
       assert.ok(!/\bindex\b/i.test(text), `${rel} does not use the word index`);
@@ -1026,6 +1129,225 @@ describe("the guides", () => {
     assert.match(skill, /Never an offer or advice, no return promised/);
     assert.ok(!skill.includes(EM_DASH));
     for (const act of pg.ACTS.filter((a) => a.kind === "prepare")) assert.ok(skill.includes(`\`${act.protocol} ${act.act}\``), act.act);
+  });
+});
+
+describe("the GMX guide treats GMX as multichain, with Base as a source chain", () => {
+  const g = readFileSync(join(HERE, "guides/gmx.md"), "utf8");
+  const skill = readFileSync(join(HERE, "SKILL.md"), "utf8");
+  it("says what a GMX Account is, that Base can send USDC and ETH, and that Stargate and LayerZero carry the funds", () => {
+    assert.match(g, /## Trading GMX from Base: the GMX Account/);
+    assert.match(g, /A separate trading balance, linked to your wallet, that lives on Arbitrum/);
+    assert.match(g, /\*\*What Base can send\.\*\* USDC and ETH, in and out\./);
+    assert.match(g, /Stargate moves the token and LayerZero carries the message/);
+    assert.match(g, /Base is a source chain, not a trading chain/);
+    assert.match(g, /liquidity caps/);
+  });
+  it("claims Arbitrum only as the settlement chain, and says GMX's docs and SDK config differ on Avalanche", () => {
+    assert.match(g, /Arbitrum is the only settlement chain and that the GMX Account is not available on Avalanche or MegaETH/);
+    assert.match(g, /lists Avalanche as a settlement chain too/);
+    assert.match(g, /this guide claims Arbitrum only/);
+  });
+  it("gives both One-Click defaults, because GMX's docs and SDK constants differ, and says smart wallets cannot use One-Click", () => {
+    assert.match(g, /30 days or 400 actions/);
+    assert.match(g, /7 days and 90 actions/);
+    assert.match(g, /but not One-Click Trading/);
+    assert.match(g, /Express orders/);
+    assert.match(g, /Subaccounts \(One-Click Trading\)/);
+  });
+  it("names the two honest roads from Base and says the program's acts are Classic and do not spend a GMX Account balance", () => {
+    assert.match(g, /### Two roads from Base/);
+    assert.match(g, /\*\*Through a GMX Account\.\*\*/);
+    assert.match(g, /\*\*Into your own Arbitrum wallet\.\*\*/);
+    assert.match(g, /not from a GMX Account balance, because GMX says GMX Account flows require Express Trading/);
+    assert.match(g, /Classic orders spent from wallet funds/);
+  });
+  it("marks each fact with how it was read, says what was not checked, and gives the cost and the risks", () => {
+    assert.ok((g.match(/\[CHECKED: /g) ?? []).length >= 12, "each fact says how it was read");
+    assert.match(g, /Not checked: Stargate's own fee/);
+    assert.match(g, /### What a deposit from Base costs/);
+    assert.match(g, /### What can go wrong with a deposit from Base/);
+    assert.match(g, /minimum received of zero/);
+    assert.match(g, /A withdrawal can fail if the bridge fee rises first/);
+    assert.match(g, /layerzeroscan\.com/);
+  });
+  it("says why no deposit is prepared and points at GMX's own kit; the router and the map agree", () => {
+    assert.match(g, /`node protocol-guide\.mjs gmx fund-account` exits with code 2/);
+    assert.match(g, /a simulation on Base can prove only the Base half/);
+    assert.match(g, /github\.com\/gmx-io\/gmx-ai/);
+    assert.match(skill, /`gmx fund-account` and `gmx express` exit 2/);
+    assert.match(skill, /GMX's own multichain path/);
+    assert.match(skill, /Base to a GMX Account is GMX's own multichain path/);
+    for (const text of [g, skill]) assert.ok(!/far chain|no road from Base|bridge, not in this kit\b.*GMX/i.test(text), "GMX is not called far or a missing road");
+  });
+  it("shows no key words, no GMX snippet that names one, and uses the house spelling onchain", () => {
+    assert.ok(!/process\.env\.PRIV|PrivateKeySigner|on-chain/i.test(g));
+  });
+});
+
+describe("the NET doors in the router", () => {
+  const skill = readFileSync(join(HERE, "SKILL.md"), "utf8");
+  it("makes 'make your own' the first router row and gives a NET programs table that says most are built and not switched on", () => {
+    const rows = skill.split("\n").filter((l) => l.startsWith("| ") && !l.startsWith("| You want to") && !l.startsWith("|---"));
+    assert.match(rows[0], /\*\*Make your own\*\*: a coin of your own, the way the house made NET/);
+    assert.match(rows[0], /prepare_net_workers_coin_plan/);
+    assert.match(rows[0], /A dry plan only, built and not switched on, and not yet served there on 2026-11-17/);
+    assert.match(skill, /## The agent programs at vealth\.net\/mcp: which tool answers which need/);
+    assert.match(skill, /They are built, and as read on 2026-11-17 none is switched on/);
+    assert.match(skill, /Treat none as live until `net_programs` or the program's own status read says so/);
+    assert.match(skill, /today the plan is refused because the priced read of ECO it needs is not built/);
+    assert.match(skill, /were not yet served by vealth\.net\/mcp on 2026-11-17/);
+    for (const tool of ["net_programs", "net_mechanism", "net_open_tasks", "prepare_net_order", "submit_net_order", "net_order_status", "prepare_net_earn", "submit_net_earn", "net_earn_status", "prepare_net_workers_coin_plan", "net_workers_coin_status"]) assert.ok(skill.includes(`\`${tool}\``), tool);
+  });
+  it("gives no program count and calls no program live", () => {
+    assert.ok(!/\b\d+ (NET )?programs\b/.test(skill), "no count of programs");
+    assert.ok(!/is live|are live|now live|switched on and live/i.test(skill.slice(skill.indexOf("## The agent programs at vealth.net/mcp"), skill.indexOf("## Install and run"))));
+  });
+});
+
+describe("recipes", () => {
+  const bots = readFileSync(join(HERE, "guides/bots.md"), "utf8");
+  const REGEN1 = `regen1${"q".repeat(38)}`;
+  const sub = (s) => s.replaceAll("0xYOU", FROM).replaceAll("regen1YOU", REGEN1).replaceAll("0xCLASS", KCLASS).replaceAll("0xCREDIT", KCREDIT).replaceAll("0xPOOL", POOL_A);
+  const words = (cmd) => [...cmd.matchAll(/"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2]);
+  const NETCIRCLE = join(HERE, "..", "net-circle", "net-circle.mjs");
+
+  it("there are six recipes, each saying who signs, its caps, what it can cost you, when to stop, and what each step does on exit 0", () => {
+    assert.deepEqual(pg.RECIPES.map((r) => r.id), ["gmx-trader", "net-circle-runner", "regen-retire", "klima-retire", "hydrex-lock-keeper", "where-next"]);
+    for (const r of pg.RECIPES) {
+      for (const f of ["title", "signer", "caps", "cost", "stop"]) assert.ok(typeof r[f] === "string" && r[f].length > 20, `${r.id} ${f}`);
+      assert.ok(r.steps.length >= 3, r.id);
+      for (const s of r.steps) { assert.ok(s.on[0], `${r.id}: ${s.run} says what exit 0 means`); assert.ok(s.run.startsWith("node protocol-guide.mjs ") || s.run.startsWith("node ../net-circle/net-circle.mjs"), s.run); }
+    }
+    assert.deepEqual(Object.keys(pg.RECIPE_STANDARD_EXITS), ["1", "2", "3"]);
+  });
+
+  it("each recipe says whether it is a capital loop, a sink or reads only, describes a loop as a path with its costs, and promises no return", () => {
+    const kind = Object.fromEntries(pg.RECIPES.map((r) => [r.id, r.shape.kind]));
+    assert.deepEqual(kind, { "gmx-trader": "loop", "net-circle-runner": "loop", "regen-retire": "sink", "klima-retire": "sink", "hydrex-lock-keeper": "loop", "where-next": "reads" });
+    for (const r of pg.RECIPES.filter((x) => x.shape.kind === "loop")) assert.match(r.shape.path, /a path with its costs, not a return/, r.id);
+    for (const r of pg.RECIPES.filter((x) => x.shape.kind === "sink")) assert.match(r.shape.path, /A retirement ends the capital by design: .* do(es)? not come back\. This is a sink, not a loop\./, r.id);
+    assert.match(pg.RECIPES_INTRO, /capital loop \(capital that goes out through a protocol and comes back\)/);
+    assert.match(pg.RECIPES_INTRO, /a path with its costs, never a profit, and no recipe promises a return/);
+    assert.match(pg.RECIPES_INTRO, /a retirement ends the capital by design/);
+    const all = pg.renderRecipes(pg.RECIPES);
+    assert.ok(!/\bAPR\b|\bAPY\b|guaranteed|profitable|will earn/i.test(all + bots), "no recipe promises a return");
+    assert.ok(!/HYDROC/.test(all + bots), "HYDROC is in no recipe");
+    assert.equal((bots.match(/^Shape: /gm) ?? []).length, 5, "the five recipes that move something say their shape in the page");
+    assert.match(bots, /^## Loops and sinks$/m);
+    assert.match(bots, /A loop is a path with its costs, never a profit/);
+    assert.match(bots, /No recipe promises a return/);
+    assert.match(bots, /a retirement on Klima or on Regen is gone for good and does not come back/);
+    assert.match(bots, /This kit builds no loop pricing tool: it prices nothing/);
+    const idx = run(["recipes"]).out;
+    assert.match(idx, /gmx-trader\s+\[loop\]/);
+    assert.match(idx, /klima-retire\s+\[sink\]/);
+    assert.match(idx, /where-next\s+\[reads\]/);
+  });
+
+  it("every protocol-guide command parses against the real program with no network: acts through argument parsing and preflight, reads by name", () => {
+    let n = 0;
+    for (const r of pg.RECIPES) {
+      for (const s of r.steps.filter((x) => x.run.startsWith("node protocol-guide.mjs "))) {
+        const argv = words(sub(s.run)).slice(2);
+        const parsed = pg.parseArgs(argv);
+        const [protocol, verb, act] = parsed.words;
+        if (["map", "list", "verify"].includes(protocol)) assert.ok(!verb || protocol === "verify", s.run);
+        else { pg.preflight(parsed); assert.ok(pg.ACTS.some((a) => `${a.protocol} ${a.act}` === `${protocol} ${verb === "prepare" ? `prepare ${act}` : verb}`), s.run); }
+        if (verb === "prepare") assert.ok(s.on[10], `${r.id}: ${s.run} says what exit 10 means`);
+        n += 1;
+      }
+    }
+    assert.ok(n >= 25, `parsed ${n} commands`);
+  });
+
+  // net-circle is a sibling package with its own install: from a copy that ran `npm ci` here only, it cannot load its one dependency,
+  // so this check runs only when `--help` works there (it needs no network), and says plainly when it is skipped.
+  const NETCIRCLE_READY = (() => { try { return spawnSync(process.execPath, [NETCIRCLE, "--help"], { encoding: "utf8", env: DEAD_ENV, timeout: 30000 }).status === 0; } catch { return false; } })();
+  it("every net-circle command is accepted by net-circle's own argument check: it gets as far as reading a node, and with a dead node exits 1, never 2", { skip: NETCIRCLE_READY ? false : "install skills/net-circle (npm ci there) to run this check" }, () => {
+    const cmds = pg.RECIPES.flatMap((r) => r.steps.filter((s) => s.run.startsWith("node ../net-circle/net-circle.mjs")).map((s) => s.run));
+    assert.equal(cmds.length, 3);
+    for (const c of cmds) {
+      const r = spawnSync(process.execPath, [NETCIRCLE, ...words(sub(c)).slice(2)], { encoding: "utf8", env: DEAD_ENV, timeout: 30000 });
+      assert.equal(r.status, 1, `${c}: ${r.stderr}`);
+      assert.match(r.stderr, /^net-circle: /, `${c}: the failure comes from net-circle's own read of the node, not from a missing install`);
+      assert.ok(!/ERR_MODULE_NOT_FOUND/.test(r.stderr), c);
+    }
+    const noFrom = spawnSync(process.execPath, [NETCIRCLE, "prepare", "--size", "0.0001"], { encoding: "utf8", env: DEAD_ENV, timeout: 30000 });
+    assert.equal(noFrom.status, 2, "prepare needs --from");
+    assert.match(noFrom.stderr, /needs --from/);
+  });
+
+  it("guides/bots.md carries every command verbatim, in the same order as the program's recipes", () => {
+    let at = 0;
+    for (const r of pg.RECIPES) for (const s of r.steps) {
+      const i = bots.indexOf(s.run, at);
+      assert.ok(i >= at, `${r.id}: ${s.run}`);
+      at = i;
+    }
+    assert.equal((bots.match(/^Who signs: your own /gm) ?? []).length, 5, "the five recipes that can move something say who signs");
+  });
+
+  it("the GMX and Klima recipes branch on prepared.step, the Klima one ends with the revoke, Hydrex runs once per epoch, and Regen says it buys no credits", () => {
+    for (const id of ["gmx-trader", "klima-retire"]) {
+      const r = pg.RECIPES.find((x) => x.id === id);
+      assert.ok(r.steps.some((s) => /prepared\.step/.test(s.on[0]) && /approve/.test(s.on[0])), id);
+    }
+    const klima = pg.RECIPES.find((x) => x.id === "klima-retire");
+    assert.ok(klima.steps.at(-1).run.includes("klima prepare revoke"));
+    assert.match(klima.stop, /Always run the revoke step/);
+    assert.match(klima.cost, /Klima's admin Safe can upgrade/);
+    assert.match(pg.RECIPES.find((x) => x.id === "hydrex-lock-keeper").steps[0].on[0], /once per epoch, after the flip/);
+    const regen = pg.RECIPES.find((x) => x.id === "regen-retire");
+    assert.match(regen.note, /gives you a token on Base, not credits/);
+    assert.match(regen.note, /both outside this kit/);
+    assert.match(pg.RECIPES.find((x) => x.id === "gmx-trader").signer, /not a GMX Account balance/);
+    assert.match(pg.RECIPES.find((x) => x.id === "net-circle-runner").cost, /zora loops send part of the coin pool's fee back to EcoWealth as ECO's creator/);
+    assert.match(bots, /exit `0` and `prepared.step` of `approve` means send that approval/);
+  });
+
+  it("recipes runs offline: the index, one recipe, all of them, --json; an unknown id or a second word exits 2", () => {
+    const idx = run(["recipes"]);
+    assert.equal(idx.code, 0);
+    for (const r of pg.RECIPES) assert.ok(idx.out.includes(r.id), r.id);
+    assert.match(idx.out, /No recipe trades for EcoWealth/);
+    const one = run(["recipes", "klima-retire"]);
+    assert.equal(one.code, 0);
+    assert.match(one.out, /RECIPE klima-retire/);
+    assert.match(one.out, /every step: exit 1 = .*exit 2 = .*exit 3 = /);
+    assert.match(one.out, /exit 10: nothing to revoke/);
+    const all = run(["recipes", "all"]);
+    assert.equal(all.code, 0);
+    for (const r of pg.RECIPES) assert.ok(all.out.includes(`RECIPE ${r.id}:`), r.id);
+    const j = JSON.parse(run(["recipes", "gmx-trader", "--json"]).out);
+    assert.equal(j.recipes.length, 1);
+    assert.equal(j.recipes[0].id, "gmx-trader");
+    assert.ok("disclosure" in j.recipes[0]);
+    assert.equal(run(["recipes", "nope"]).code, 2);
+    assert.equal(run(["recipes", "gmx-trader", "extra"]).code, 2);
+  });
+
+  it("no recipe trades for the house or names a key; every line that names NET, ECO, kVCM or HYDROC carries the standing line, in the words and in the --json", () => {
+    const all = pg.renderRecipes(pg.RECIPES);
+    for (const house of ["0x034F29D2CCFf01551304ad92d2599B850D076c89", "0x590dc2428870fb37625104870c709ace9dc12d24", "0x538aa4800ae2bd8e90556899514376ab96113a8e"]) assert.ok(!all.includes(house) && !bots.includes(house), house);
+    assert.ok(!/privateKey|mnemonic|seed phrase/i.test(all + bots));
+    assert.match(all, /No recipe trades|your own signer/i);
+    for (const l of all.split("\n").filter((x) => /\bNET\b/.test(x))) assert.ok(l.includes(pg.NET_DISCLOSURE), l);
+    // ECO, kVCM and HYDROC are disclosed where a recipe first points at them
+    for (const r of pg.RECIPES) {
+      const lines = pg.renderRecipes([r]).split("\n");
+      for (const [re, d] of [[/\bECO\b/, pg.ECO_DISCLOSURE], [/\bkVCM\b/, pg.KVCM_DISCLOSURE], [/\bHYDROC\b/, pg.HYDROC_DISCLOSURE]]) {
+        const first = lines.find((l) => re.test(l));
+        if (first) assert.ok(first.includes(d), `${r.id}: ${first.slice(0, 80)}`);
+      }
+    }
+    assert.ok(pg.RECIPES.some((r) => /\bkVCM\b/.test(pg.renderRecipes([r]))), "the Klima recipe names kVCM");
+    for (const f of [/EcoWealth holds some kVCM/, /EcoWealth created ECO, holds it/]) assert.match(all, f);
+    assert.ok(!all.includes(EM_DASH) && !bots.includes(EM_DASH));
+    assert.ok(!/\bindex\b/i.test(all + bots));
+    const net = pg.RECIPES.find((r) => r.id === "net-circle-runner");
+    assert.ok(JSON.parse(run(["recipes", "net-circle-runner", "--json"]).out).recipes[0].disclosure.includes(pg.NET_DISCLOSURE));
+    assert.ok(net.steps.every((s) => !/--loop zora/.test(s.run)), "the example does not steer a bot into the loop that pays the house");
   });
 });
 
