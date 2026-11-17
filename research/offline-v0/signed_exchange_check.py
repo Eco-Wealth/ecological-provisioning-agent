@@ -58,6 +58,11 @@ def inspect(raw, expected_key=None):
     if len(raw) > MAX or not raw.endswith(b"\n"):
         raise ValueError("package byte bound or newline error")
     envelope = json.loads(raw.decode("utf-8"), object_pairs_hook=pairs_unique)
+    # The same rule as readSignedExchange: the bytes must be the canonical form (sorted members, no spaces,
+    # characters written as themselves, one trailing newline), so a pretty-printed package is refused here too.
+    # A lone surrogate cannot be encoded: that raises UnicodeError, which main() answers as a refusal.
+    if json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8") + b"\n" != raw:
+        raise ValueError("noncanonical package bytes")
     if not isinstance(envelope, dict) or set(envelope) != {
         "format", "journal", "publicKeySpki", "envelope"
     } or envelope["format"] != FORMAT:
@@ -143,7 +148,7 @@ def main():
                          sys.argv[1] if len(sys.argv) == 2 else None)
         print(json.dumps(result, sort_keys=True))
         return 0
-    except (ValueError, TypeError, KeyError, UnicodeError, OverflowError) as error:
+    except (ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError) as error:
         print(json.dumps({"valid": False, "error": str(error)}, sort_keys=True))
         return 1
 

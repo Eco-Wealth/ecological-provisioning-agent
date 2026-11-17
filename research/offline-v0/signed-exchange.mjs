@@ -64,6 +64,16 @@ function decode64(text, maxBytes) {
   return bytes;
 }
 
+// A lone surrogate (half of an emoji, with no partner) survives JSON.parse and canonical() as an escape such as \ud800,
+// but any step that writes the text as UTF-8 turns it into U+FFFD, so a digest can then match the other spelling.
+// One rule, in one place: text that holds one is refused, wherever it is read from signed or hashed bytes.
+function wellFormed(value) {
+  if (typeof value === 'string') return value.isWellFormed();
+  if (Array.isArray(value)) return value.every(wellFormed);
+  if (object(value)) return Object.entries(value).every(([k, v]) => k.isWellFormed() && wellFormed(v));
+  return true;
+}
+
 /** Accept signing keys only in memory; no key creation, persistence or deployment. */
 export function signJournal(entries, signingKey, issuedAt) {
   const { head, entries: count } = validateJournal(entries);
@@ -137,6 +147,10 @@ export function inspectSignedExchange(exchange, trust = {}) {
     entries = readJournal(exchange.journal);
     ({ head } = validateJournal(entries));
     bundle = exportBundle(entries);
+    if (!wellFormed(bundle.evidence)) {
+      add('SP002', 'FAIL', 'journal evidence text holds a lone surrogate');
+      return report;
+    }
     if (hasFailures(verifyBundle(bundle)) || failIn(inspectMeasurements(bundle).findings)) {
       add('SP002', 'FAIL', 'journal exports an invalid research bundle or measurement');
       return report;
@@ -160,6 +174,8 @@ export function inspectSignedExchange(exchange, trust = {}) {
     try { text = strictUtf8.decode(raw); }
     catch { throw new TypeError('checkpoint payload is not valid UTF-8'); }
     checkpoint = JSON.parse(text);
+    if (!wellFormed(checkpoint))
+      throw new TypeError('checkpoint text holds a lone surrogate');
     if (canonical(checkpoint) !== text ||
         !keys(checkpoint, ['format','publisher','journalHead','entryCount','sequence','issuedAt','signerKeySha256']) ||
         checkpoint.format !== CHECKPOINT_FORMAT || !word(checkpoint.publisher) ||
@@ -243,7 +259,11 @@ function verifiedMeasurementHashes(bundle) {
 }
 
 /** Reproduce bounded comparisons while preserving provenance and uncertainty. */
-export function inspectSignedPair(publisherExchange, challengerExchange, { publisher = {}, challenger = {} } = {}) {
+export function inspectSignedPair(publisherExchange, challengerExchange, options = {}) {
+  if (!object(options))
+    return { experimental: true, publisher: null, challenger: null, comparisons: [], reusedEvidence: [],
+      findings: [{ ruleId: 'PX001', status: 'FAIL', reason: 'trust options must be an object' }] };
+  const { publisher = {}, challenger = {} } = options;
   const first = inspectSignedExchange(publisherExchange, publisher);
   const second = inspectSignedExchange(challengerExchange, challenger);
   const findings = [];
