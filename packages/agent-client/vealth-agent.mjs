@@ -24,7 +24,9 @@
 //   node vealth-agent.mjs physical <workId> <claimId> --gps <lat,lng> [capturedAtISO] # record them for the human reviewer
 //   node vealth-agent.mjs status <workId>     # packet state (free, keyless)
 //   node vealth-agent.mjs mine                # everything your wallet has done
+//   node vealth-agent.mjs address             # print the address of the key you keep (VEALTH_AGENT_KEY) and nothing else, so you fund the right wallet
 //   node vealth-agent.mjs spend-402 <https url> [bodyJson] [--pay-to <0x address>]   # pay a 402 door in USDC-on-Base
+//   node vealth-agent.mjs spend-402 <https url> --get [--pay-to <0x address>]         # the same, for a door that wants a GET
 //
 // spend-402: POSTs `bodyJson` (default `{}`) to `url`. If the door answers 402,
 // this reads its standard `accepts[]` challenge, picks the exact-scheme
@@ -35,6 +37,16 @@
 // (VEALTH_AGENT_MAX_SPEND_USDC to change it): a bare, unfunded wallet always
 // gets refused on-chain (no USDC to move) — that refusal is the honest,
 // expected outcome, not a bug.
+//
+// X402 VERSION 2 (for doors that answer in version 2, such as Brave Search on Base): with --get the request is a GET (no body; the query
+// stays in the url, and a bodyJson is refused). A door whose 402 body carries no challenge (no `accepts[]`, no
+// `x402` block) may put it in a base64 JSON PAYMENT-REQUIRED header that says x402Version 2; that header is read
+// only then, so a door that answers with a body is read exactly as before. A version 2 offer names its price as
+// `amount`, written as text (never `maxAmountRequired`; one that carries both is refused) and must say
+// `extra.assetTransferMethod: "eip3009"`; the price goes through the same whole-unit reading and the same cap,
+// and every pin below holds unchanged. The signed payment goes in the PAYMENT-SIGNATURE header alone, as
+// { x402Version: 2, resource, accepted, payload }, with `accepted` the door's own offer, unchanged. These are the
+// same refusals and the same wire shape as the shared payment helper.
 //
 // What came of the money: after the door has been asked, spend-402 prints ONE line,
 // `spend-402 result: {"status":…,"signedUsdc":…,"settled":…,"paidUsdc":…}`, whatever came
@@ -57,7 +69,7 @@
 // may be spelled "base" or "eip155:8453" (the server reads them as one chain).
 // Only the door's FIRST Base USDC offer is read: a pin never picks among several,
 // it refuses when that offer names another payee. These are the same refusals as
-// the shared payment helper (recipes/x402-pay.mjs), and one check holds the two
+// the shared payment helper, and one check holds the two
 // to each other. Only an https door is paid (a door on this machine may use
 // http, for a local check), a redirect is never followed, and the payee and the exact
 // amount are printed BEFORE the signature is made.
@@ -66,11 +78,35 @@
 // --pay-to <0x address> (or set VEALTH_AGENT_PAY_TO) and a payment to any other
 // address is refused. And the cap is per RUN, not across runs: each run may spend
 // up to the cap, so a loop that calls spend-402 again and again spends the cap
-// every time. An https door at a private or internal address (a private IP address,
-// an internal name) is still allowed, so do not point this at an address you would
-// not want a stranger's door to be. And no reply, from the board or from a door,
+// every time, until the DAY BUDGET (next) says no. An https door at a private or
+// internal address (a private IP address, an internal name) is still allowed, so
+// do not point this at an address you would not want a stranger's door to be.
+// And no reply, from the board or from a door,
 // has a size or a time limit: a hostile one can stall this client or fill its
 // memory. Keep the wallet this key holds no larger than you can lose.
+//
+// THE DAY BUDGET (2026-11-16): spend-402 keeps a running total of what this machine's runs have signed today (UTC) in a
+// small ledger file, one JSON line per signature ({"day","units"}, in USDC base units), and refuses a run whose payment would
+// take the total past the budget, BEFORE the key is used. The budget is $5 a day. Set VEALTH_AGENT_DAY_BUDGET_USDC to a plain
+// dollar amount from 0.000001 to 1000 to change it. Anything else (empty, text, NaN, a sign, zero, an exponent, hex, a seventh
+// decimal, more than 1000) falls to the $5 default and says so: it is never read as no budget. The ledger is
+// ~/.vealth-agent/day-spend.jsonl (VEALTH_AGENT_DAY_LEDGER names another file). A ledger that cannot be read, holds a line this
+// client did not write, holds a later day than the clock, or cannot be written refuses the run: it is never read as zero.
+// WHAT THIS DOES NOT DO: it trusts this machine's file and clock, so anyone who can edit the file or set the clock back can
+// clear it (and could as well sign with the key). Runs that start at the same moment cannot pass the budget between them, but
+// a run that loses that race, or whose signer fails after its line was written, keeps its line, so the total can read too
+// high, never too low. A valid setting may raise the budget up to $1000. It counts what was signed, not what settled.
+//
+// THE HOST ALLOW LIST (2026-11-16): spend-402 pays only a door on a host YOU list. VEALTH_AGENT_PAY_HOSTS is host names
+// separated by commas, such as vealth.net,search.agent.s.brave.app. Each is matched EXACTLY against the host of the door's
+// address as the URL parser reads it (any case, any port): no wildcard, no subdomain, no suffix, and no scheme, path or port in
+// a name. With none set the list is vealth.net and this machine (localhost, 127.0.0.1, [::1]: the one place plain http was
+// already allowed, for a local check). A list you set REPLACES that, so list every host you mean to pay. This file names only
+// vealth.net: a real Brave Search door (search.agent.s.brave.app) has to be listed. A door on any other host is refused BEFORE
+// any request, so an address a page, a tool result or a message hands this client cannot receive a signature. A list that is set
+// but is not host names (blank, *, an address with a scheme or a path, a trailing comma) refuses the run: it is never read as
+// allow-all. Only spend-402 is gated by it. The loopback address under a numeric spelling (https://2130706433/ is read as
+// 127.0.0.1) is this machine and passes by default.
 //
 // proof-photo: a phone photo is megabytes and an MCP tool call is a small JSON
 // envelope, so photos never ride through the assistant. This command reads each
@@ -87,7 +123,7 @@
 // location back to a caller, because the packet, claim and wallet are public.
 //
 // claim on PHYSICAL work: the board asks the person two factual questions
-// before a claim can be signed (claim-attestation.ts, #1226): "I am at least 18
+// before a claim can be signed: "I am at least 18
 // years old." and, when the packet names its own hazards, "I have read the
 // safety and stop-work lines shown above for this packet." This client asks
 // the board for those statements FIRST, prints them and the packet's own safety
@@ -108,7 +144,23 @@
 // location, the target address), a field you never asked for is refused, and
 // the message is rebuilt HERE from that body and from a path built here. A
 // board that swaps a packet or a wallet, adds a field, or hands back a message
-// for anything else gets a plain refusal, and nothing is signed.
+// for anything else gets a plain refusal, and nothing is signed. A prepare reply
+// that says wait or done where a message to sign belongs is refused too.
+//
+// THE NEXT STEP IT HANDS ON: this client never calls a tool a reply names. It prints one `next:` line for the
+// agent that runs it, and only for a tool of the worker loop: WORKER_LOOP_NEXT_TOOLS below, the registry's own worker-loop set
+// (a check holds the list to the registry). Any other name, real or invented, gets one plain "refused
+// next step" line and is never printed as a next step. The board's raw NEXT_CALL line is not echoed with the reply text, and a line
+// of the board's words that starts like one of this client's own (NEXT_CALL:, next:, wait:, poll:, done:, refused next step:) is
+// shown with a leading space, so the line this client prints is the only one that reads as the next step. A WAIT line
+// ({"wait":true,...}) is a stop: the poll it names is shown only with a usable time and never as a next step. A DONE line
+// ({"done":true,...}) is a stop too, and the new loop it may suggest is only a mention. WHAT THIS DOES NOT DO: the board's words
+// (the reply text, a packet's text, the `why` of a next step) are still printed, as a stranger's text, and an agent that obeys prose
+// is not stopped by a list of tool names. The list is closed over this client's own commands: a check
+// finds, from the server's handlers, every tool the replies of the commands below can name in a NEXT_CALL, and fails when one is
+// neither in the worker lane nor in a short named list of tools kept refused on purpose. One is: prepare_request, which an empty
+// find_work search names for a person who wants work done at their own place. That is a requester's act, not the worker's, so it is
+// printed as a refused step; the reply's own words say what it is, and a person or agent calls it on purpose.
 //
 // SOME PHYSICAL PACKETS ALSO PAY REGEN: `--flag vsh_eligible` on the bare
 // (no-command) preflight finds only the packets carrying Regen Network
@@ -118,9 +170,12 @@
 //
 // Identity: set VEALTH_AGENT_KEY=0x… (a private key YOU generate and keep) so
 // votes, claims, spends, and any credit accrue to one wallet across runs.
-// Without it, a fresh ephemeral wallet is generated per run (address printed,
-// key never) — spend-402 will then always be refused, since a fresh wallet
-// holds no USDC.
+// `address` prints the address of that kept key, and only that, so a person who
+// lets this client pay funds the right wallet. Without a kept key, a fresh
+// ephemeral wallet is generated per run (address printed, key never) and its key
+// is thrown away when the run ends: money sent to that address is lost, and every
+// line that prints it says so. spend-402 will then always be refused, since a
+// fresh wallet holds no USDC.
 
 import { createHash } from "node:crypto";
 
@@ -191,7 +246,7 @@ const BOARD = process.env.VEALTH_BOARD_URL || new URL(MCP).origin;
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
 
 // ── x402 exact-scheme (EIP-3009) — the ONE wire format every vealth.net paid
-// door decodes (apps/api/src/x402/x402-standard.ts decodeExactPayment). Base
+// door decodes (the server's decodeExactPayment). Base
 // mainnet only: USDC 0x8335…2913, chainId 8453, written "base" or "eip155:8453"
 // (getX402Chain there reads both as Base). A door on another chain in
 // accepts[] is skipped — this client speaks Base/USDC, nothing else, so it
@@ -199,7 +254,7 @@ const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
 //
 // PINNED HERE, never read from a door: the token, its decimals, the domain it
 // is signed under and the longest window an authorization may live. Copied from
-// the server's own chain table (apps/api/src/x402/x402-standard.ts: USDC_BASE
+// the server's own chain table (its USDC_BASE
 // and X402_CHAINS.base.eip712); a check holds this file to that table.
 const BASE_CHAIN_ID = 8453;
 const BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
@@ -212,6 +267,12 @@ const USDC_DOMAIN_VERSION = "2";
 // given more, so a signed authorization cannot sit around for an hour.
 const MAX_AUTH_WINDOW_SECONDS = 900;
 const DEFAULT_MAX_SPEND_USDC = "0.25";
+// The DAY BUDGET: what a day of runs may sign in all (see the header). A setting that is not a plain amount from one base unit up
+// to the ceiling falls to the default, never to "no budget". The shared payment helper holds the same two numbers.
+const DEFAULT_DAY_BUDGET_USDC = "5";
+const MAX_DAY_BUDGET_USDC = "1000";
+// The HOST ALLOW LIST default (see the header): the one host this file names, and this machine. A list the caller sets replaces it.
+const DEFAULT_PAY_HOSTS = ["vealth.net", "localhost", "127.0.0.1", "[::1]"];
 const EIP3009_TYPES = {
   TransferWithAuthorization: [
     { name: "from", type: "address" },
@@ -234,9 +295,58 @@ function account() {
     console.error("VEALTH_AGENT_KEY must be a 0x…64-hex private key. Never share it with anyone — including vealth.net.");
     process.exit(1);
   }
-  const acct = privateKeyToAccount(k || generatePrivateKey());
-  if (!k) console.error(`ephemeral wallet ${acct.address} (set VEALTH_AGENT_KEY to keep one identity across runs)`);
+  let acct;
+  try {
+    acct = privateKeyToAccount(k || generatePrivateKey());
+  } catch {
+    // The library's own error writes the key out as a number, so it is never shown: the sentence is fixed.
+    console.error("VEALTH_AGENT_KEY is a key this client cannot use (it is not a valid private key), so nothing was signed.");
+    process.exit(1);
+  }
+  if (!k) {
+    console.error(
+      `ephemeral wallet ${acct.address}: ${LOST_WORDS}, because its key is thrown away when this run ends. Do not fund it. ` +
+      "To keep one wallet across runs, set VEALTH_AGENT_KEY (the address command shows the address of the key you keep).",
+    );
+  }
   return acct;
+}
+
+/** What a run with no kept key says wherever it prints its address: the key of that wallet is gone when the run ends. */
+const LOST_WORDS = "money sent to this address is lost";
+
+/** The address as a line prints it. A run with no kept key signs from a throwaway wallet, so wherever such a run prints its
+ * address the same line says that money sent there is lost. A run with a kept key prints the address as it is. */
+function whoIs(acct) {
+  return process.env.VEALTH_AGENT_KEY ? acct.address : `${acct.address} (ephemeral wallet: ${LOST_WORDS})`;
+}
+
+/** `address`: the address of the key the person keeps (VEALTH_AGENT_KEY), and nothing else, so they fund the right wallet. It never
+ * goes through account(): a run with no kept key would make a throwaway wallet and print ITS address, which is the one thing this
+ * command must never do. It prints no key, makes no request and writes nothing. A key it cannot use is refused with a fixed
+ * sentence, because the library's own error writes the key out as a number. */
+function keptAddress() {
+  const k = process.env.VEALTH_AGENT_KEY;
+  if (!k) {
+    console.error('no kept key: make and keep one first (export VEALTH_AGENT_KEY=0x$(openssl rand -hex 32), and keep that value somewhere safe), then run address again. Never fund an address printed by a run that said "ephemeral wallet": that key is thrown away when the run ends.');
+    process.exit(1);
+  }
+  if (!/^0x[0-9a-fA-F]{64}$/.test(k)) {
+    console.error("VEALTH_AGENT_KEY is set but is not a key that starts with 0x and holds 64 hex characters, so there is no address to show. Fix it first, and never share it with anyone.");
+    process.exit(1);
+  }
+  if (!viem) {
+    console.error("address needs the one dependency to work out the address: npm i viem (then run it again).");
+    process.exit(1);
+  }
+  let address;
+  try {
+    address = viem.privateKeyToAccount(k).address;
+  } catch {
+    console.error("VEALTH_AGENT_KEY is a key this client cannot use (it is not a valid private key), so there is no address to show.");
+    process.exit(1);
+  }
+  console.log(address);
 }
 
 async function call(name, args) {
@@ -287,8 +397,7 @@ const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 const WALLET_RE = /^0x[0-9a-fA-F]{40}$/;
 const HEX64_RE = /^[0-9a-f]{64}$/;
 // The nonce is the BOARD's own clock when it prepared the body, and the board takes a signature
-// for five minutes behind that clock and five seconds ahead of it (NONCE_WINDOW_BEHIND_MS and
-// NONCE_WINDOW_AHEAD_MS in signature-refusal.ts). So a stamp ahead of this machine's clock can
+// for five minutes behind that clock and five seconds ahead of it (the board's own nonce window). So a stamp ahead of this machine's clock can
 // only be honest clock drift, and the further ahead a hostile board sets it, the longer it can
 // hold a signature before using it: the signature stays usable until stamp + 5 minutes.
 //   ahead:  2 minutes of drift slack, so a signature is never usable more than 7 minutes out;
@@ -349,8 +458,10 @@ function bodyProblem(body, bound, address) {
 /** Prove the prepared write is the one asked for. Returns what to sign and send, or exits with a plain sentence. */
 function checkPrepared(acct, prepared, submitTool, bound) {
   const nc = prepared.structured?.next_call;
+  // A prepare reply is the one place a message to sign is handed over. A WAIT or a DONE line there is a stop, never a message to sign.
+  if (nc && (nc.wait === true || nc.done === true)) fail(`The board answered with a wait or done line where a message to sign belongs`);
   if (!nc || nc.tool !== submitTool || typeof nc.message_to_sign !== "string" || typeof nc.args?.bodyJson !== "string") {
-    throw new Error(scrub(`expected a ${submitTool} envelope with message_to_sign and bodyJson; got:\n${prepared.text.slice(0, 600)}`));
+    throw new Error(scrub(`expected a ${submitTool} envelope with message_to_sign and bodyJson; got:\n${wordsOf(prepared.text).slice(0, 600)}`));
   }
   if (!bound || typeof bound.path !== "string" || typeof bound.check !== "function" || !Array.isArray(bound.fields)) {
     throw new Error(`${submitTool} was called with no local binding, so nothing was signed`);
@@ -438,30 +549,117 @@ async function proofPhoto(acct, workId, claimId, files) {
     }
   }
   if (!refs.length) process.exit(1);
-  console.log(`\n${refs.length} photo(s) uploaded for packet ${workId}, claim ${claimId}, as ${acct.address}.`);
+  console.log(`\n${refs.length} photo(s) uploaded for packet ${workId}, claim ${claimId}, as ${whoIs(acct)}.`);
   console.log("The photo bytes went from this machine straight to the board; only the references above go to the assistant.");
   const proofs = refs.map((r, i) => ({ type: "photo", upload: r.ref, step: i + 1, ...(r.capturedAt ? { capturedAt: r.capturedAt } : {}) }));
   const gps = refs.find((r) => r.gps)?.gps;
   console.log(`\nproofs for prepare_proof (add the packet's other items, such as a text note, and hoursClaimed where it counts hours):\n${JSON.stringify(proofs)}`);
-  console.log(`\nnext: prepare_proof ${JSON.stringify({ workId, claimId, workerWallet: acct.address, proofs, ...(gps ? { gps } : {}) })}`);
+  // The address rides inside the JSON of this line, so on a run with no kept key the warning follows the JSON on the same line.
+  const ephemeral = process.env.VEALTH_AGENT_KEY ? "" : "  (ephemeral wallet: money sent to the address in this line is lost)";
+  console.log(`\nnext: prepare_proof ${JSON.stringify({ workId, claimId, workerWallet: acct.address, proofs, ...(gps ? { gps } : {}) })}${ephemeral}`);
   if (failed) process.exit(1);
 }
 
+// ── the next step this client hands on, with the WAIT and DONE lines ────────────────────────────────────────────────────────
+//
+// This client never calls a tool a reply names. The one place a stranger's tool name leaves it is the `next:` line it prints for the
+// agent that runs it, and that line is printed only for a tool of the worker loop. The list is the MCP registry's own set of
+// worker-loop tools (lane "worker" in the registry). This file
+// stands alone, so the list is a literal here, and a check fails when it stops matching the registry.
+const WORKER_LOOP_NEXT_TOOLS = ["credential_record_status","day_card","find_work","get_work_packet","hour_card","how_to_claim","my_hours","my_ledger","my_money","my_next_step","my_votes","my_work","place_status","prepare_claim","prepare_credential_record","prepare_evidence_surface","prepare_evidence_write","prepare_physical_proof","prepare_place","prepare_proof","prepare_site_authorization","prepare_token_settlement","prepare_vote","site_authorization_status","start_here","submit_claim","submit_credential_record","submit_evidence_surface","submit_evidence_write","submit_physical_proof","submit_place","submit_proof","submit_site_authorization","submit_vote","work_status"];
+
+/** The lines a reply's NEXT_CALL becomes on the screen: an array of lines, empty when the reply carries none. A tool of the worker loop
+ * is printed as `next: <tool> <args>`; any other name, or one that is not a name, is refused in one plain line and never printed as a
+ * next step. A WAIT ({"wait":true,...}) and a DONE ({"done":true,...}) are stops: a DONE wins over everything else on the line, a WAIT's
+ * poll is shown only with a usable time (a number of seconds, not text, not negative) and never as a `next:` line, and a suggested new
+ * loop is only a mention. A stranger's words are cut to one short line each, so they cannot become a line of their own. Self-contained:
+ * it needs only the list above and `plain`. */
+function nextStepLines(nc) {
+  const lines = [];
+  if (nc === null || typeof nc !== "object" || Array.isArray(nc)) return lines;
+  const words = (v) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, 300) : "");
+  const onTheList = (v) => typeof v === "string" && WORKER_LOOP_NEXT_TOOLS.includes(v);
+  const argsOf = (v) => JSON.stringify(v === undefined ? {} : v);
+  const why = words(nc.why);
+  if (nc.done === true) {
+    lines.push(`done: ${why || "this job is finished for you."}`);
+    lines.push("stop here: nothing more is asked of you on this job.");
+    const suggested = nc.suggest;
+    if (suggested !== null && typeof suggested === "object" && !Array.isArray(suggested) && onTheList(suggested.tool)) {
+      lines.push(`a new loop would start with ${suggested.tool} (new work, not a next step of this job).`);
+    }
+    return lines;
+  }
+  if (nc.wait === true) {
+    lines.push("wait: nothing is asked of you now. Someone else has to move this job first.");
+    if (why) lines.push(`why: ${why}`);
+    const seconds = nc.after_seconds;
+    const usableTime = typeof seconds === "number" && Number.isFinite(seconds) && seconds >= 0;
+    const until = typeof nc.until === "string" && Number.isFinite(Date.parse(nc.until)) ? new Date(Date.parse(nc.until)).toISOString() : "";
+    if (!onTheList(nc.tool)) {
+      lines.push(typeof nc.tool === "string" && nc.tool !== ""
+        ? `no poll is shown: the board named "${plain(nc.tool)}" to poll, and that is not a worker-loop tool this client passes on.`
+        : "no poll is shown: the board named no tool to poll.");
+    } else if (!usableTime) {
+      lines.push("no poll is shown: the board gave no usable time to wait. Come back later.");
+    } else {
+      lines.push(`poll: ${nc.tool} ${argsOf(nc.args)} (no sooner than ${Math.ceil(seconds)} seconds from now${until ? `; the board names ${until} as when this may change` : ""}). Stopping here is fine.`);
+    }
+    return lines;
+  }
+  if (typeof nc.tool !== "string") {
+    lines.push("refused next step: the board's reply carried a next step this client cannot read.");
+    return lines;
+  }
+  if (!onTheList(nc.tool)) {
+    lines.push(`refused next step: the board named "${plain(nc.tool)}", and that is not a worker-loop tool this client passes on. Call it yourself only if you mean to.`);
+    return lines;
+  }
+  lines.push(`next: ${nc.tool} ${argsOf(nc.args)}`);
+  if (why) lines.push(`why: ${why}`);
+  return lines;
+}
+
+/** Print a board reply: its words, then the next step as nextStepLines reads it. The board's raw NEXT_CALL line (the last `NEXT_CALL:`
+ * marker and what follows it) is not echoed with the words: the structured half is the board's own word for what the next step is (when
+ * it says there is none, a line in the prose is never read), and only when the reply has no structured half is that line read, as JSON.
+ * Any other line of the words that starts like one of this client's own lines (`NEXT_CALL:`, `next:`, `wait:`, `poll:`, `done:`,
+ * `refused next step:`) is shown with a leading space, so words in a reply cannot pass for the line this client prints. */
 function report(r) {
-  console.log(r.text);
-  const nc = r.structured?.next_call;
-  if (nc) console.log(`\nnext: ${nc.tool} ${JSON.stringify(nc.args)}`);
+  printReply(r);
   if (r.isError) process.exit(1);
+}
+
+const NEXT_CALL_MARKER = "\n\nNEXT_CALL:\n";
+
+/** The board's words with its raw NEXT_CALL line cut off, and any line that starts like one of this client's own shown with a leading space. */
+function wordsOf(text) {
+  const at = text.lastIndexOf(NEXT_CALL_MARKER);
+  return (at >= 0 ? text.slice(0, at) : text).replace(/^(NEXT_CALL|next|wait|poll|done|refused next step):/gim, " $1:");
+}
+
+/** Print a reply the way report does, and go on: every place that shows a board reply goes through here, so no raw NEXT_CALL line is echoed. */
+function printReply(r) {
+  console.log(wordsOf(r.text));
+  let nc = r.structured ? r.structured.next_call : undefined;
+  if (!r.structured) {
+    const at = r.text.lastIndexOf(NEXT_CALL_MARKER);
+    if (at >= 0) {
+      try { nc = JSON.parse(r.text.slice(at + NEXT_CALL_MARKER.length).trim()); } catch { nc = undefined; }
+    }
+  }
+  const shown = nextStepLines(nc);
+  if (shown.length) console.log(`\n${shown.join("\n")}`);
 }
 
 // ── claim: physical work asks for two factual statements before a signature ──
 
 // The only flags this client takes, each mapped to the ONE prepare_claim
-// argument it sets (mcpRoutes.ts prepareClaim reads `=== true`, nothing else).
+// argument it sets (the board's prepare_claim reads `=== true`, nothing else).
 const CLAIM_FLAGS = { "--adult": "attestAtLeast18", "--safety-read": "attestSafetyRead" };
 
 // prepare_claim's own refusal, read by the markers it writes around the
-// statements (mcpRoutes.ts prepareClaim). The packet's safety text is the
+// statements (the board's prepare_claim). The packet's safety text is the
 // poster's words and may contain anything, so the text is taken between the
 // FIRST safety header and the LAST hash line, both of which the board writes.
 const STATEMENT_LINE = "REQUIRED STATEMENT: ";
@@ -480,7 +678,7 @@ function statementsAsked(text) {
   return { shown, safetySha256, safetyText };
 }
 
-// Every field a prepared claim body may carry (mcpRoutes.ts prepareClaim). `crew`
+// Every field a prepared claim body may carry (the board's prepare_claim). `crew`
 // is not here: this client never sends one, so a body that names a crew is not the
 // claim that was asked for.
 const CLAIM_FIELDS = ["workId", "workerWallet", "nonce", "termsVersion", "targetUrl", "attestation", "programFundingTermsHash"];
@@ -498,8 +696,8 @@ const CLAIM_ATTESTATION_FIELDS = ["atLeast18", "safetyTextSha256"];
  */
 function claimBodyProblem(body, { workId, targetUrl, passed, asked }) {
   if (body.workId !== workId) return "The prepared claim is for another packet than the one you named";
-  // The board puts a target address into the claim only on a self-verifying template packet (prepareClaim in
-  // mcpRoutes.ts: `template && rawTarget`). On any other packet it takes none and leaves the address out. That is
+  // The board puts a target address into the claim only on a self-verifying template packet (prepare_claim:
+  // `template && rawTarget`). On any other packet it takes none and leaves the address out. That is
   // an honest answer, said plainly; a DIFFERENT address, or one the person never gave, is never signed.
   if (targetUrl && body.targetUrl === undefined) return "This packet takes no target address, so the board left yours out of the claim (run it again without the address)";
   if (body.targetUrl !== (targetUrl || undefined)) return "The prepared claim names another target address than the one you gave";
@@ -597,7 +795,7 @@ async function claim(acct, workId, targetUrl, passed) {
   const checked = checkPrepared(acct, prepared, "submit_claim", bound);
   const att = checked.body.attestation;
   const said = att ? ["--adult", ...(att.safetyTextSha256 ? ["--safety-read"] : [])] : [];
-  console.log(`Signing the claim on ${workId} as ${acct.address}${said.length ? `, affirming ${said.join(" and ")} as you passed them` : ""}.`);
+  console.log(`Signing the claim on ${workId} as ${whoIs(acct)}${said.length ? `, affirming ${said.join(" and ")} as you passed them` : ""}.`);
   const done = await sendSigned(acct, "submit_claim", checked, bound);
   report(done);
   return done;
@@ -612,7 +810,7 @@ async function readBodyText(res) {
 
 /** The one network this client pays on, under either spelling a door may use, or null: "base", or the CAIP-2 name
  * "eip155:8453", in any case and with nothing around it. The server's own table reads the two as one chain
- * (getX402Chain in apps/api/src/x402/x402-standard.ts). The shared payment helper holds the same function, word for word. */
+ * (the server's getX402Chain). The shared payment helper holds the same function, word for word. */
 function baseNetworkLabel(network) {
   const n = String(network ?? "").toLowerCase();
   return n === "base" || n === `eip155:${BASE_CHAIN_ID}` ? n : null;
@@ -635,6 +833,28 @@ function isBaseUsdcOffer(a) {
 function selectBaseUsdcRequirement(accepts) {
   if (!Array.isArray(accepts)) return null;
   return accepts.find(isBaseUsdcOffer) ?? null;
+}
+
+/** Does the BODY of a 402 carry a challenge of its own: an `accepts[]` list or the older `x402` block? Our own doors send
+ * both, so their challenge is read from the body exactly as before. Only a body with neither sends the reader to the
+ * header. The shared payment helper holds the same function, word for word. */
+function bodyCarriesChallenge(body) {
+  return Array.isArray(body?.accepts) || Boolean(body?.x402);
+}
+
+/** The challenge a door puts in its PAYMENT-REQUIRED header (x402 version 2): base64 text of a JSON object that says
+ * x402Version 2. { challenge }, or { why } when it is anything else. A stranger's text: checked here, never trusted; its
+ * offers are read and pinned like any other. The shared payment helper holds the same function, word for word. */
+function decodePaymentRequiredHeader(value) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (text.length < 8 || text.length > 65536 || !/^[A-Za-z0-9+/]+={0,2}$/.test(text)) {
+    return { why: "this door's payment-required header is not base64 text" };
+  }
+  let challenge;
+  try { challenge = JSON.parse(Buffer.from(text, "base64").toString("utf8")); } catch { return { why: "this door's payment-required header is not JSON" }; }
+  if (challenge === null || typeof challenge !== "object" || Array.isArray(challenge)) return { why: "this door's payment-required header is not a challenge" };
+  if (challenge.x402Version !== 2) return { why: `this door's payment-required header says x402 version ${plain(challenge.x402Version)}, and this client reads only version 2 there` };
+  return { challenge };
 }
 
 /** What is wrong with an address, or null when it is fine: 0x and 40 hex digits, and when it is written in mixed case
@@ -674,8 +894,11 @@ function parseAtomicAmount(value) {
 
 /** Read what a door asks for and say whether this client will sign it. The door's settlement, decimals, domain,
  * chain hints and window are never used to compute anything: they are only checked against the pinned values.
- * `checksum` is viem's checksumAddress, which reads a payee written in mixed case. */
-function readOffer(offer, capUnits, checksum) {
+ * `checksum` is viem's checksumAddress, which reads a payee written in mixed case. `v2` (false unless the challenge came
+ * in the version 2 header) changes only two things, as in the shared payment helper: the price is the offer's `amount` and
+ * no other field (written as text, as the standard writes it; an offer that carries both `amount` and `maxAmountRequired`
+ * names its price twice and is refused), and `extra.assetTransferMethod` must say eip3009. */
+function readOffer(offer, capUnits, checksum, v2 = false) {
   if (offer.settlement !== undefined && offer.settlement !== "eip3009") {
     return { why: `this offer names ${plain(offer.settlement)} settlement, and this client signs only the USDC EIP-3009 authorization` };
   }
@@ -691,8 +914,14 @@ function readOffer(offer, capUnits, checksum) {
   for (const hint of [offer.chainId, extra?.chainId]) {
     if (hint !== undefined && Number(hint) !== BASE_CHAIN_ID) return { why: `this door names chain ${plain(hint)}, and this client pays on Base (${BASE_CHAIN_ID}) only` };
   }
-  const value = parseAtomicAmount(offer.maxAmountRequired);
-  if (value === null) return { why: `this door's amount (${plain(offer.maxAmountRequired)}) is not a whole number of USDC base units (${USDC_DECIMALS} decimals)` };
+  if (v2 && extra?.assetTransferMethod !== "eip3009") {
+    return { why: `this offer's assetTransferMethod is ${extra?.assetTransferMethod === undefined ? "missing" : plain(extra.assetTransferMethod)}, and this client pays only when it says eip3009` };
+  }
+  if (v2 && offer.amount !== undefined && offer.maxAmountRequired !== undefined) return { why: "this offer names its price twice (amount and maxAmountRequired), and this client reads one" };
+  if (v2 && offer.amount !== undefined && typeof offer.amount !== "string") return { why: `this door's amount (${plain(offer.amount)}) is not text, and a version 2 amount is a string of whole USDC base units` };
+  const priced = v2 ? offer.amount : offer.maxAmountRequired;
+  const value = parseAtomicAmount(priced);
+  if (value === null) return { why: `this door's amount (${plain(priced)}) is not a whole number of USDC base units (${USDC_DECIMALS} decimals)` };
   if (value === 0n) return { why: "this door asks for a zero amount, which is nothing worth a signature" };
   if (value > capUnits) {
     return { why: `price $${formatUnits(value)} exceeds max spend $${formatUnits(capUnits)} (VEALTH_AGENT_MAX_SPEND_USDC)` };
@@ -715,6 +944,31 @@ function doorUrlProblem(url) {
   return `spend-402 only pays a door on https, and ${plain(`${u.protocol}//${u.host}`)} is not (a signed payment over plain http can be read and replayed by anyone on the way)`;
 }
 
+/** Why this client will not pay a door on this host, or null. The hosts it may pay are the caller's own list,
+ * `setting` (VEALTH_AGENT_PAY_HOSTS: host names separated by commas), or when nothing is set the default list (vealth.net and this
+ * machine). A list REPLACES the default. Each listed name is a plain host name (letters, digits, hyphens and dots, or a bracketed
+ * IPv6 address) and is matched EXACTLY, lower-cased, against the host of the door's address as the URL parser reads it: no wildcard, no
+ * subdomain, no suffix, no port. A list that is set but holds anything else (a blank, `*`, a scheme, a path, a port, a look-alike letter, a
+ * trailing comma) is refused with a sentence: it is never read as allow-all. Self-contained: it needs only the default list and `plain`. */
+function payHostProblem(url, setting) {
+  let hosts = DEFAULT_PAY_HOSTS;
+  if (setting !== undefined) {
+    hosts = [];
+    for (const raw of String(setting).split(",")) {
+      const name = raw.trim().toLowerCase();
+      const plainName = name.length <= 253 && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/.test(name);
+      const bracketed = name.length <= 47 && /^\[[0-9a-f:]{2,45}\]$/.test(name);
+      if (!plainName && !bracketed) {
+        return `VEALTH_AGENT_PAY_HOSTS must be host names separated by commas, such as vealth.net,search.agent.s.brave.app (each a plain name, matched exactly: no wildcard, scheme, path or port), and "${plain(raw)}" is not one`;
+      }
+      hosts.push(name);
+    }
+  }
+  let host;
+  try { host = new URL(url).hostname; } catch { return `${plain(url)} is not a web address`; }
+  return hosts.includes(host) ? null : `this client pays only doors on hosts you list (VEALTH_AGENT_PAY_HOSTS; now ${hosts.join(", ")}), and ${plain(host)} is not one of them`;
+}
+
 /** The door's word that a paid call went through: a status from 200 to 299. Nothing else is read as settled (a 0 or a
  * 1xx is no answer from the door). The shared payment helper holds the same function, word for word. */
 function settledBy(status) {
@@ -733,7 +987,91 @@ function reportSpend(status, signedUnits) {
   console.log(`spend-402 result: ${JSON.stringify({ status, signedUsdc, settled, paidUsdc: settled ? signedUsdc : 0 })}`);
 }
 
-async function spend402(acct, url, bodyArg, payToArg) {
+// ── the DAY BUDGET: what this machine's runs have signed today, in a file ──
+
+/** The day budget in whole USDC base units, from a setting: { units, fellBack }. A plain dollar amount (digits, at most six after
+ * the point, a number or a string) from one base unit up to the ceiling is kept. Anything else (empty, text, NaN, Infinity, a sign,
+ * zero, an exponent, hex, a seventh decimal, more than the ceiling) is NOT read as "no budget" and is not clamped to the ceiling: it
+ * falls to the default and `fellBack` says so. Nothing set (undefined or null) is the default with `fellBack` false. The shared
+ * payment helper and its served copy hold this function word for word. */
+function readDayBudget(setting) {
+  const toUnits = (dollars) => {
+    const m = /^(\d{1,9})(?:\.(\d{1,6}))?$/.exec(dollars);
+    return m ? BigInt(m[1]) * 10n ** BigInt(USDC_DECIMALS) + BigInt((m[2] ?? "").padEnd(USDC_DECIMALS, "0")) : null;
+  };
+  const standing = toUnits(DEFAULT_DAY_BUDGET_USDC);
+  const ceiling = toUnits(MAX_DAY_BUDGET_USDC);
+  if (setting === undefined || setting === null) return { units: standing, fellBack: false };
+  let text = setting;
+  if (typeof setting === "number") {
+    if (!Number.isFinite(setting) || setting < 0) return { units: standing, fellBack: true };
+    text = setting.toFixed(USDC_DECIMALS);
+    if (Math.abs(Number(text) - setting) > 1e-9) return { units: standing, fellBack: true };
+  }
+  const asked = typeof text === "string" ? toUnits(text.trim()) : null;
+  return asked !== null && asked > 0n && asked <= ceiling ? { units: asked, fellBack: false } : { units: standing, fellBack: true };
+}
+
+/** Today's date in UTC, such as "2026-11-16": the day the budget counts in. The shared payment helper holds the same function. */
+function utcDay() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Take `units` of today's room in the day ledger, BEFORE the key is used: { ok: true }, or { why } (a plain sentence, nothing signed).
+ * The ledger is a file of JSON lines, one per signature, each exactly { day, units } (units: whole USDC base units as a digit
+ * string). It is read whole every time and a line this client did not write refuses the run, so a ledger that cannot be trusted is
+ * never read as zero. The new line is appended BEFORE the key is used, and the total is read again after it: runs that start at the
+ * same moment cannot all pass, and one that loses the race keeps its line (the total can read too high, never too low). */
+async function reserveDayBudget(units, budgetUnits) {
+  const { appendFileSync, mkdirSync, readFileSync } = await import("node:fs");
+  const { homedir } = await import("node:os");
+  const { dirname, join } = await import("node:path");
+  const named = process.env.VEALTH_AGENT_DAY_LEDGER;
+  const file = typeof named === "string" && named.trim() !== "" ? named.trim() : join(homedir(), ".vealth-agent", "day-spend.jsonl");
+  const shown = String(file).replace(/[^\x20-\x7e]/g, "?");
+  const today = utcDay();
+  const unusable = (why) => ({ why: `the day ledger ${shown} ${why}` });
+  const totalToday = () => {
+    let text = "";
+    try {
+      text = readFileSync(file, "utf8");
+    } catch (err) {
+      if (err?.code !== "ENOENT") return unusable(`cannot be read (${plain(err?.code ?? err?.message)}), so the budget cannot be checked. Fix it, or point VEALTH_AGENT_DAY_LEDGER at a file you can use`);
+    }
+    let total = 0n;
+    const lines = text.split("\n");
+    for (let i = 0; i < lines.length; i += 1) {
+      if (lines[i].trim() === "") continue;
+      let row = null;
+      try { row = JSON.parse(lines[i]); } catch { /* not one of ours: refused below */ }
+      const ours = row !== null && typeof row === "object" && !Array.isArray(row) && Object.keys(row).length === 2
+        && typeof row.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.day) && typeof row.units === "string" && /^\d{1,15}$/.test(row.units);
+      if (!ours) return unusable(`has a line (line ${i + 1}) that this client did not write, so the budget cannot be trusted. Check it, or point VEALTH_AGENT_DAY_LEDGER at a new file`);
+      if (row.day > today) return unusable(`holds a later day (${row.day}) than this machine's clock says (${today}), so the clock is wrong or the file is not this machine's. Fix the clock, or point VEALTH_AGENT_DAY_LEDGER at a new file`);
+      if (row.day === today) total += BigInt(row.units);
+    }
+    return { total };
+  };
+  const before = totalToday();
+  if (before.why) return before;
+  if (before.total + units > budgetUnits) {
+    return { why: `the day budget is reached: $${formatUnits(before.total)} was signed today by this machine's runs, a payment of $${formatUnits(units)} would take it past $${formatUnits(budgetUnits)} (VEALTH_AGENT_DAY_BUDGET_USDC; ledger ${shown})` };
+  }
+  try {
+    mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+    appendFileSync(file, `${JSON.stringify({ day: today, units: String(units) })}\n`, { mode: 0o600 });
+  } catch (err) {
+    return unusable(`cannot be written (${plain(err?.code ?? err?.message)}), so the budget cannot be kept. Fix it, or point VEALTH_AGENT_DAY_LEDGER at a file you can use`);
+  }
+  const after = totalToday();
+  if (after.why) return after;
+  if (after.total > budgetUnits) {
+    return { why: `the day budget is reached: another run signed at the same moment, and together they would take $${formatUnits(after.total)} past $${formatUnits(budgetUnits)} (VEALTH_AGENT_DAY_BUDGET_USDC; ledger ${shown}). This run's line stays in the ledger, which can only make the total too high` };
+  }
+  return { ok: true };
+}
+
+async function spend402(acct, url, bodyArg, payToArg, getMode = false) {
   // The cap is read FIRST, before anything is sent: a setting that is not a plain dollar
   // amount used to read as "no cap at all" (NaN compares false with everything).
   const capUnits = parseCapUnits(process.env.VEALTH_AGENT_MAX_SPEND_USDC || DEFAULT_MAX_SPEND_USDC);
@@ -762,6 +1100,16 @@ async function spend402(acct, url, bodyArg, payToArg) {
     console.error(`${urlProblem}. Nothing was sent and nothing was signed.`);
     process.exit(1);
   }
+  // The host allow list: a door on a host the caller did not list is refused here, before any request, so nothing is signed for it.
+  const hostProblem = payHostProblem(url, process.env.VEALTH_AGENT_PAY_HOSTS);
+  if (hostProblem) {
+    console.error(`${hostProblem}. Nothing was sent and nothing was signed.`);
+    process.exit(1);
+  }
+  if (getMode && bodyArg !== undefined) {
+    console.error("a GET carries no body, and one was given: put the query in the url. Nothing was sent and nothing was signed.");
+    process.exit(1);
+  }
   let body;
   try {
     body = bodyArg ? JSON.parse(bodyArg) : {};
@@ -769,10 +1117,11 @@ async function spend402(acct, url, bodyArg, payToArg) {
     console.error(`bodyJson is not valid JSON: ${bodyArg}`);
     process.exit(1);
   }
-  const headers = { "content-type": "application/json", accept: "application/json" };
+  const verb = getMode ? "GET" : "POST";
+  const headers = getMode ? { accept: "application/json" } : { "content-type": "application/json", accept: "application/json" };
 
   // A redirect is never followed: the payment header must go to the door that was asked for and to no other.
-  const first = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), redirect: "manual" });
+  const first = await fetch(url, { method: verb, headers, ...(getMode ? {} : { body: JSON.stringify(body) }), redirect: "manual" });
   if (first.status !== 402) {
     const { text } = await readBodyText(first);
     reportSpend(first.status, 0n); // nothing was signed
@@ -781,7 +1130,23 @@ async function spend402(acct, url, bodyArg, payToArg) {
     process.exit(first.status >= 400 ? 1 : 0);
   }
 
-  const { json: challenge, text: challengeText } = await readBodyText(first);
+  const { json: bodyChallenge, text: challengeText } = await readBodyText(first);
+  // The challenge is in the BODY (ours, always) unless the body carries none: then, and only then, a version 2 door's
+  // base64 PAYMENT-REQUIRED header is read. v2 is true for that header alone, so a body challenge is read exactly as before.
+  let challenge = bodyChallenge;
+  let v2 = false;
+  if (!bodyCarriesChallenge(bodyChallenge)) {
+    const headerText = first.headers.get("payment-required");
+    if (headerText !== null) {
+      const fromHeader = decodePaymentRequiredHeader(headerText);
+      if (fromHeader.why) {
+        console.error(`${fromHeader.why}. Refusing, and nothing was signed.`);
+        process.exit(1);
+      }
+      challenge = fromHeader.challenge;
+      v2 = true;
+    }
+  }
   const accepts = challenge?.accepts;
   const offer = selectBaseUsdcRequirement(accepts);
   if (!offer) {
@@ -793,7 +1158,7 @@ async function spend402(acct, url, bodyArg, payToArg) {
     process.exit(1);
   }
   // A settlement other than EIP-3009 (permit2 among them) is refused inside readOffer, before anything is signed.
-  const read = readOffer(offer, capUnits, checksumAddress);
+  const read = readOffer(offer, capUnits, checksumAddress, v2);
   if (read.why) {
     console.error(`${read.why}. Refusing, and nothing was signed.`);
     process.exit(1);
@@ -805,9 +1170,21 @@ async function spend402(acct, url, bodyArg, payToArg) {
     );
     process.exit(1);
   }
+  // The day budget: the room is taken in the day ledger BEFORE anything is said about signing or the key is used. A setting that
+  // is not a plain amount falls to the default and is said, because the default may be looser than the one that was meant.
+  const dayBudgetSetting = process.env.VEALTH_AGENT_DAY_BUDGET_USDC;
+  const dayBudget = readDayBudget(dayBudgetSetting);
+  if (dayBudget.fellBack) {
+    console.error(`VEALTH_AGENT_DAY_BUDGET_USDC (${plain(dayBudgetSetting)}) is not a plain dollar amount from 0.000001 to ${MAX_DAY_BUDGET_USDC}, so the default $${formatUnits(dayBudget.units)} a day stands.`);
+  }
+  const heldRoom = await reserveDayBudget(read.value, dayBudget.units);
+  if (heldRoom.why) {
+    console.error(`${heldRoom.why}. Refusing, and nothing was signed.`);
+    process.exit(1);
+  }
   // Said BEFORE the key is used, so the person (or the log an agent leaves) has the payee and the exact amount first.
   console.log(
-    `About to sign: pay $${formatUnits(read.value)} USDC on Base to ${offer.payTo} from ${acct.address}, good for ${read.windowSeconds} seconds. ` +
+    `About to sign: pay $${formatUnits(read.value)} USDC on Base to ${offer.payTo} from ${whoIs(acct)}, good for ${read.windowSeconds} seconds. ` +
     (payToPin !== undefined ? "That payee is the address you pinned." : "The payee is the door's own choice (pin one with --pay-to to refuse any other)."),
   );
 
@@ -831,21 +1208,30 @@ async function spend402(acct, url, bodyArg, payToArg) {
     primaryType: "TransferWithAuthorization",
     message: { from: acct.address, to: checksumAddress(offer.payTo), value: read.value, validAfter: 0n, validBefore: BigInt(validBefore), nonce },
   });
-  // What goes on the wire is the same authorization, in the shape every vealth.net door decodes.
-  const authorization = { from: acct.address, to: offer.payTo, value: String(read.value), validAfter: 0, validBefore, nonce };
+  // What goes on the wire is the same authorization, in the shape every vealth.net door decodes (version 1: numeric times).
+  // Version 2 writes the times as text, as the shared payment helper does and as the reference client does.
+  const authorization = v2
+    ? { from: acct.address, to: offer.payTo, value: String(read.value), validAfter: "0", validBefore: String(validBefore), nonce }
+    : { from: acct.address, to: offer.payTo, value: String(read.value), validAfter: 0, validBefore, nonce };
 
   console.log(`signed, nonce ${authorization.nonce.slice(0, 10)}… (unfunded wallets get refused on-chain, expected)`);
 
-  const xPayment = Buffer.from(
-    // The network as the door spelled it ("base" or "eip155:8453"), as the shared payment helper sends it.
-    JSON.stringify({ x402Version: 1, scheme: "exact", network: read.network, asset: BASE_USDC, payload: { signature, authorization } }),
-  ).toString("base64");
+  // Version 2: { x402Version: 2, resource, accepted, payload }, `accepted` the door's own offer unchanged, `resource` the challenge's
+  // own when it names a url, and no `extensions`. Version 1: the network as the door spelled it ("base" or "eip155:8453"), as the helper sends it.
+  const resource = challenge?.resource;
+  const echoed = resource !== null && typeof resource === "object" && !Array.isArray(resource) && typeof resource.url === "string";
+  const envelope = v2
+    ? { x402Version: 2, ...(echoed ? { resource } : {}), accepted: offer, payload: { signature, authorization } }
+    : { x402Version: 1, scheme: "exact", network: read.network, asset: BASE_USDC, payload: { signature, authorization } };
+  const xPayment = Buffer.from(JSON.stringify(envelope)).toString("base64");
+  // A version 2 door reads `payment-signature` and nothing else; a version 1 door reads `x-payment`. One header is sent, never both.
+  const payHeader = v2 ? "payment-signature" : "x-payment";
 
   // From here the authorization has been handed to the door. Every way out says what was signed (reportSpend), because the
   // door may have broadcast it even when it answered with an error or did not answer at all.
   let second;
   try {
-    second = await fetch(url, { method: "POST", headers: { ...headers, "x-payment": xPayment }, body: JSON.stringify(body), redirect: "manual" });
+    second = await fetch(url, { method: verb, headers: { ...headers, [payHeader]: xPayment }, ...(getMode ? {} : { body: JSON.stringify(body) }), redirect: "manual" });
   } catch (err) {
     reportSpend(null, read.value);
     console.error(`the paid call got no answer (${plain(err?.message)}) after the payment went to the door. It may still have settled, so count it as spent. It lapses by itself within ${read.windowSeconds} seconds.`);
@@ -878,7 +1264,10 @@ async function spend402(acct, url, bodyArg, payToArg) {
     console.log(`door refused settlement (402): ${result?.error ?? "?"} — ${reason}`);
     // Always a string, so it goes through the scrub: an object printed by the console would skip it.
     if (result?.message) console.log(typeof result.message === "string" ? result.message : JSON.stringify(result.message));
-    console.log(`\nnext: spend-402 ${url}  (fund ${acct.address} with USDC on Base, then re-run)`);
+    // A run with no kept key signed from a wallet whose key is gone, so it is never told to fund that address.
+    console.log(process.env.VEALTH_AGENT_KEY
+      ? `\nnext: spend-402 ${url}  (fund ${acct.address} with USDC on Base, then re-run)`
+      : `\nnothing to fund: this run's wallet was ephemeral, and money sent to it is lost. Keep a key of your own (set VEALTH_AGENT_KEY), run the address command to see where to send USDC on Base, then run spend-402 ${url} again.`);
     process.exit(1);
   }
   if (second.status >= 400) {
@@ -1053,7 +1442,11 @@ const afterGps = gpsIdx !== -1 ? [...afterFlag.slice(0, gpsIdx), ...afterFlag.sl
 // --pay-to <address> belongs to `spend-402` alone (the one address a payment may go to), stripped the same way.
 const payIdx = afterGps.indexOf("--pay-to");
 const payToValue = payIdx !== -1 ? afterGps[payIdx + 1] : undefined;
-const argv = payIdx !== -1 ? [...afterGps.slice(0, payIdx), ...afterGps.slice(payIdx + 2)] : afterGps;
+const afterPay = payIdx !== -1 ? [...afterGps.slice(0, payIdx), ...afterGps.slice(payIdx + 2)] : afterGps;
+// --get belongs to `spend-402` alone too (a door that wants a GET, no body): taken out only there, so no other command's
+// arguments change, and `claim` still refuses a flag it does not know.
+const getMode = afterPay[0] === "spend-402" && afterPay.includes("--get");
+const argv = getMode ? afterPay.filter((a) => a !== "--get") : afterPay;
 function parsePin(text) {
   const m = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(String(text ?? ""));
   if (!m) return null;
@@ -1120,9 +1513,10 @@ const [cmd, a1, a2, a3, ...rest] = argv[0] === "claim" ? argv.filter((a) => !a.s
 
 if (!cmd) {
   const start = await call("start_here", {});
-  console.log(start.text);
+  printReply(start);
   const work = await call("find_work", { limit: 5, ...(flagValue ? { flag: flagValue } : {}) });
-  console.log(`\n${work.text}`);
+  console.log("");
+  printReply(work);
   console.log("\nread-only preflight done — nothing signed, nothing sent. `earn --dry` lists the work you could take from anywhere; `vote <workId>` is the free first act.");
 } else if (cmd === "earn") {
   await earn(argv.slice(1));
@@ -1186,11 +1580,17 @@ if (!cmd) {
 } else if (cmd === "mine") {
   const acct = account();
   report(await call("my_work", { wallet: acct.address }));
+} else if (cmd === "address") {
+  if (a1 !== undefined) { console.error("usage: address   (it takes no arguments: it prints the address of the key you keep in VEALTH_AGENT_KEY, and nothing else)"); process.exit(1); }
+  keptAddress();
 } else if (cmd === "spend-402") {
-  if (!a1 || (payIdx !== -1 && payToValue === undefined)) { console.error("usage: spend-402 <https url> [bodyJson] [--pay-to <0x address the payment may go to>]"); process.exit(1); }
+  if (!a1 || (payIdx !== -1 && payToValue === undefined)) {
+    console.error("usage: spend-402 <https url> [bodyJson] [--pay-to <0x address the payment may go to>]\n   or: spend-402 <https url> --get [--pay-to <0x address the payment may go to>]   (a door that wants a GET, with no body)");
+    process.exit(1);
+  }
   const acct = account();
-  await spend402(acct, a1, a2, payToValue);
+  await spend402(acct, a1, a2, payToValue, getMode);
 } else {
-  console.error(`unknown command: ${cmd}. Use earn | vote | claim | proof | proof-photo | physical | status | mine | spend-402, or no command for the read-only preflight.`);
+  console.error(`unknown command: ${cmd}. Use earn | vote | claim | proof | proof-photo | physical | status | mine | address | spend-402, or no command for the read-only preflight.`);
   process.exit(1);
 }

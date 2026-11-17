@@ -1,11 +1,11 @@
 ---
 name: net-circle
-description: Quote every ETH loop through the NET token's pools on Base and take one with your own wallet. prepare returns ONE unsigned Universal Router transaction that trades exactly the size it states and reverts unless at least input plus gas comes back. Holds no key, signs nothing, sends nothing.
+description: Quote every ETH loop through the NET token's pools on Base (the buying in NET's pools is the house's own) and take one with your own wallet. prepare returns ONE unsigned Universal Router transaction that trades exactly the size it states and reverts unless at least input plus gas comes back. Holds no key, signs nothing, sends nothing.
 ---
 
 # The NET circle
 
-NET trades in four small Uniswap V4 pools on Base, against WETH, native ETH, ECO and VVV. ECO in turn trades against ZORA, MfT, axlREGEN and ETH. When one pool moves and the others have not caught up, a trade around a loop returns more ETH than it took. This program quotes twelve such loops, finds the size that pays most after gas, and prepares that trade as one transaction you sign.
+NET trades in four small Uniswap V4 pools on Base that this kit quotes, against WETH, native ETH, ECO and VVV (the buying in NET's pools is the house's own). NET has a fifth pool, against HYDROC, that this kit does not quote; the sibling kit `skills/protocol-guide` reads the pools with ETH, WETH, ECO and HYDROC. ECO in turn trades against ZORA, MfT, axlREGEN and ETH. When one pool moves and the others have not caught up, a trade around a loop returns more ETH than it took. This program quotes twelve such loops, finds the size that pays most after gas, and prepares that trade as one transaction you sign.
 
 | Loop (`--loop`) | Legs in the `buy-net` direction (`sell-net` is the reverse) | Pool fees |
 |---|---|---|
@@ -24,7 +24,7 @@ Node 20 or newer. Use an RPC node you trust: the program refuses fees above 10 g
 npm ci                                           # installs viem from the lockfile; this package has no install scripts
 npm test                                         # offline tests, including real viem errors from a mock node
 node net-circle.mjs                              # every loop: gap, fees, and whether any size pays after gas
-node net-circle.mjs pools                        # every pool's id and liquidity; the NET pools' holdings and burned positions
+node net-circle.mjs pools                        # every pool's id and liquidity; the NET pools' holdings and burned positions (the buying in NET's pools is the house's own)
 node net-circle.mjs selftest --from 0xYOU        # proves every loop's path executes today (simulation)
 node net-circle.mjs prepare --from 0xYOU --json  # the best loop as one unsigned tx, only when it is worth sending
 node net-circle.mjs watch --from 0xYOU --every 30 > trades.jsonl   # one JSON line per sendable trade
@@ -112,7 +112,7 @@ It does **not** protect profit, and it does not stop someone else from closing t
 
 ## What it is honestly worth
 
-- **The pools are tiny.** Run `pools` to see them. On 2026-11-08 and 09:
+- **The pools are tiny.** Run `pools` to see them (the buying in NET's pools is the house's own). On 2026-11-08 and 09:
   - NET/WETH held about 0.0158 WETH, about $34.
   - NET/ETH held about 0.0009 ETH.
   - NET/VVV held about 0.098 VVV.
@@ -131,7 +131,7 @@ It does **not** protect profit, and it does not stop someone else from closing t
 
   At 0.006 to 0.007 gwei, a dust-size try costs roughly a third of a US cent to two cents.
 - **The largest gaps on 2026-11-09:** `vvv:buy-net` +4.69%, `axlregen:buy-net` +2.94% and `mft:buy-net` +2.44%. None paid after gas, because the pools are too shallow to carry a size where the gap beats the gas. Gaps open when NET, ECO, ZORA, MfT, axlREGEN or VVV move. EcoWealth buys NET regularly in small amounts.
-- **NET's price is mostly EcoWealth's own buying** and is no sign of demand. The NET/WETH pool's ratio implies about $1.8M per NET, against $34 of ETH. What any holder can take out of a pool is its reserve, never the quoted price.
+- **The buying in NET's pools is the house's own.** NET's market value is mostly EcoWealth's own buying, which is our own demand, not outside demand. What any holder can take out of a pool is its reserve, never a quoted price.
 
 ## EcoWealth's interest, disclosed
 
@@ -140,6 +140,8 @@ EcoWealth created ECO and NET and holds both, plus MfT, so it gains when they ri
 The NET pools' only liquidity is their burned founding positions, so their 0.01% fees go to no one. Loops that buy NET pay ETH into a NET pool. Loops that sell NET take it out. You keep the spread.
 
 ## Pools and proofs (Base, chain 8453)
+
+The four NET pools this kit quotes (the buying in NET's pools is the house's own). NET also has a fifth pool, against HYDROC, that this kit does not quote.
 
 | Pool | V4 pool id | Founding position |
 |---|---|---|

@@ -8,7 +8,7 @@
 //   1. find_work near your place, and write every NEW job to digest.md and to the screen in plain words (with --kind, only the jobs
 //      whose title, proof line or work type carries one of your words; the default watches everything);
 //   2. turn each .txt or .md file you drop in needs/ into a post (the free post signed by your own wallet);
-//   3. read my_work for its own wallet, and follow the reply's NEXT_CALL for read steps only;
+//   3. read my_work for its own wallet, and follow the reply's NEXT_CALL for read steps only (a WAIT or a DONE line is a stop);
 //   4. vote, free, only on the work ids you wrote in votes.txt.
 // DRY by default: it prints what it would post and vote. Add --live to act.
 //
@@ -33,8 +33,10 @@ export const VERSION = "0.3.0"; // 0.3.0 (2026-11-08): --kind, watch one kind of
 export const DEFAULT_MCP_URL = "https://vealth.net/mcp";
 /** The board's free signed lane takes ten posts per wallet per rolling day; the steward never asks for more. */
 export const POSTS_PER_DAY = 10;
-/** The only tools a NEXT_CALL may lead this program to follow: reads. A write is never followed, only the ones written below. */
-export const READ_ONLY_FOLLOW = new Set(["my_work", "work_status", "my_votes", "get_work_packet"]);
+/** The only tools a NEXT_CALL may lead this program to follow: reads of the worker loop. A write is never followed, only the ones written
+ * below. Each name is a free read in the worker lane of the MCP registry (a check holds the list to the
+ * registry). Any other name in a NEXT_CALL is not called and is said in one plain line. */
+export const READ_ONLY_FOLLOW = new Set(["my_work", "work_status", "get_work_packet"]);
 /** Every tool this program ever calls. The door refuses any other name before a byte leaves, so no reply can widen it. */
 export const TOOLS = new Set(["find_work", "get_work_packet", "my_work", "my_votes", "work_status", "prepare_post_work", "submit_post_work", "prepare_vote", "submit_vote"]);
 /** MCP protocol eras: the steward speaks 2026-07-28 (per-request _meta, no handshake) and falls back to 2025-06-18 once if a door refuses it. */
@@ -531,13 +533,25 @@ function retryAfterSeconds(header, nowMs) {
   const at = Date.parse(header);
   return Number.isFinite(at) ? Math.max(0, Math.ceil((at - nowMs) / 1000)) : 0;
 }
-export function parseNextCall(text) {
+/** One NEXT_CALL object as a step. The three shapes of the line (the terminal envelope convention): a DONE ({"done":true,...}) wins over
+ * everything else on it; then a WAIT ({"wait":true,...}), which names the one poll and the seconds before it may be made; then a literal
+ * call, which has a tool name. Anything else is no step. A WAIT and a DONE are stops: a WAIT's poll is never made, and a DONE's suggested
+ * new loop is never followed. */
+export function stepOf(obj) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
+  if (obj.done === true) return { kind: "done" };
+  if (obj.wait === true) return { kind: "wait", afterSeconds: typeof obj.after_seconds === "number" && Number.isFinite(obj.after_seconds) && obj.after_seconds >= 0 ? obj.after_seconds : null };
+  return typeof obj.tool === "string" ? { kind: "call", call: obj } : null;
+}
+export function parseNextStep(text) {
   const at = text.lastIndexOf("NEXT_CALL:\n");
   if (at < 0) return null;
-  try {
-    const next = JSON.parse(text.slice(at + "NEXT_CALL:\n".length).trim());
-    return next && typeof next === "object" && typeof next.tool === "string" ? next : null;
-  } catch { return null; }
+  try { return stepOf(JSON.parse(text.slice(at + "NEXT_CALL:\n".length).trim())); } catch { return null; }
+}
+/** The literal call a reply ends with, or null: a WAIT or a DONE is not a call. */
+export function parseNextCall(text) {
+  const step = parseNextStep(text);
+  return step?.kind === "call" ? step.call : null;
 }
 /** Read the body, but never more than the cap: past it the reading stops and the look backs off. */
 async function readCapped(res, max) {
@@ -620,8 +634,10 @@ async function callOnce(s, name, args) {
   const content = Array.isArray(result.content) ? result.content : [];
   const text = scrub(content.map((c) => (typeof c?.text === "string" ? c.text : "")).join("\n")).slice(0, 200_000);
   const sc = result.structuredContent && typeof result.structuredContent === "object" && !Array.isArray(result.structuredContent) ? result.structuredContent : {};
-  const fallbackNext = sc.next_call && typeof sc.next_call === "object" && typeof sc.next_call.tool === "string" ? sc.next_call : null;
-  const rep = { status: res.status, isError: result.isError === true, text, prose: text, sc, next: parseNextCall(text) ?? fallbackNext };
+  // The line in the prose first, then the structured half. `next` is a literal call to follow, or null; `stop` is a WAIT or a DONE, which
+  // is never a call and never a missing NEXT_CALL: the reply said stop.
+  const step = parseNextStep(text) ?? stepOf(sc.next_call);
+  const rep = { status: res.status, isError: result.isError === true, text, prose: text, sc, next: step?.kind === "call" ? step.call : null, stop: step && step.kind !== "call" ? step : null };
   // The board relays its own gates inside a tool reply. A 429 or 5xx there is the door asking to wait, except the day cap, which is its own words.
   const inner = /\(HTTP (429|5\d\d)\)/.exec(text);
   if (rep.isError && inner && !/signed_post_cap_reached/.test(text)) throw new StopLook(`the board answered ${inner[1]} inside the tool`, { retryAfter, status: Number(inner[1]) });
@@ -957,9 +973,12 @@ async function phaseOwn(s, state, report) {
     return;
   }
   const sig = createHash("sha256").update(JSON.stringify(rows.map((r) => [r.workId, r.status, r.movedAt]))).digest("hex").slice(0, 16);
-  // NEXT_CALL, for read steps on its own work only: two hops at most, never twice the same call, never a write.
-  const reads = []; const tried = new Set(); let cur = rep;
-  for (let hop = 0; hop < 2 && rows.length && cur.next && READ_ONLY_FOLLOW.has(cur.next.tool); hop++) {
+  // NEXT_CALL, for read steps on its own work only: two hops at most, never twice the same call, never a write. A WAIT or a DONE ends the
+  // walk (cur.next is null then, cur.stop says which): the poll a WAIT names is never made, and a DONE's new loop is never followed.
+  // A tool that is not on the list is not called, and is said once below.
+  const reads = []; const tried = new Set(); let cur = rep; let refusedTool = null;
+  for (let hop = 0; hop < 2 && rows.length && cur.next; hop++) {
+    if (!READ_ONLY_FOLLOW.has(cur.next.tool)) { refusedTool = cur.next.tool; break; }
     const args = fillReadArgs(cur.next.args, s.address);
     const key = JSON.stringify([cur.next.tool, args]);
     if (!args || tried.has(key)) break;
@@ -970,6 +989,7 @@ async function phaseOwn(s, state, report) {
   }
   if (sig === state.ownSig) return;
   state.ownSig = sig;
+  if (refusedTool !== null) report.notes.push(`the door's reply named ${safeName(String(refusedTool)).slice(0, 40)} as a next step, and the steward follows only reads of its own work (${[...READ_ONLY_FOLLOW].join(", ")}), so it did not call it.`);
   if (!rows.length) { report.own.push("This wallet has not claimed any job yet. Claim one yourself, on the job's page or with the Vealth client; this steward never claims for you."); return; }
   for (const r of rows) {
     const title = r.title ? fence(r.title) : r.workId;
@@ -1226,7 +1246,7 @@ export const HELP = `vealth steward ${VERSION}: keeps provisioning one place thr
   --dir <folder>        the steward's folder (default ~/.vealth-steward, or VEALTH_STEWARD_HOME)
   --kind <words>        watch only one kind of work: words separated by commas (up to ${MAX_KINDS}); saved with the place; --kind all watches everything again
   --interval <min>      minutes between looks (default 30, at least ${MIN_INTERVAL_MINUTES})
-  --mcp-url <url>       the door (default ${DEFAULT_MCP_URL}); https only
+  --mcp-url <url>       the door (default ${DEFAULT_MCP_URL}); https, or plain http for this computer's own address only
   --max-new <n>         new jobs listed per look (default 15)
   --pace-ms <ms>        pause between calls to the door (default 1250, at least 1000 for a door that is not this computer)
   --stop-file <path>    one more stop file to honour before every look (the folder's STOP is always honoured)
