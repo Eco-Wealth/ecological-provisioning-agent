@@ -295,3 +295,119 @@ test('signed checkpoint bytes that are not valid UTF-8 are refused by both check
     assert.equal(JSON.parse(run.stdout).error, 'checkpoint payload is not valid UTF-8');
   }
 });
+
+// A lone surrogate (half of an emoji) is refused in the checkpoint and in an evidence text; a whole pair passes; a third argument that is not an object is a FAIL.
+const LONE = { 'a high half alone': '\ud800', 'a low half alone': '\udc00', 'a reversed pair': '\udc00\ud800' };
+function respell(x, key, value) {
+  const c = JSON.parse(Buffer.from(x.envelope.payload, 'base64').toString('utf8'));
+  c[key] = value;
+  const body = Buffer.from(JSON.stringify(Object.fromEntries(Object.keys(c).sort().map(k => [k, c[k]]))), 'utf8');
+  const y = copy(x);
+  y.envelope.payload = body.toString('base64');
+  return { y, body };
+}
+test('a lone surrogate in any string of the signed checkpoint fails SP003 with one reason, however it is placed', () => {
+  const keyPair = generateKeyPairSync('ed25519');
+  const x = signJournal(journal('fictional-A', 'baseline'), keyPair.privateKey, '2026-01-04T00:00:00Z');
+  assert.equal(sp003(inspectSignedExchange(x)).status, 'PASS');
+  let tried = 0;
+  for (const [label, lone] of Object.entries(LONE)) for (const key of ['publisher', 'format', 'journalHead', 'issuedAt', 'signerKeySha256']) {
+    const { y, body } = respell(x, key, 'x' + lone + 'y');
+    y.envelope.signatures[0].sig = sign(null, pae(y.envelope.payloadType, body), keyPair.privateKey).toString('base64');
+    const report = inspectSignedExchange(y);
+    assert.equal(sp003(report).status, 'FAIL', label + ' in ' + key);
+    assert.match(sp003(report).reason, /checkpoint text holds a lone surrogate$/, label + ' in ' + key);
+    assert.equal(report.bundle, undefined);
+    tried++;
+  }
+  assert.equal(tried, 15);
+});
+test('a lone surrogate in the publisher name is refused by both checkers', () => {
+  for (const lone of Object.values(LONE)) {
+    const x = signJournal(journal('fictional-' + lone, 'baseline'), generateKeyPairSync('ed25519').privateKey, '2026-01-04T00:00:00Z');
+    const report = inspectSignedExchange(x);
+    assert.equal(sp003(report).status, 'FAIL');
+    assert.match(sp003(report).reason, /checkpoint text holds a lone surrogate$/);
+    assert.equal(pyRun(x).status, 1);
+  }
+});
+test('a lone surrogate in an evidence text fails SP002, even when the hash is of its replacement-character form', () => {
+  for (const [label, lone] of Object.entries(LONE)) {
+    const x = signJournal(journal('fictional-A', 'baseline', 12, 'FICTIONAL note ' + lone + ' end'), generateKeyPairSync('ed25519').privateKey, '2026-01-04T00:00:00Z');
+    const report = inspectSignedExchange(x);
+    const sp002 = report.findings.find(f => f.ruleId === 'SP002');
+    assert.equal(sp002.status, 'FAIL', label);
+    assert.match(sp002.reason, /lone surrogate$/);
+    assert.equal(report.bundle, undefined);
+  }
+});
+test('a whole surrogate pair (an emoji) in the publisher name and in an evidence text still passes', () => {
+  const x = signJournal(journal('fictional-🌳', 'baseline', 12, 'FICTIONAL note 🌳 end'), generateKeyPairSync('ed25519').privateKey, '2026-01-04T00:00:00Z');
+  const report = inspectSignedExchange(x);
+  assert.equal(report.findings.find(f => f.ruleId === 'SP002').status, 'PASS');
+  assert.equal(sp003(report).status, 'PASS');
+  assert.ok(report.bundle);
+  assert.equal(pyRun(x).status, 0);
+});
+test('inspectSignedPair given null or another value that is not an object returns a FAIL and no comparison, and throws nothing', () => {
+  const p = pair();
+  for (const options of [null, 'x', 7, true, ['a']]) {
+    const report = inspectSignedPair(p.first, p.second, options);
+    assert.deepEqual(report.findings.map(f => [f.ruleId, f.status]), [['PX001', 'FAIL']]);
+    assert.deepEqual(report.comparisons, []);
+    assert.deepEqual(report.reusedEvidence, []);
+    assert.equal(report.bundle, undefined);
+  }
+  assert.equal(status(inspectSignedPair(p.first, p.second, undefined), 'PX001'), 'PASS');
+});
+
+// The Python check and readSignedExchange must agree on bytes: a package that is not the canonical form is refused by both,
+// and an input too deeply nested for Python's recursion limit gets the same one-line JSON answer, not a Python error.
+const pyText = text => spawnSync('python3', [signedChecker], { input: text, encoding: 'utf8' });
+test('a valid package that is pretty-printed or reordered is refused by both checkers; the canonical bytes pass both', () => {
+  const x = signJournal(journal('fictional-A', 'baseline'), generateKeyPairSync('ed25519').privateKey, '2026-01-04T00:00:00Z');
+  const canonicalText = serializeSignedExchange(x);
+  assert.deepEqual(readSignedExchange(canonicalText), x);
+  assert.equal(pyText(canonicalText).status, 0);
+  const respelled = {
+    'pretty-printed': JSON.stringify(x, null, 2) + '\n',
+    'spaces after separators': JSON.stringify(x).replaceAll('":', '": ').replaceAll(',"', ', "') + '\n',
+    'members out of order': JSON.stringify({ journal: x.journal, format: x.format, envelope: x.envelope, publicKeySpki: x.publicKeySpki }) + '\n',
+    'a plain letter written as an escape': canonicalText.replace('"format":"e', '"format":"\\u0065')
+  };
+  for (const [label, text] of Object.entries(respelled)) {
+    assert.throws(() => readSignedExchange(text), TypeError, label);
+    const run = pyText(text);
+    assert.equal(run.status, 1, label + ': ' + run.stdout + run.stderr);
+    assert.equal(JSON.parse(run.stdout).valid, false, label);
+  }
+  assert.equal(JSON.parse(pyText(JSON.stringify(x, null, 2) + '\n').stdout).error, 'noncanonical package bytes');
+});
+test('a very deeply nested input gets the one-line JSON answer and exit 1 from the Python check, and a throw from the main reader', () => {
+  const depth = 200000;
+  for (const text of ['['.repeat(depth) + ']'.repeat(depth) + '\n', '{"a":'.repeat(depth) + '1' + '}'.repeat(depth) + '\n']) {
+    assert.throws(() => readSignedExchange(text)); // a TypeError or a RangeError: either way it throws and returns no package
+    const run = pyText(text);
+    assert.equal(run.status, 1, run.stdout + run.stderr);
+    assert.equal(run.stderr, '');
+    const answer = JSON.parse(run.stdout);
+    assert.equal(answer.valid, false);
+    assert.equal(typeof answer.error, 'string');
+  }
+});
+// The canonical-bytes rule must not refuse a valid package for how an unusual character is written: a control character (U+0001), DEL,
+// the line separator U+2028, an accented letter and an emoji in the publisher name and in an evidence text are written by serializeSignedExchange
+// the way the Python re-serialization writes them, so readSignedExchange accepts the package and the same bytes pass the Python check.
+test('a package whose publisher and evidence text hold U+0001, DEL, U+2028, an accented letter and an emoji is accepted by readSignedExchange and passes the Python check on the same bytes', () => {
+  // Built at runtime, so the source holds no invisible character: U+0001, DEL, U+2028, an accented letter and an emoji.
+  const ch = { soh: String.fromCodePoint(0x01), del: String.fromCodePoint(0x7f), ls: String.fromCodePoint(0x2028), acute: String.fromCodePoint(0xe9), tree: String.fromCodePoint(0x1f333) };
+  const odd = ['fictional', ch.soh, ch.del, ch.ls, ch.acute, ch.tree].join('-');
+  const note = 'FICTIONAL note ' + [ch.soh, ch.del, ch.ls, ch.acute, ch.tree].join(' ') + ' end';
+  const x = signJournal(journal(odd, 'baseline', 12, note), generateKeyPairSync('ed25519').privateKey, '2026-01-04T00:00:00Z');
+  const text = serializeSignedExchange(x);
+  assert.deepEqual(readSignedExchange(text), x);
+  const run = pyText(text); // plain python3, like every other case here: the checker imports its sibling journal_check module, which isolated mode (-I) hides
+  assert.equal(run.status, 0, run.stdout + run.stderr);
+  assert.equal(run.stderr, '');
+  assert.equal(JSON.parse(run.stdout).valid, true);
+});

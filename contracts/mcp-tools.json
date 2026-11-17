@@ -2,8 +2,8 @@
   "note": "Pinned public tool surface of vealth.net/mcp: every tool's name, title, description and inputSchema, exactly as tools/list serves them. Strangers' agents decide what to call from these strings, so they are pinned like an interface and may not change without this file changing in the SAME commit.",
   "law": "A description change is a trust change. Re-pin deliberately with `npm run check:mcp-tool-descriptions -- --write` and let the reviewer read the before/after text in the diff. Never re-pin to make a red lane green.",
   "regenerate_with": "npm run check:mcp-tool-descriptions -- --write",
-  "tool_count": 173,
-  "registry_digest": "sha256:a31780215fda8c555fc835c77a0c3f4122bea05ec0cafe3c759857d4f0c60ec2",
+  "tool_count": 182,
+  "registry_digest": "sha256:f3d3893ae9682f16435244d9247663cddc7fd0d031d542c1c8873eebc978d9de",
   "tools": [
     {
       "name": "start_here",
@@ -981,7 +981,7 @@
     {
       "name": "hour_card",
       "title": "The hour card for a packet",
-      "description": "The ONE document to read to a person before they start: what the place is and the circle every GPS fix must land inside, what to bring and what the safety notes say, the method steps in order, the proof to hand in as a checklist, what the land gets, what the worker gets and whether the pay is funded or only proposed, exactly what the record will hold about them, and the tool calls in order. Free, keyless, no wallet needed. The packet's own words are carried verbatim and never shortened. Read it to them in order rather than summarising it: the order is the order the hour runs in. Optionally in Swahili (lang: \"sw\"): the board's own sentences translate from a fixed dictionary, and the packet's own words translate only where a translation exists for that packet, tagged \"(Kiingereza)\" and counted in `coverage` where it does not; a safety-critical line always carries its English source on its own line too. Cost and signer: free and keyless, nothing to sign.",
+      "description": "The ONE document to read to a person before they start: what the place is and the circle every GPS fix must land inside, what to bring and what the safety notes say, the method steps in order, the proof to hand in as a checklist, what the land gets, what the worker gets and whether the pay is funded or only proposed, exactly what the record will hold about them, and the tool calls in order. Free, keyless, no wallet needed. The packet's own words are carried verbatim and never shortened. Read it to them in order rather than summarising it: the order is the order the hour runs in. Optionally in a second language (lang: \"sw\"): the board's own sentences translate from a fixed dictionary, and the packet's own words translate only where a translation exists for that packet, tagged as English on its line and counted in `coverage` where it does not; a safety-critical line always carries its English source on its own line too. Cost and signer: free and keyless, nothing to sign.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -995,14 +995,14 @@
               "en",
               "sw"
             ],
-            "description": "Optional, defaults to \"en\". \"sw\" reads the card in Swahili."
+            "description": "Optional, defaults to \"en\". \"sw\" reads the card in its second language."
           }
         },
         "required": [
           "workId"
         ]
       },
-      "digest": "sha256:d277ded1237b3f58276af6385e5e2ff5d882a6731e72a6b76e548c9e04c42e23"
+      "digest": "sha256:e5c59b48eac219bd59f959d18699967d30b1bebbc567f4a52f68493cbf696c04"
     },
     {
       "name": "my_hours",
@@ -1025,7 +1025,7 @@
     {
       "name": "my_money",
       "title": "A person's whole money picture, in one read",
-      "description": "Everything one wallet was paid, is owed as a receipt, is only offered, and can do next, in a single free keyless read: dollars that settled, every OTHER token that settled and in what amount, open work receipts, token offers still standing on packets they took (each with the token's own risk label), their hours, what the Regen #77 payout ledger recorded for them, and exactly three doors. IT IS A BOARD-SIDE RECORD, NOT A CHAIN BALANCE: every figure is what this board itself recorded, no chain is read here, and a wallet's real holdings are whatever the chain says. A CREDIT IS NEVER MONEY: it is a receipt for work, not a token, not spendable, and nothing can be bought with it. The board prices no token, so a token amount carries no dollar value. There is no cash-out: what was paid sits in the person's own wallet, and turning it into money they can spend where they live happens on a rail they choose, which this board never names. Use this whenever the person asks what they have, what they are owed, or what to do next with it. Cost and signer: free and keyless, nothing to sign.",
+      "description": "Everything one wallet was paid, is owed as a receipt, is only offered, and can do next, in a single read: dollars that settled, every OTHER token that settled and in what amount, open work receipts, token offers still standing on packets they took (each with the token's own risk label), their hours, what the Regen #77 payout ledger recorded for them, and exactly three doors. The packets the wallet funded and the pledges it made are COUNTED here and not listed: the wallet reads those rows with its own signature (the keyless reply ends with the message to sign; call again with the wallet, the nonce and the signature). IT IS A BOARD-SIDE RECORD, NOT A CHAIN BALANCE: every figure is what this board itself recorded, no chain is read here, and a wallet's real holdings are whatever the chain says. A CREDIT IS NEVER MONEY: it is a receipt for work, not a token, not spendable, and nothing can be bought with it. The board prices no token, so a token amount carries no dollar value. There is no cash-out: what was paid sits in the person's own wallet, and turning it into money they can spend where they live happens on a rail they choose, which this board never names. Use this whenever the person asks what they have, what they are owed, or what to do next with it. Cost and signer: free; the record is keyless, the funded and pledge rows are read with a signature by the wallet's own with no gas, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1039,14 +1039,22 @@
               "en",
               "sw"
             ],
-            "description": "The language of the FRAME: the block labels, the door sentences and the honesty lines. Numbers, wallets, token symbols and packet ids never change. 'sw' is authored Kiswahili. Default 'en'."
+            "description": "The language of the FRAME: the block labels, the door sentences and the honesty lines. Numbers, wallets, token symbols and packet ids never change. 'sw' is the second language, authored by hand. Default 'en'."
+          },
+          "nonce": {
+            "type": "number",
+            "description": "Only to read the funded and pledge rows: the time in milliseconds from the message to sign, the same number the signature was made over."
+          },
+          "signature": {
+            "type": "string",
+            "description": "Only to read the funded and pledge rows: the wallet's own signature of the message to sign the keyless reply gave. Free, no gas, used once."
           }
         },
         "required": [
           "workerWallet"
         ]
       },
-      "digest": "sha256:03e87331b07bda343bb0c528d46782c252d1128820fa1dd20a165418642bfab1"
+      "digest": "sha256:4e13c8893eb85c3bb7c13f7a8d4a2263b3d052c538393282a44a6901c47cbdef"
     },
     {
       "name": "prepare_credential_record",
@@ -1252,7 +1260,7 @@
     {
       "name": "my_ledger",
       "title": "A person's whole record, event by event, each with its receipt",
-      "description": "Answers \"what is the whole record behind this person\": for one wallet, every event the board holds in time order, each with a plain label, the job it belongs to and the receipt that proves it. It lists jobs claimed, proofs handed in and whether each was accepted or not, settlements with their transaction hash, earned credits banked and how each closed, payouts a backer's offer recorded, votes and pledges cast, titles the person declared, proof the wallet decided as an acceptor, and, derived from a settled job, the condition it counts as evidence toward. It composes the records my_work, my_money, my_votes and worker_titles already read and creates no store. Free, keyless, read-only. VEALTH IS AN EXPERIMENT AND THIS IS A READ OF THE RECORD, NOT A VALUATION: pay is proposed unless a record says funded and is paid only on a confirmed settlement, a pledge is intent, earned credit is a receipt and never money, a title is self-declared and unverified, and nothing here says anyone is fit for a job. Any source it cannot read is named under unreadable and its counts read unknown, never zero; a few records have no per-wallet read yet and are named too. Newest first by default; pass order and limit to page. Address only, never a private key. Cost and signer: free and keyless, nothing to sign.",
+      "description": "Answers \"what is the whole record behind this person\": for one wallet, every event the board holds in time order, each with a plain label, the job it belongs to and the receipt that proves it. It lists jobs claimed, proofs handed in and whether each was accepted or not, settlements with their transaction hash, earned credits banked and how each closed, payouts a backer's offer recorded, votes cast, titles the person declared, proof the wallet decided as an acceptor, and, derived from a settled job, the condition it counts as evidence toward. The packets a wallet funded and the pledges it made are COUNTED here and not listed: the wallet reads those rows with its own signature (the keyless reply ends with the message to sign; call again with the wallet, the nonce and the signature). It composes the records my_work, my_money, my_votes and worker_titles already read and creates no store. Read-only. VEALTH IS AN EXPERIMENT AND THIS IS A READ OF THE RECORD, NOT A VALUATION: pay is proposed unless a record says funded and is paid only on a confirmed settlement, a pledge is intent, earned credit is a receipt and never money, a title is self-declared and unverified, and nothing here says anyone is fit for a job. Any source it cannot read is named under unreadable and its counts read unknown, never zero; a few records have no per-wallet read yet and are named too. Newest first by default; pass order and limit to page. Address only, never a private key. Cost and signer: free; the record is keyless, the funded and pledge rows are read with a signature by the wallet's own with no gas, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1271,13 +1279,21 @@
           "limit": {
             "type": "number",
             "description": "Most rows to return, from 1 to 500. Defaults to 100. The summary always counts the whole record."
+          },
+          "nonce": {
+            "type": "number",
+            "description": "Only to read the funded and pledge rows: the time in milliseconds from the message to sign, the same number the signature was made over."
+          },
+          "signature": {
+            "type": "string",
+            "description": "Only to read the funded and pledge rows: the wallet's own signature of the message to sign the keyless reply gave. Free, no gas, used once."
           }
         },
         "required": [
           "wallet"
         ]
       },
-      "digest": "sha256:4b1a33f98766851534f15fd0b0a8c81887316dc565c1078475a161f4124fd9c9"
+      "digest": "sha256:62653c8f4229cfb8e8a69f338b06e36ab5ea8cd0bc10213d7143e6822cbc5dbb"
     },
     {
       "name": "my_next_step",
@@ -1998,7 +2014,7 @@
     {
       "name": "work_status",
       "title": "Where a packet stands right now",
-      "description": "Live lifecycle state of one packet — OPEN, CLAIMED, PROOF_SUBMITTED, APPROVED, PROOF_REJECTED, SETTLED or EXPIRED — plus its honest pay status (funded vs proposed). Free, keyless, read-only. Cost and signer: free and keyless, nothing to sign.",
+      "description": "Live lifecycle state of one packet — OPEN, CLAIMED, PROOF_SUBMITTED, APPROVED, PROOF_REJECTED, SETTLED or EXPIRED — plus its honest pay status (funded vs proposed). Its NEXT_CALL says WAIT while a person reviews the proof (poll no sooner than after_seconds, or stop and come back later) and DONE once the job is finished: stop. Free, keyless, read-only. Cost and signer: free and keyless, nothing to sign.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -2011,12 +2027,12 @@
           "workId"
         ]
       },
-      "digest": "sha256:0947cf37a4979364950ae0bccda8501a141eecea7d6dfb740720c2b0819c69aa"
+      "digest": "sha256:f1243250917a00aa72279e31597eabddc300331429fc39873dacbd69774682eb"
     },
     {
       "name": "my_work",
       "title": "What happened with my work",
-      "description": "One question, the whole picture for ONE wallet: every packet it claimed and where each one stands, what is waiting on the person (proof not handed in, proof rejected and the reason given), what settled and its public receipt, and what is newly open nearby that fits the kind of work they have already done. Use this whenever someone asks how their work is going, whether they got paid, whether anyone reviewed their proof, or what to pick up next. Vealth sends no email and no notifications, so this tool is how a person stays with the process. Free, keyless, read-only, and it records nothing about the person: it cannot know when they last looked, so pass `since` if you know. Cost and signer: free and keyless, nothing to sign.",
+      "description": "One question, the whole picture for ONE wallet: every packet it claimed and where each one stands, what is waiting on the person (proof not handed in, proof rejected and the reason given), what settled and its public receipt, and what is newly open nearby that fits the kind of work they have already done. Use this whenever someone asks how their work is going, whether they got paid, whether anyone reviewed their proof, or what to pick up next. Vealth sends no email and no notifications, so this tool is how a person stays with the process. Its NEXT_CALL says WAIT while everything is with a reviewer or a payer, and DONE when every packet is finished. Free, keyless, read-only, and it records nothing about the person: it cannot know when they last looked, so pass `since` if you know. Cost and signer: free and keyless, nothing to sign.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -2037,25 +2053,33 @@
           "wallet"
         ]
       },
-      "digest": "sha256:8ec335f2a3774dff36d349bce0f5fdbf08ed9a3f48e962b5b45d7b6bf0b4522e"
+      "digest": "sha256:51e2dfaa454d58256e47da0ef243478ecac8d3eca9e8b7344579804b31ea2c7a"
     },
     {
       "name": "my_votes",
       "title": "What one wallet has voted on and backed",
-      "description": "One wallet's whole demand history: every packet it voted for or against, and every packet it pledged to back — both free, signed acts that move no money. Use this when someone asks what they voted for, whether their vote is still active, or what they have pledged. A pledge here is a signed statement of intent only: pledged is not funded, nothing moves and nothing is held until a real payment settles through the separate funding door (prepare_funding). Free, keyless, read-only, and it records nothing about the caller. Cost and signer: free and keyless, nothing to sign.",
+      "description": "One wallet's demand history: the packets it voted for or against are listed free and keyless, its pledges are counted, and the pledge rows need your own signature. Use this when someone asks what they voted for, whether their vote is still active, or how many pledges they have made. To read the pledge rows, call again with the wallet, the nonce and the signature (the keyless reply ends with the message to sign). Votes and pledges are free, signed acts that move no money; a pledge here is a signed statement of intent only: pledged is not funded, nothing moves and nothing is held until a real payment settles through the separate funding door (prepare_funding). Read-only, and it records nothing about the caller. Cost and signer: free; the record is keyless, the pledge rows are read with a signature by the wallet's own with no gas, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "wallet": {
             "type": "string",
             "description": "The 0x… address that voted or pledged. The ADDRESS only, never a private key."
+          },
+          "nonce": {
+            "type": "number",
+            "description": "Only to read the pledge rows: the time in milliseconds from the message to sign, the same number the signature was made over."
+          },
+          "signature": {
+            "type": "string",
+            "description": "Only to read the pledge rows: the wallet's own signature of the message to sign the keyless reply gave. Free, no gas, used once."
           }
         },
         "required": [
           "wallet"
         ]
       },
-      "digest": "sha256:9bd84293da2bf83a03c8f759e125b18843bc5c5595e1b436ae131f8ae2b13b49"
+      "digest": "sha256:5d37f2ee5ddd65f0d05ee6333da9979cab2b2d59edae0413562663399173146f"
     },
     {
       "name": "estimate_footprint",
@@ -2206,30 +2230,38 @@
     {
       "name": "net_subscription_quote",
       "title": "Sovereign net worth as a service — your user's own token program",
-      "description": "The token program we proved on NET, run for your user: $1/month mints their OWN 1,000-fixed-supply asset (~999 to their wallet, no owner functions), creates a real burned-LP market for it, and standing-buys it monthly while they hold ~99% of the supply; $2/month adds a dollar for the service. This tool returns the tiers, the doors, whether sales are open, how to pay (standard x402 from their own wallet — we never take custody of their supply), and the honesty block: the market is thin, its price is their own buying, never external demand, and no profit is promised. Free, keyless, read-only. Cost and signer: free and keyless, nothing to sign.",
+      "description": "The token program we proved on NET, run for your user: $1/month mints their OWN 1,000-fixed-supply asset (~999 to their wallet, no owner functions), creates a real burned-LP market for it, and standing-buys it monthly while they hold ~99% of the supply; $2/month adds a dollar for the service. This tool returns the tiers, the doors, whether sales are open, how to pay (standard x402 from their own wallet — we never take custody of their supply), and the honesty block: the market is thin, its price is their own buying, which is their own demand, not outside demand, and no profit is promised. Free, keyless, read-only. Cost and signer: free and keyless, nothing to sign.",
       "inputSchema": {
         "type": "object",
         "properties": {}
       },
-      "digest": "sha256:b795bac7a1a5a78f782865f6e9ffa13925094d62ad03a4ffa85fba1827f62f88"
+      "digest": "sha256:fb82e9a4f56e99561b59d4f0427c0b4bb90de99ef4d924729061a8817a1eff1f"
     },
     {
       "name": "net_subscription_status",
-      "title": "A wallet's program subscription: months paid and program state",
-      "description": "Given a subscriber wallet, returns its paid months, each window's program budget, the asset naming on record, and fulfillment state. Everything the program does for the wallet — the mint, the burned market seed, every standing buy — is independently checkable on Base. Free, keyless, read-only. Cost and signer: free and keyless, nothing to sign.",
+      "title": "A wallet's program subscription: months paid and program state (a signed read)",
+      "description": "A signed read that only the subscriber wallet itself can make: given that wallet, returns its paid months, each window's program budget, the asset naming on record, and fulfillment state. To read, call with the wallet alone to get MESSAGE_TO_SIGN, sign it with that wallet (personal_sign, free, no gas), then call again with the wallet, the nonce and the signature within 5 minutes: a signature is good for one read, and a request without a valid one is refused the same way for every wallet. Everything the program does for the wallet — the mint, the burned market seed, every standing buy — is independently checkable on Base. Free, read-only. Cost and signer: free; a list by wallet is signed by that wallet itself with no gas, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "wallet": {
             "type": "string",
-            "description": "The subscriber wallet (0x…), the same wallet that paid."
+            "description": "The subscriber wallet (0x…), the same wallet that paid. Address only, never a private key. Reading it is a signed read: call with the wallet alone to get MESSAGE_TO_SIGN."
+          },
+          "nonce": {
+            "type": "number",
+            "description": "With wallet: the time in milliseconds the read is signed at, within 5 minutes of the board's time. The first answer gives you one; pass the same number back with the signature."
+          },
+          "signature": {
+            "type": "string",
+            "description": "With wallet and nonce: the 0x… personal_sign output over MESSAGE_TO_SIGN, made by that same wallet. Good for one read."
           }
         },
         "required": [
           "wallet"
         ]
       },
-      "digest": "sha256:692bb5f7e127311e4740bb40766c1ece84c03b1e3b638b57f34758c9502a70c8"
+      "digest": "sha256:2227ca8116f7a3ace10e796a8f35fe58e6a7e8f17624f4b20c6cb05a9a712a04"
     },
     {
       "name": "regen_provisioning_subscription_quote",
@@ -2805,11 +2837,11 @@
           },
           "limit": {
             "type": "number",
-            "description": "How many to list, 1 to 46. Default 12."
+            "description": "How many to list, 1 to 49. Default 12."
           }
         }
       },
-      "digest": "sha256:3c86082cc46769aa1c8c8c561d993331e1d5baef44a691bf05de604c0f77429a"
+      "digest": "sha256:3afcd5c21b1a434b2cef20ba45eb834daae68dc09aa9e8e622b75714079896dd"
     },
     {
       "name": "net_mechanism",
@@ -2832,7 +2864,7 @@
     {
       "name": "net_open_tasks",
       "title": "Open agent-to-agent specialist tasks a provider could take",
-      "description": "Specialist tasks that one agent has commissioned from another and that no provider has taken yet: data integrity, research replication, measurement analysis, method documentation, interoperability testing. Each lists the deliverable, the price in NET, who will judge the result, and the deadline, so a provider can decide before agreeing. Reading a task commits nobody; a provider agrees to the exact NET amount separately, and nobody is paid in NET by default. Free, keyless, read-only, moves no money. Cost and signer: free and keyless, nothing to sign.",
+      "description": "Specialist tasks that one agent has commissioned from another and that no provider has taken yet: data integrity, research replication, measurement analysis, method documentation, interoperability testing. Each lists the deliverable, the price in NET, whether a judge is named, and the deadline, so a provider can decide before agreeing; a task shows no wallet. Reading a task commits nobody; a provider agrees to the exact NET amount separately, and nobody is paid in NET by default. Free, keyless, read-only, moves no money. Cost and signer: free and keyless, nothing to sign.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -2846,12 +2878,12 @@
           }
         }
       },
-      "digest": "sha256:0cfbc20901e4e2d67252e802f74c15067dff9aea1b856bf40faf37ae4201cb30"
+      "digest": "sha256:e60a3855469eea33ebe275473d3bf8ed8691b506a87245775e9fc5d490a2e18a"
     },
     {
       "name": "net_order_status",
       "title": "Where a NET service order stands, and what a refusal means",
-      "description": "Read one NET service order: its state, who must act next and what, the product's gates, and the verifiable service receipt that says exactly what has and has not happened (delivered, accepted, paid, settled, ecological outcome claimed). Or pass a refusal code you were given and get its plain meaning and the next step. A dry-run order never shows a payment. Free, keyless, read-only, moves no money; it changes nothing about the order. Cost and signer: free and keyless, nothing to sign.",
+      "description": "Read one NET service order: its state, who must act next and what, the product's gates, and the verifiable service receipt that says exactly what has and has not happened (delivered, accepted, paid, settled, ecological outcome claimed). That read shows no party's wallet. A party to the order reads who the others are with their own signature: pass the order id and your wallet for the message to sign, then call again with the nonce and the signature (the buyer also gets the unsigned NET transfer of a live, accepted order there). The state read says whether the order is paid or a transfer of NET back to the buyer was recognized, and on what date; the payment and transfer-back transaction hashes and the quote and receipt hashes are shown only on the signed read, to the order's parties. A wallet that took an open task's provider seat reads only its own seat there until the buyer accepts it. Or pass a refusal code you were given and get its plain meaning and the next step. A dry-run order never shows a payment. Free, keyless for the state and signed by a party's own wallet for the parties, read-only, moves no money; it changes nothing about the order. Cost and signer: free; the state is keyless, the parties are read with a signature by a party's own wallet with no gas, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -2862,10 +2894,22 @@
           "refusal": {
             "type": "string",
             "description": "Optional: a refusal code such as insufficient_net_coverage; returns what it means and what to do."
+          },
+          "wallet": {
+            "type": "string",
+            "description": "Optional: your wallet, a party to this order (buyer, agent, provider or named judge), to read the parties with its own signature. Call with the order id and this wallet alone to get the message to sign."
+          },
+          "nonce": {
+            "type": "number",
+            "description": "With the signature: the nonce the message to sign carried (the time in milliseconds)."
+          },
+          "signature": {
+            "type": "string",
+            "description": "With the wallet and the nonce: the wallet's signature (EIP-191 personal_sign) of the message to sign."
           }
         }
       },
-      "digest": "sha256:81e1daae2c75dcd464dcfe250f23bc0428ac33549c262f7a946357dfd6494863"
+      "digest": "sha256:091009d3212f2d513f677b2180a8ebece475d73fd67a0be0207f7ba7cd72e502"
     },
     {
       "name": "net_review_evidence",
@@ -3015,7 +3059,7 @@
     {
       "name": "net_reserve_status",
       "title": "Where a seasonal upkeep reserve stands, or every reserve one wallet holds (a signed read)",
-      "description": "Read one seasonal upkeep reserve by its id, which is keyless, or list the reserves one wallet holds, which is a signed read that only that wallet can make. For each: open or withdrawn, the NET it stands for (a house reference, not a price), the cycle that is active, the needs and what each is waiting on, and the packets linked. A read by id shows no wallet, no name, no words of the holder, no evidence reference and no pin: a place is shown only as a 350 metre cell, and only public ground a listed verifier has confirmed; any other place is not shown at all, and a list by wallet carries no place. To list by wallet, call with the wallet alone to get MESSAGE_TO_SIGN, sign it with that wallet (personal_sign, free, no gas), then call again with the wallet, the nonce and the signature within 5 minutes: a signature is good for one list, and a request without a valid one is refused the same way for every wallet. It says plainly that the NET is not held: a reserve is a record, never custody and never a lock. Free; a read by id is keyless, and a list is signed by the holder's own wallet, never by a key. Cost and signer: free; a read by id is keyless, a list by wallet is signed by that wallet itself with no gas, and the house never holds a key.",
+      "description": "Read one seasonal upkeep reserve by its id, which is keyless, or list the reserves one wallet holds, which is a signed read that only that wallet can make. For each: open or withdrawn, the cycle that is active, the needs and what each is waiting on, and, only where the place is shown, the NET it stands for (a house reference, not a price) and which packets are linked. For a place that is not shown a read by id says the NET figure is not shown and names no packet; the holder's own signed reply and signed list always show them. A read by id shows no wallet, no name, no words of the holder, no evidence reference and no pin: a place is shown only as a 350 metre cell, and only public ground a listed verifier has confirmed; any other place is not shown at all, and a list by wallet carries no place. To list by wallet, call with the wallet alone to get MESSAGE_TO_SIGN, sign it with that wallet (personal_sign, free, no gas), then call again with the wallet, the nonce and the signature within 5 minutes: a signature is good for one list, and a request without a valid one is refused the same way for every wallet. It says plainly that the NET is not held: a reserve is a record, never custody and never a lock. Free; a read by id is keyless, and a list is signed by the holder's own wallet, never by a key. Cost and signer: free; a read by id is keyless, a list by wallet is signed by that wallet itself with no gas, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -3037,7 +3081,7 @@
           }
         }
       },
-      "digest": "sha256:e545df1b242eff2d7b694cf3537bca5e6044f38c7ff74f99a069de917adba61f"
+      "digest": "sha256:6892925f81b176a3b874d637f619a8fb19e096791737dd207ccb0f0b36c485e3"
     },
     {
       "name": "prepare_net_bond",
@@ -3121,22 +3165,30 @@
     },
     {
       "name": "net_bond_status",
-      "title": "Where a provider performance bond stands, or every bond one wallet has committed",
-      "description": "Read one provider performance bond by its id, or list the bonds one wallet has committed, oldest first. For each: the service it names, the NET it names, open, withdrawn or expired, and whether the wallet covers it, by a balance read at most 30 seconds earlier (covered or uncovered). It says plainly that the NET is not held and nothing can take it: a bond is a record, never custody and never a lock. Free, keyless, nothing to sign. Cost and signer: free and keyless, nothing to sign.",
+      "title": "Where a provider performance bond stands, or every bond one wallet has committed (a signed read)",
+      "description": "Read one provider performance bond by its id, which is keyless, or list the bonds one wallet has committed, which is a signed read that only that wallet can make, oldest first. For each: the service it names, the NET it names, open, withdrawn or expired, and whether the wallet covers it, by a balance read at most 30 seconds earlier (covered or uncovered). To list by wallet, call with the wallet alone to get MESSAGE_TO_SIGN, sign it with that wallet (personal_sign, free, no gas), then call again with the wallet, the nonce and the signature within 5 minutes: a signature is good for one list, and a request without a valid one is refused the same way for every wallet. It says plainly that the NET is not held and nothing can take it: a bond is a record, never custody and never a lock. Free; a read by id is keyless, and a list is signed by the holder's own wallet, never by a key. Cost and signer: free; a read by id is keyless, a list by wallet is signed by that wallet itself with no gas, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "bondId": {
             "type": "string",
-            "description": "The bond's id (the bondId it was committed under)."
+            "description": "The bond's id (the bondId it was committed under). A read by id is keyless: nothing to sign."
           },
           "wallet": {
             "type": "string",
-            "description": "Or the 0x… address of a provider, to list its bonds. Address only, never a private key."
+            "description": "Or the 0x… address of a provider, to list its bonds. A list by wallet is a signed read: call with the wallet alone to get MESSAGE_TO_SIGN. Address only, never a private key."
+          },
+          "nonce": {
+            "type": "number",
+            "description": "With wallet: the time in milliseconds the list is signed at, within 5 minutes of the board's time. The first answer gives you one; pass the same number back with the signature."
+          },
+          "signature": {
+            "type": "string",
+            "description": "With wallet and nonce: the 0x… personal_sign output over MESSAGE_TO_SIGN, made by that same wallet. Good for one list."
           }
         }
       },
-      "digest": "sha256:1c8de1ff0256cfe70756fe854f31170e769001a1fc71288267428d2ce573b126"
+      "digest": "sha256:9488ad5a5da1007ef5b15dae61c7dea45a50f139817cf15acd3967a0a2654b8b"
     },
     {
       "name": "prepare_net_envelope",
@@ -3228,22 +3280,30 @@
     },
     {
       "name": "net_envelope_status",
-      "title": "Where a buyer budget envelope stands, or every envelope one wallet holds",
-      "description": "Read one buyer budget envelope by its id, or list the envelopes one wallet holds, oldest first. For each: covered, released, withdrawn or expired and why, the cap in NET units, the work period, the packet it names if any, and what the wallet's NET balance showed when it was signed. It says plainly that the NET is not held: an envelope is a record, never custody and never a lock. Free, keyless, nothing to sign. Cost and signer: free and keyless, nothing to sign.",
+      "title": "Where a buyer budget envelope stands, or every envelope one wallet holds (a signed read)",
+      "description": "Read one buyer budget envelope by its id, which is keyless, or list the envelopes one wallet holds, which is a signed read that only that wallet can make, oldest first. For each: covered, released, withdrawn or expired and why, the cap in NET units, the work period, the packet it names if any, and, in the holder's own signed list only, what the wallet's NET balance showed when it was signed (a read by id shows no balance). To list by wallet, call with the wallet alone to get MESSAGE_TO_SIGN, sign it with that wallet (personal_sign, free, no gas), then call again with the wallet, the nonce and the signature within 5 minutes: a signature is good for one list, and a request without a valid one is refused the same way for every wallet. It says plainly that the NET is not held: an envelope is a record, never custody and never a lock. Free; a read by id is keyless, and a list is signed by the holder's own wallet, never by a key. Cost and signer: free; a read by id is keyless, a list by wallet is signed by that wallet itself with no gas, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "envelopeId": {
             "type": "string",
-            "description": "The envelope's id (the envelopeId it was committed under)."
+            "description": "The envelope's id (the envelopeId it was committed under). A read by id is keyless: nothing to sign."
           },
           "wallet": {
             "type": "string",
-            "description": "Or the 0x… address of a buyer, to list its envelopes. Address only, never a private key."
+            "description": "Or the 0x… address of a buyer, to list its envelopes. A list by wallet is a signed read: call with the wallet alone to get MESSAGE_TO_SIGN. Address only, never a private key."
+          },
+          "nonce": {
+            "type": "number",
+            "description": "With wallet: the time in milliseconds the list is signed at, within 5 minutes of the board's time. The first answer gives you one; pass the same number back with the signature."
+          },
+          "signature": {
+            "type": "string",
+            "description": "With wallet and nonce: the 0x… personal_sign output over MESSAGE_TO_SIGN, made by that same wallet. Good for one list."
           }
         }
       },
-      "digest": "sha256:ff36d26c3e3d90ebdee6cbc85404d8b3e1beef930b9744e72964ea8bd1756ca1"
+      "digest": "sha256:b9198d597c54bc180c49ee7d7e0b2a5c69e3555864cd02d59f23fbfd4b485bac"
     },
     {
       "name": "prepare_net_dispute_bond",
@@ -3327,22 +3387,30 @@
     },
     {
       "name": "net_dispute_bond_status",
-      "title": "Where a dispute evidence bond stands, or every one a wallet has committed",
-      "description": "Read one dispute evidence bond by its id, or list the dispute bonds one wallet has committed, oldest first. For each: the NET it names, open, withdrawn or expired, and whether the wallet covers it, by a balance read at most 30 seconds earlier (covered or uncovered). A dispute is about another party, so the words the signer wrote about the matter are never shown on this read. It says plainly that the NET is not held and nothing can take it, and that no independent reviewer is named, so no review has happened and no outcome is recorded: a dispute bond is a record, never custody and never a lock. Free, keyless, nothing to sign. Cost and signer: free and keyless, nothing to sign.",
+      "title": "Where a dispute evidence bond stands, or every one a wallet has committed (a signed read)",
+      "description": "Read one dispute evidence bond by its id, which is keyless, or list the dispute bonds one wallet has committed, which is a signed read that only that wallet can make, oldest first. For each: the NET it names, open, withdrawn or expired, and whether the wallet covers it, by a balance read at most 30 seconds earlier (covered or uncovered). A dispute is about another party, so the words the signer wrote about the matter are never shown on this read. To list by wallet, call with the wallet alone to get MESSAGE_TO_SIGN, sign it with that wallet (personal_sign, free, no gas), then call again with the wallet, the nonce and the signature within 5 minutes: a signature is good for one list, and a request without a valid one is refused the same way for every wallet. It says plainly that the NET is not held and nothing can take it, and that no independent reviewer is named, so no review has happened and no outcome is recorded: a dispute bond is a record, never custody and never a lock. Free; a read by id is keyless, and a list is signed by the holder's own wallet, never by a key. Cost and signer: free; a read by id is keyless, a list by wallet is signed by that wallet itself with no gas, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "disputeBondId": {
             "type": "string",
-            "description": "The dispute bond's id (the disputeBondId it was committed under)."
+            "description": "The dispute bond's id (the disputeBondId it was committed under). A read by id is keyless: nothing to sign."
           },
           "wallet": {
             "type": "string",
-            "description": "Or the 0x… address of a wallet, to list its dispute bonds. Address only, never a private key."
+            "description": "Or the 0x… address of a wallet, to list its dispute bonds. A list by wallet is a signed read: call with the wallet alone to get MESSAGE_TO_SIGN. Address only, never a private key."
+          },
+          "nonce": {
+            "type": "number",
+            "description": "With wallet: the time in milliseconds the list is signed at, within 5 minutes of the board's time. The first answer gives you one; pass the same number back with the signature."
+          },
+          "signature": {
+            "type": "string",
+            "description": "With wallet and nonce: the 0x… personal_sign output over MESSAGE_TO_SIGN, made by that same wallet. Good for one list."
           }
         }
       },
-      "digest": "sha256:0061d029fbbc5bb8bb0fb735be4fa4288dae388165ac0756b82f39dac3f998fa"
+      "digest": "sha256:d558039cb0c5ecd17b4911768a6bc6c02863a32c4d4a7da219ffdcf7c14b696b"
     },
     {
       "name": "prepare_net_contribution",
@@ -3426,26 +3494,34 @@
     },
     {
       "name": "net_contribution_status",
-      "title": "Where a community reserve line stands, or every line toward a goal",
-      "description": "Read one community reserve line by its id, list the lines one wallet holds, or list every line toward one goal (a packet on the board), oldest first, each by the wallet that signed it. For each: covered, released, withdrawn or expired and why, the cap in NET units, when it lapses, and what the wallet's NET balance showed when it was signed. It says plainly that the NET is not held and that no pot exists: a reserve line is a record, never custody, never a lock and never a pool. Free, keyless, nothing to sign. Cost and signer: free and keyless, nothing to sign.",
+      "title": "Where a community reserve line stands, or every line toward a goal, or every line one wallet holds (a signed read)",
+      "description": "Read one community reserve line by its id, which is keyless, list every line toward one goal (a packet on the board), which is keyless too and shows no wallet on any line, or list the lines one wallet holds, which is a signed read that only that wallet can make, oldest first. For each: covered, released, withdrawn or expired and why, the cap in NET units, when it lapses, and, in the holder's own signed list only, what the wallet's NET balance showed when it was signed (a read by id or by goal shows no balance). To list by wallet, call with the wallet alone to get MESSAGE_TO_SIGN, sign it with that wallet (personal_sign, free, no gas), then call again with the wallet, the nonce and the signature within 5 minutes: a signature is good for one list, and a request without a valid one is refused the same way for every wallet. It says plainly that the NET is not held and that no pot exists: a reserve line is a record, never custody, never a lock and never a pool. Free; a read by id or by goal is keyless, and a list by wallet is signed by the holder's own wallet, never by a key. Cost and signer: free; a read by id is keyless, a list by wallet is signed by that wallet itself with no gas, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "contributionId": {
             "type": "string",
-            "description": "The line's id (the contributionId it was committed under)."
+            "description": "The line's id (the contributionId it was committed under). A read by id is keyless: nothing to sign."
           },
           "wallet": {
             "type": "string",
-            "description": "Or the 0x… address of a contributor, to list its lines. Address only, never a private key."
+            "description": "Or the 0x… address of a contributor, to list its lines. A list by wallet is a signed read: call with the wallet alone to get MESSAGE_TO_SIGN. Address only, never a private key."
+          },
+          "nonce": {
+            "type": "number",
+            "description": "With wallet: the time in milliseconds the list is signed at, within 5 minutes of the board's time. The first answer gives you one; pass the same number back with the signature."
+          },
+          "signature": {
+            "type": "string",
+            "description": "With wallet and nonce: the 0x… personal_sign output over MESSAGE_TO_SIGN, made by that same wallet. Good for one list."
           },
           "workId": {
             "type": "string",
-            "description": "Or the id of a goal packet on the board, to list every line toward it."
+            "description": "Or the id of a goal packet on the board, to list every line toward it. A read by goal is keyless: nothing to sign."
           }
         }
       },
-      "digest": "sha256:99887d35bcc9885aff62ea8d42fb11a983752e93216d38b2d06cc430a5805ad1"
+      "digest": "sha256:e02fdda2ebf368f659e77f291ba47e292dd4b871724b3ba7aad076435c3be72f"
     },
     {
       "name": "prepare_net_seat",
@@ -3545,27 +3621,35 @@
     },
     {
       "name": "net_seat_status",
-      "title": "Where a recurrent agent seat stands, or every seat one wallet holds",
-      "description": "Read one recurrent agent seat by its id, or list the seats one wallet holds, oldest first. For each: open, withdrawn or expired, the NET units it stands for, the recurring service and cadence, the day it lapses, and what the wallet could cover when it was signed. It says plainly that the NET is not held: a seat is a record, never custody and never a lock, and Vealth sells no service in it. Free, keyless, nothing to sign. Cost and signer: free and keyless, nothing to sign.",
+      "title": "Where a recurrent agent seat stands, or every seat one wallet holds (a signed read)",
+      "description": "Read one recurrent agent seat by its id, which is keyless, or list the seats one wallet holds, which is a signed read that only that wallet can make, oldest first. For each: open, withdrawn or expired, the NET units it stands for, the recurring service and cadence, the day it lapses, and, in the holder's own signed list only, what the wallet could cover when it was signed (a read by id shows no balance). To list by wallet, call with the wallet alone to get MESSAGE_TO_SIGN, sign it with that wallet (personal_sign, free, no gas), then call again with the wallet, the nonce and the signature within 5 minutes: a signature is good for one list, and a request without a valid one is refused the same way for every wallet. It says plainly that the NET is not held: a seat is a record, never custody and never a lock, and Vealth sells no service in it. Free; a read by id is keyless, and a list is signed by the holder's own wallet, never by a key. Cost and signer: free; a read by id is keyless, a list by wallet is signed by that wallet itself with no gas, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "seatId": {
             "type": "string",
-            "description": "The seat's id (the seatId it was committed under)."
+            "description": "The seat's id (the seatId it was committed under). A read by id is keyless: nothing to sign."
           },
           "wallet": {
             "type": "string",
-            "description": "Or the 0x… address of a holder, to list its seats. Address only, never a private key."
+            "description": "Or the 0x… address of a holder, to list its seats. A list by wallet is a signed read: call with the wallet alone to get MESSAGE_TO_SIGN. Address only, never a private key."
+          },
+          "nonce": {
+            "type": "number",
+            "description": "With wallet: the time in milliseconds the list is signed at, within 5 minutes of the board's time. The first answer gives you one; pass the same number back with the signature."
+          },
+          "signature": {
+            "type": "string",
+            "description": "With wallet and nonce: the 0x… personal_sign output over MESSAGE_TO_SIGN, made by that same wallet. Good for one list."
           }
         }
       },
-      "digest": "sha256:9e0600e712b618cb4a6bf5ca56a7a16f0faf6b2fa14c38d238d8080cf9cedea1"
+      "digest": "sha256:2e3a7c1fa6206ea01ab0f76990b4ee3786b581fc9f745eb8d4ec6dcafef418a2"
     },
     {
       "name": "prepare_net_match",
       "title": "Commit or withdraw a sponsor's matching offer (step 1 of 2)",
-      "description": "MATCHING OFFER: a sponsor signs a capped offer to match outside funding for accepted work, sees it, or revokes what is left of it. Four programs share this one tool, named by program: sponsor-funded-match (match an outside funder's NET for work a person accepted on the board), district-matching-budget (match NET from different payer wallets for upkeep of a place inside a district; no packet there is matched until a listed person who is not you has confirmed the place, public ground included; a wallet the journal links to an earlier payer counts as the same payer, and one person using wallets nobody has linked is not seen), grant-milestone-match (a capped offer toward one milestone packet, with the grant's name and spending rules in your own words: nothing here checks that the grant was awarded or judges its rules), and agent-research-tournament, shown to people as a research solution match (a capped offer that matches funding toward solutions to a question, each accepted by a person, with a cap per solution; nothing is pooled; nothing is ranked or judged and nothing is paid by chance). You say, in plain words, what you are matching for, the ratio (for every 100 units of outside funding you match this many), your cap in whole NET units and when the offer lapses (commit), or you revoke the unapplied remainder (withdraw). FREE, a signed statement, no fee, no gas, and your NET never moves. An offer is a record, never custody and never a lock: your NET stays in your own wallet, nothing is held or sent, you pay the worker directly, Vealth pays, holds and sells nothing, and you can withdraw at any time, even when new program actions are stopped. When you commit, the door checks the cap against your wallet's fresh NET balance less everything it already stands behind (your offers, orders, reserves, bonds, envelopes, seats and other matching offers), and refuses if it does not cover; nothing is recorded then. A match is recorded only from what the board itself shows (funding from an outside party that already arrived, and work a person with no known link to anyone involved accepted), never on your say-so; a packet draws one match across every offer; and the engine can record a reversal of a match applied to funding later shown to be the sponsor's own, but nothing runs it yet. A match is not an outcome. One NET is 1,000,000 units. Never put a phone number, an email or a street address in any field. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the sponsor wallet's personal_sign, then call submit_net_match within 5 minutes. Cost and signer: free, no gas; the person signs the result with their own wallet or passkey, and the house never holds a key.",
+      "description": "MATCHING OFFER: a sponsor signs a capped offer to match outside funding for accepted work, sees it, or revokes what is left of it. Four programs share this one tool, named by program: sponsor-funded-match (match an outside funder's NET for work a person accepted on the board), district-matching-budget (match NET from different payer wallets for upkeep of a place inside a district; no packet there is matched until a listed person who is not you has confirmed the place, public ground included, and no door lets anyone confirm a district offer's place yet, so a district offer matches nothing until that door is built; a wallet the journal links to an earlier payer counts as the same payer, and one person using wallets nobody has linked is not seen), grant-milestone-match (a capped offer toward one milestone packet, with the grant's name and spending rules in your own words: nothing here checks that the grant was awarded or judges its rules), and agent-research-tournament, shown to people as a research solution match (a capped offer that matches funding toward solutions to a question, each accepted by a person, with a cap per solution; nothing is pooled; nothing is ranked or judged and nothing is paid by chance). You say, in plain words, what you are matching for, the ratio (for every 100 units of outside funding you match this many), your cap in whole NET units and when the offer lapses (commit), or you revoke the unapplied remainder (withdraw). FREE, a signed statement, no fee, no gas, and your NET never moves. An offer is a record, never custody and never a lock: your NET stays in your own wallet, nothing is held or sent, you pay the worker directly, Vealth pays, holds and sells nothing, and you can withdraw at any time, even when new program actions are stopped. When you commit, the door checks the cap against your wallet's fresh NET balance less everything it already stands behind (your offers, orders, reserves, bonds, envelopes, seats and other matching offers), and refuses if it does not cover; nothing is recorded then. A match is recorded only from what the board itself shows (funding from an outside party that already arrived, and work a person with no known link to anyone involved accepted), never on your say-so; a packet draws one match across every offer; and the engine can record a reversal of a match applied to funding later shown to be the sponsor's own, but nothing runs it yet. A match is not an outcome. One NET is 1,000,000 units. Never put a phone number, an email or a street address in any field. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the sponsor wallet's personal_sign, then call submit_net_match within 5 minutes. Cost and signer: free, no gas; the person signs the result with their own wallet or passkey, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -3617,7 +3701,7 @@
           },
           "district": {
             "type": "object",
-            "description": "commit, district-matching-budget only: { place: { name, lat, lng }, radiusM (100 to 2000, default 500), siteAuthority: { kind: owner | manager | association | public_ground, evidenceRef } }. The kind of place is your own word: no packet is matched until a listed verifier who is not you confirms the place, public ground included. A private place also needs an evidenceRef."
+            "description": "commit, district-matching-budget only: { place: { name, lat, lng }, radiusM (100 to 2000, default 500), siteAuthority: { kind: owner | manager | association | public_ground, evidenceRef } }. The kind of place is your own word: no packet is matched until a listed verifier who is not you confirms the place, public ground included. No door lets a verifier do that for a district offer yet, so a district offer matches nothing until one is built. A private place also needs an evidenceRef."
           },
           "grant": {
             "type": "object",
@@ -3638,7 +3722,7 @@
           "matchId"
         ]
       },
-      "digest": "sha256:3bf39e6cee887a0d074a10b00f543e964cabeab0167baa3c0b429704f39e06c0"
+      "digest": "sha256:a5a0adb701545dc198bc20462ca2520d82fa85c1339d5ea19d4920b52fa3321d"
     },
     {
       "name": "submit_net_match",
@@ -3674,22 +3758,30 @@
     },
     {
       "name": "net_match_status",
-      "title": "Where a sponsor's matching offer stands, or every offer one wallet holds",
-      "description": "Read one matching offer by its id, or list the offers one wallet holds, oldest first. For each: sponsor_signed, matched, exhausted, expired or revoked and why, the ratio and the cap in NET units, what is applied and what is left, and every match applied against the cap (the funder, the worker and the acceptor the board named, and whether it stands or was reversed). It says plainly that the NET is not held: an offer is a record, never custody and never a lock. A private district place shows no name and no exact pin. Free, keyless, nothing to sign. Cost and signer: free and keyless, nothing to sign.",
+      "title": "Where a sponsor's matching offer stands, or every offer one wallet holds (a signed read)",
+      "description": "Read one matching offer by its id, which is keyless, or list the offers one wallet holds, which is a signed read that only that wallet can make, oldest first. For each: sponsor_signed, matched, exhausted, expired or revoked and why, the ratio and the cap in NET units, what is applied and what is left, and every match applied against the cap (the funder, the worker and the acceptor the board named, and whether it stands or was reversed). To list by wallet, call with the wallet alone to get MESSAGE_TO_SIGN, sign it with that wallet (personal_sign, free, no gas), then call again with the wallet, the nonce and the signature within 5 minutes: a signature is good for one list, and a request without a valid one is refused the same way for every wallet. It says plainly that the NET is not held: an offer is a record, never custody and never a lock. A private district place shows no name and no exact pin. Free; a read by id is keyless, and a list is signed by the holder's own wallet, never by a key. Cost and signer: free; a read by id is keyless, a list by wallet is signed by that wallet itself with no gas, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "matchId": {
             "type": "string",
-            "description": "The offer's id (the matchId it was committed under)."
+            "description": "The offer's id (the matchId it was committed under). A read by id is keyless: nothing to sign."
           },
           "wallet": {
             "type": "string",
-            "description": "Or the 0x… address of a sponsor, to list its offers. Address only, never a private key."
+            "description": "Or the 0x… address of a sponsor, to list its offers. A list by wallet is a signed read: call with the wallet alone to get MESSAGE_TO_SIGN. Address only, never a private key."
+          },
+          "nonce": {
+            "type": "number",
+            "description": "With wallet: the time in milliseconds the list is signed at, within 5 minutes of the board's time. The first answer gives you one; pass the same number back with the signature."
+          },
+          "signature": {
+            "type": "string",
+            "description": "With wallet and nonce: the 0x… personal_sign output over MESSAGE_TO_SIGN, made by that same wallet. Good for one list."
           }
         }
       },
-      "digest": "sha256:7ab4732c3d50c973c31466358a4ca661710e0b189402786ddc3a88af3a758489"
+      "digest": "sha256:8ede05e919160e2cb77bab67516297195a8447a3619aaa150a98a458e148f440"
     },
     {
       "name": "prepare_net_earn",
@@ -3836,27 +3928,35 @@
     },
     {
       "name": "net_earn_status",
-      "title": "Where a NET earn claim stands, read from the board",
-      "description": "Read one NET earn claim or election by its id, or list the ones a wallet holds, oldest first. For a claim: recorded, accepted, earned, refused (and why) or withdrawn, with every check and whether it passed, read from the board's own facts each time (who did the work, who accepted the proof, how it settled), never from anyone's say-so. For an election to reuse earned NET: elected, completed, withdrawn or expired. It says plainly that a record moves no NET and that the house pays nothing in it. Free, keyless, nothing to sign. Cost and signer: free and keyless, nothing to sign.",
+      "title": "Where a NET earn claim stands, read from the board, or every claim one wallet holds (a signed read)",
+      "description": "Read one NET earn claim or election by its id, which is keyless, or list the ones a wallet holds, which is a signed read that only that wallet can make, oldest first. For a claim: recorded, accepted, earned, refused (and why) or withdrawn, with every check and whether it passed, read from the board's own facts each time (who did the work, who accepted the proof, how it settled), never from anyone's say-so. For an election to reuse earned NET: elected, completed, withdrawn or expired. To list by wallet, call with the wallet alone to get MESSAGE_TO_SIGN, sign it with that wallet (personal_sign, free, no gas), then call again with the wallet, the nonce and the signature within 5 minutes: a signature is good for one list, and a request without a valid one is refused the same way for every wallet. It says plainly that a record moves no NET and that the house pays nothing in it. Free; a read by id is keyless, and a list is signed by the holder's own wallet, never by a key. Cost and signer: free; a read by id is keyless, a list by wallet is signed by that wallet itself with no gas, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "claimId": {
             "type": "string",
-            "description": "The claim's id (the claimId it was recorded under)."
+            "description": "The claim's id (the claimId it was recorded under). A read by id is keyless: nothing to sign."
           },
           "wallet": {
             "type": "string",
-            "description": "Or the 0x… address of a worker, to list its claims and elections. Address only, never a private key."
+            "description": "Or the 0x… address of a worker, to list its claims and elections. A list by wallet is a signed read: call with the wallet alone to get MESSAGE_TO_SIGN. Address only, never a private key."
+          },
+          "nonce": {
+            "type": "number",
+            "description": "With wallet: the time in milliseconds the list is signed at, within 5 minutes of the board's time. The first answer gives you one; pass the same number back with the signature."
+          },
+          "signature": {
+            "type": "string",
+            "description": "With wallet and nonce: the 0x… personal_sign output over MESSAGE_TO_SIGN, made by that same wallet. Good for one list."
           }
         }
       },
-      "digest": "sha256:f8d7d4259b52a83446d6a0ef95947af57c1368263c84908658ec945358260526"
+      "digest": "sha256:afac0ea94236d6977631a97f4c27097f34413bf99c41f41bd9e5b9a57239a6c7"
     },
     {
       "name": "prepare_net_recycle",
       "title": "Record one step of a NET purchase from surplus the operator states (step 1 of 2)",
-      "description": "RECYCLE PAPERWORK for the operator: the record around a purchase of NET from surplus the operator states; no dollar is checked here. Four programs share it (optional-service-recycle, commercial-margin-recycle, donor-directed-acquisition, license-fee-recycle). You name one act: open (the surplus evidence: its dollar amount, its source in plain words, and the figures that reconcile to it), quote (an executable counterparty quote for the WHOLE size, never the house reference rate), authorize (the operator's authorization for EXACTLY the dollars that quote costs, never more than the surplus, and it expires), acted (what the operator reports he did himself), close (where it was applied), revoke (an authorization nothing was done under) or withdraw (evidence nothing was done under). FREE, a signed statement, no fee, no gas. THIS RECORDS ONLY: it never buys, sells, swaps, signs or sends, reads no key and touches no wallet; the purchase, if one is made, is the operator's own act, and the record is house activity, never outside demand. Only a wallet the operator listed as an approver can sign it, and with no wallet listed nothing can be recorded or authorized. The program is built but not switched on until the operator switches the NET programs on together: until then every act that records is refused before you sign, while revoke, withdraw and reads still work. Amounts are whole cents; NET is in whole units (1 NET is 1,000,000 units). Never put a phone number, an email, a street address or a word about tax treatment in any field. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the approver wallet's personal_sign, then call submit_net_recycle within 5 minutes. Cost and signer: free, no gas; the person signs the result with their own wallet or passkey, and the house never holds a key.",
+      "description": "RECYCLE PAPERWORK for the operator: the record around a purchase of NET from surplus the operator states; no dollar is checked here. Four programs share it (optional-service-recycle, commercial-margin-recycle, donor-directed-acquisition, license-fee-recycle). You name one act: open (the surplus evidence: its dollar amount, its source in plain words, and the figures that reconcile to it), quote (an executable counterparty quote for the WHOLE size, never the house reference rate), publish (make the plan PUBLIC for one quote before it is authorized: its id, its hash, its exact terms and the exact authorization sentence, readable with no wallet at net_recycle_status; the terms show no wallet), authorize (the operator's authorization for EXACTLY the dollars that quote costs, never more than the surplus, and it expires; it is refused unless the plan was published first and it names the published plan hash and carries the exact sentence the public record serves), acted (what the operator reports he did himself), close (where it was applied), revoke (an authorization nothing was done under) or withdraw (evidence nothing was done under). FREE, a signed statement, no fee, no gas. THIS RECORDS ONLY: it never buys, sells, swaps, signs or sends, reads no key and touches no wallet; the purchase, if one is made, is the operator's own act, and the record is house activity, never outside demand. Only a wallet the operator listed as an approver can sign it, and with no wallet listed nothing can be recorded or authorized. The program is built but not switched on until the operator switches the NET programs on together: until then every act that records is refused before you sign, while revoke, withdraw and reads still work. Amounts are whole cents; NET is in whole units (1 NET is 1,000,000 units). Never put a phone number, an email, a street address or a word about tax treatment in any field. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the approver wallet's personal_sign, then call submit_net_recycle within 5 minutes. Cost and signer: free, no gas; the person signs the result with their own wallet or passkey, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -3865,6 +3965,7 @@
             "enum": [
               "open",
               "quote",
+              "publish",
               "authorize",
               "revoke",
               "acted",
@@ -3917,7 +4018,7 @@
           },
           "quoteId": {
             "type": "string",
-            "description": "quote: your id for this quote. authorize: the quote it names."
+            "description": "quote: your id for this quote. publish and authorize: the quote it names."
           },
           "sourceKind": {
             "type": "string",
@@ -3954,7 +4055,15 @@
           },
           "expiresAt": {
             "type": "string",
-            "description": "quote: when the quote stops standing (an ISO time within 168 hours). authorize: when the authorization ends: in the future, no later than its quote, within 72 hours."
+            "description": "quote: when the quote stops standing (an ISO time within 168 hours). publish: the latest time the authorization could end. authorize: when the authorization ends: in the future, no later than its quote, within 72 hours, and no later than the published time."
+          },
+          "planHash": {
+            "type": "string",
+            "description": "authorize: the plan hash the public record served for this quote (64 lowercase hex characters). Read it at net_recycle_status."
+          },
+          "authorizationSentence": {
+            "type": "string",
+            "description": "authorize: the exact authorization sentence the public record served, word for word. Read it at net_recycle_status."
           },
           "actedAt": {
             "type": "string",
@@ -3991,7 +4100,7 @@
           "planId"
         ]
       },
-      "digest": "sha256:efc0bbb7f9ffaf3e7f5d94bb11aa3124d9e2fb499cbe9d9e4e100c3749cfaf18"
+      "digest": "sha256:d066df95303e1ebd9c94ff779069b60bd836c92b34d56301e876c38923a56662"
     },
     {
       "name": "submit_net_recycle",
@@ -4019,7 +4128,7 @@
     {
       "name": "net_recycle_status",
       "title": "Where a recycle plan stands, or the plans of one program",
-      "description": "Read one recycle plan by its id, or list the plans of one program (or all four), oldest first. For a plan: its state (evidence recorded, authorized, acted, closed or withdrawn), the evidence amount, the counterparty quotes, the exact-amount authorization and what the operator reports he did. It says plainly that nothing was bought by this code: a plan is paperwork for a purchase the operator makes himself, it is house activity and never outside demand, and each plan stands on its own evidence and its own cap, never added into a pooled figure. The source words, reference and figures behind a surplus are never shown here. Free, keyless, nothing to sign. Cost and signer: free and keyless, nothing to sign.",
+      "description": "Read one recycle plan by its id, or list the plans of one program (or all four), oldest first. For a plan: its state (evidence recorded, authorized, acted, closed or withdrawn), the evidence amount, the counterparty quotes, the PUBLISHED plan (its hash, its exact terms and the exact authorization sentence the operator would sign, public before he authorizes anything and showing no wallet), the exact-amount authorization and what the operator reports he did. It says plainly that nothing was bought by this code: a plan is paperwork for a purchase the operator makes himself, it is house activity and never outside demand, and each plan stands on its own evidence and its own cap, never added into a pooled figure. The source words, reference and figures behind a surplus are never shown here. Free, keyless, nothing to sign. Cost and signer: free and keyless, nothing to sign.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -4039,7 +4148,7 @@
           }
         }
       },
-      "digest": "sha256:331fee6d969d66fc1dd37fc716599d0492f7c36bed57c24fba10db245c5f9d17"
+      "digest": "sha256:b208fe8f9ce4b4b07beafd821b6a78594acf688810da8b24843c85e34d3cd111"
     },
     {
       "name": "prepare_net_order",
@@ -4353,8 +4462,8 @@
     },
     {
       "name": "net_speculate_status",
-      "title": "Read the holding disclosure, the open work interest counts, one record, or the acknowledgements one wallet holds",
-      "description": "Read the SPECULATE RECORDS. view disclosure: the plain-words holding disclosure with its version and the hash an acknowledgement must name. view forward_counts: how many open nonbinding work interests there are per kind of work, place and quarter, never a wallet. recordId: one record of either kind, with its status and why (an interest is shown without its wallet and no withdrawal reason is ever shown). wallet: the acknowledgements one wallet holds, oldest first (interests are never listed by wallet). With nothing passed, the disclosure is read. The programs are held off until the operator switches the NET programs on together, and until then the disclosure and the counts say so plainly; this tool moves no NET, and the house pays, holds and sells nothing through it. Every answer says a record is never needed to hold NET, claim a job, vote or work. Free, keyless, nothing to sign. Cost and signer: free and keyless, nothing to sign.",
+      "title": "Read the holding disclosure, the open work interest counts, one record, or the acknowledgements one wallet holds (a signed read)",
+      "description": "Read the SPECULATE RECORDS, or list the acknowledgements one wallet holds, which is a signed read that only that wallet can make. view disclosure: the plain-words holding disclosure with its version and the hash an acknowledgement must name. view forward_counts: how many open nonbinding work interests there are per kind of work, place and quarter, never a wallet. recordId: one record of either kind, with its status and why (an interest is shown without its wallet and no withdrawal reason is ever shown). wallet: the acknowledgements one wallet holds, oldest first, which is a signed read that only that wallet can make (interests are never listed by wallet). To list by wallet, call with the wallet alone to get MESSAGE_TO_SIGN, sign it with that wallet (personal_sign, free, no gas), then call again with the wallet, the nonce and the signature within 5 minutes: a signature is good for one list, and a request without a valid one is refused the same way for every wallet. With nothing passed, the disclosure is read. The programs are held off until the operator switches the NET programs on together, and until then the disclosure and the counts say so plainly; this tool moves no NET, and the house pays, holds and sells nothing through it. Every answer says a record is never needed to hold NET, claim a job, vote or work. Free; the disclosure, the counts and a read by id are keyless, and a list by wallet is signed by the holder's own wallet, never by a key. Cost and signer: free; a read by id is keyless, a list by wallet is signed by that wallet itself with no gas, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -4368,15 +4477,23 @@
           },
           "recordId": {
             "type": "string",
-            "description": "One record's id (the recordId it was made under)."
+            "description": "One record's id (the recordId it was made under). A read by id is keyless: nothing to sign."
           },
           "wallet": {
             "type": "string",
-            "description": "Or the 0x… address of a holder, to list its acknowledgements. Address only, never a private key."
+            "description": "Or the 0x… address of a holder, to list its acknowledgements. A list by wallet is a signed read: call with the wallet alone to get MESSAGE_TO_SIGN. Address only, never a private key."
+          },
+          "nonce": {
+            "type": "number",
+            "description": "With wallet: the time in milliseconds the list is signed at, within 5 minutes of the board's time. The first answer gives you one; pass the same number back with the signature."
+          },
+          "signature": {
+            "type": "string",
+            "description": "With wallet and nonce: the 0x… personal_sign output over MESSAGE_TO_SIGN, made by that same wallet. Good for one list."
           }
         }
       },
-      "digest": "sha256:83ca86c7b5f1726a43ab38ddd4452a4acb87fa39ec284819837e8e54aa7fee7f"
+      "digest": "sha256:dab0500df34602f187eefe475f9dba1f59fda8ae2a2cf5a9e1097db474464cf9"
     },
     {
       "name": "prepare_net_governance",
@@ -5422,7 +5539,7 @@
     {
       "name": "net_work_order_status",
       "title": "Read one maintenance work order by its id, or the counts",
-      "description": "Read the MAINTENANCE WORK ORDER. workOrderId: one work order by its id, with its status, whether an authority record is on file for the place, the active cycle, each need and what it waits for, the jobs linked, and whether a cycle reads accepted, never a wallet. On a keyless read the place is shown only as a 350 metre cell, and only for public ground a listed verifier has confirmed; the holder's own signed reply shows their place. view counts: how many work orders stand, how many jobs are linked and where (a 350 metre cell is listed only for public ground a listed verifier has confirmed), never a wallet and never an id. With nothing passed, the counts are read. The program is held off until the operator switches it on, and until then the counts say so plainly; a work order that exists can be read at any time. This tool moves no NET, and the house pays, holds and sells nothing through it. Free, keyless, nothing to sign. Cost and signer: free and keyless, nothing to sign.",
+      "description": "Read the MAINTENANCE WORK ORDER. workOrderId: one work order by its id, with its status, whether an authority record is on file for the place, the active cycle, each need and what it waits for, whether a cycle reads accepted and, only where the place is shown, the NET it stands for and which jobs are linked, never a wallet. On a keyless read the place is shown only as a 350 metre cell, and only for public ground a listed verifier has confirmed; the holder's own signed reply shows their place. view counts: how many work orders stand, how many jobs are linked and where (a 350 metre cell is listed only for public ground a listed verifier has confirmed), never a wallet and never an id. With nothing passed, the counts are read. The program is held off until the operator switches it on, and until then the counts say so plainly; a work order that exists can be read at any time. For a place that is not shown the NET figure reads Not shown and the links name no job; the holder's own signed reply and signed list always show them. This tool moves no NET, and the house pays, holds and sells nothing through it. Free, keyless, nothing to sign. Cost and signer: free and keyless, nothing to sign.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -5439,7 +5556,7 @@
           }
         }
       },
-      "digest": "sha256:0821e5b957bf892ab3041e96dcb57338d5e244bef7ae85fbad8665e919d38497"
+      "digest": "sha256:f2d8fd9fea5f5aaebb7dd210f2c87153b0a83f0c297d1d6bc6a6e0223390bdf8"
     },
     {
       "name": "prepare_net_order_record",
@@ -5563,7 +5680,7 @@
     {
       "name": "prepare_net_independence_record",
       "title": "Declare that two wallets are linked, or (a listed attester) record whether wallets are independent (step 1 of 2)",
-      "description": "NET INDEPENDENCE RECORD, built and held off: a wallet signs one record about how wallets are linked, which a NET service order reads when it shows whether its parties have a known link to one another: affiliation (you declare that your wallet is linked to another) or attestation (a wallet the operator lists as an attester says whether wallets are independent, with evidence). It is a record only: an affiliation adds a link and cannot be taken back here, the other wallet does not sign it, an attestation is the attester's own word and the board does not check it, and with no attester listed, the default, nobody can attest and no order reads confirmed. You name one act: affiliation (wallets: exactly two addresses, one of them the wallet you sign with; basis: one code from a short list of reasons they are linked), or attestation (a listed attester only: one to twenty addresses, a source from a short list, a reference to the evidence, and a verdict of confirmed or affiliated). An affiliation links the two wallets for good: where they hold different roles in an order it reads affiliated, and an acceptor or provider linked to another party in it is refused. Only a confirmation changes how an order reads: an attester's record of affiliation links nobody, and a confirmation by a wallet that is a party to an order does not count for that order. Nothing here proves anyone is independent: a wallet no one has linked is only one with no known link. FREE to sign, no fee, no gas. The programs are built but held off until the operator switches the NET programs on together: until then both acts are refused before you sign, with the same answer whatever the wallet and whatever the body, but for a house wallet, which is named as such. Prepare refuses only what is true for every wallet: a body that breaks the door's rules (an affiliation must name the wallet you sign with), a house wallet, the kill switch, and no order program switched on. What depends on this wallet is answered only when you submit, so prepare never says whether a wallet is a listed attester or already has the pair on record: the door tells a wallet that is not a listed attester so before it consumes the signature (that signature is not consumed), and the cap of twenty declared affiliations for one wallet is refused, and a pair already on record is read back as already recorded, each after the signature is verified, so each spends the signature. Prepare answers the same for every wallet. This moves no NET, and the house pays, holds and sells nothing through these tools. Never put a phone number, an email or a street address in any field. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the acting wallet's personal_sign, then call submit_net_independence_record within 5 minutes. Cost and signer: free, no gas; the person signs the result with their own wallet or passkey, and the house never holds a key.",
+      "description": "NET INDEPENDENCE RECORD, built and held off: a wallet signs one record about how wallets are linked, which a NET service order reads when it shows whether its parties have a known link to one another: affiliation (you declare that your wallet is linked to another) or attestation (a wallet the operator lists as an attester says whether wallets are independent, with evidence). It is a record only: an affiliation adds a link and cannot be taken back here, the other wallet does not sign it, an attestation is the attester's own word and the board does not check it, and with no attester listed, the default, nobody can attest and no order reads confirmed. You name one act: affiliation (wallets: exactly two addresses, one of them the wallet you sign with; basis: one code from a short list of reasons they are linked), or attestation (a listed attester only: the id of ONE order, the ONE party you attest about, the ONE counterparty it is independent of, a source from a short list, a reference to the evidence, and a verdict of confirmed or affiliated). An attestation is for that one party in that one order against that one counterparty and is never reused: it does not count for another order, another party or the same pair the other way round, and an order reads confirmed only when every outside party in it has been attested against every other party in it. An attestation made before this rule, which named wallets and no order, counts for nothing. An affiliation links the two wallets for good: where they hold different roles in an order it reads affiliated, and an acceptor or provider linked to another party in it is refused. Only a confirmation changes how an order reads: an attester's record of affiliation links nobody, and a confirmation by a wallet that is a party to an order does not count for that order. Nothing here proves anyone is independent: a wallet no one has linked is only one with no known link. FREE to sign, no fee, no gas. The programs are built but held off until the operator switches the NET programs on together: until then both acts are refused before you sign, with the same answer whatever the wallet and whatever the body, but for a house wallet, which is named as such. Prepare refuses only what is true for every wallet: a body that breaks the door's rules (an affiliation must name the wallet you sign with), a house wallet, the kill switch, and no order program switched on. What depends on this wallet is answered only when you submit, so prepare never says whether a wallet is a listed attester or already has the pair on record: the door tells a wallet that is not a listed attester so before it consumes the signature (that signature is not consumed), and the cap of twenty declared affiliations for one wallet is refused, and a pair already on record is read back as already recorded, each after the signature is verified, so each spends the signature. Prepare answers the same for every wallet. This moves no NET, and the house pays, holds and sells nothing through these tools. Never put a phone number, an email or a street address in any field. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the acting wallet's personal_sign, then call submit_net_independence_record within 5 minutes. Cost and signer: free, no gas; the person signs the result with their own wallet or passkey, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -5584,7 +5701,19 @@
             "items": {
               "type": "string"
             },
-            "description": "affiliation: exactly two 0x… addresses, yours and the one you are linked to. attestation: one to twenty 0x… addresses. Addresses only, never a private key."
+            "description": "affiliation: exactly two 0x… addresses, yours and the one you are linked to. Addresses only, never a private key. An attestation takes no list of wallets."
+          },
+          "orderId": {
+            "type": "string",
+            "description": "attestation: the id of the ONE order (or match offer, or claim) the attestation is for. It counts for that order and no other."
+          },
+          "party": {
+            "type": "string",
+            "description": "attestation: the ONE 0x… address you attest about. Address only, never a private key."
+          },
+          "counterparty": {
+            "type": "string",
+            "description": "attestation: the ONE other 0x… address in the same order that the party is independent of. Address only, never a private key."
           },
           "basis": {
             "type": "string",
@@ -5622,11 +5751,10 @@
         },
         "required": [
           "act",
-          "actor",
-          "wallets"
+          "actor"
         ]
       },
-      "digest": "sha256:2da68481ff9f97a9d97fa6481b11b1b014338f33473d16baa7805588c0981c3b"
+      "digest": "sha256:24cff2287db07b481953ce9e375cf8b9e6bef2f0bbb60812485b37322d9a3608"
     },
     {
       "name": "submit_net_independence_record",
@@ -5661,9 +5789,278 @@
       "digest": "sha256:7f99ac274c2ef99e1ab01f242f51ccd07854d582d48dc4f7001ab7f51c71e2fd"
     },
     {
+      "name": "prepare_net_vvv",
+      "title": "Opt in to the inference allowance, allocate part, record a call or close it (step 1 of 2)",
+      "description": "AGENT INFERENCE ALLOWANCE (VVV): opt in with your own NET and an allowance you set, and get inference at Venice from your own wallet. You name some of your NET, set an allowance in USDC base units (a hard cap on what this program records and allocates; nothing in VVV spends), pin the payee you pay (opt_in), allocate part of the allowance (allocate), record each call you signed (receipt), or end it (close). FREE, a signed statement, no fee, no gas, and your NET never moves. An opt-in is a record, never custody and never a lock: your NET stays in your own wallet, Vealth holds no VVV, DIEM or USDC, signs nothing for you, pays no one and is never the payee. You pay Venice yourself, from your own wallet. The door checks the NET against your wallet's fresh balance less everything it already stands behind, and refuses if it does not cover. The allowance is a hard cap on what this program records and allocates: a setting that is empty, negative, fractional, text or above 25000000 is refused, and so is an allocation, or a receipt for a call, that would pass it. The program refuses to record or allocate past the cap; it does not stop a spend, because nothing in this program can spend (you pay Venice yourself, from your own wallet). A call counts for the amount you signed, whether or not it went through, and one that threw after signing still counts. A call with no payment reference is not recorded. The program is built but not switched on until the operator switches the NET programs on together: until then an opt-in and an allocation are refused before you sign, while a receipt, a close and the reads still work. The routes (NET to USDC from your wallet, where the buying in NET's pools is the house's own; Venice pay per call; and VVV or DIEM held in your wallet) are prepared steps, read them with net_vvv_status. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the agent wallet's personal_sign, then call submit_net_vvv within 5 minutes. Cost and signer: free, no gas; the person signs the result with their own wallet or passkey, and the house never holds a key.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "act": {
+            "type": "string",
+            "enum": [
+              "opt_in",
+              "allocate",
+              "receipt",
+              "close"
+            ],
+            "description": "opt_in to name your NET and set the cap and the payee; allocate part of the allowance to a route; receipt a call you signed; close the opt-in."
+          },
+          "principal": {
+            "type": "string",
+            "description": "The 0x… address that signs: the agent's own wallet. Address only, never a private key."
+          },
+          "optInId": {
+            "type": "string",
+            "description": "The opt-in's id: 1 to 80 letters, numbers and . _ : - , never a wallet address. You choose it when you opt in; the same id and the same terms read the opt-in back."
+          },
+          "netUnits": {
+            "type": "number",
+            "description": "opt_in: whole NET units you name, at least 1 (1 NET is 1,000,000 units). Checked against your wallet, never held."
+          },
+          "allowanceUnits": {
+            "type": "number",
+            "description": "opt_in: the most inference you allow yourself, a whole number of USDC base units (one millionth of a dollar), from 1 to 25000000. A hard cap on what this program records and allocates: it refuses to record or allocate past it, and nothing in VVV spends."
+          },
+          "payee": {
+            "type": "string",
+            "description": "opt_in and receipt: the 0x… address you pin as the only payee your calls may name: the one Venice publishes, which you read yourself. No default; never a house wallet."
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "opt_in: the day it lapses, an ISO time between 1 and 90 days from now."
+          },
+          "allocationId": {
+            "type": "string",
+            "description": "allocate and receipt: the allocation's id, which you choose when you allocate and name again on each call."
+          },
+          "route": {
+            "type": "string",
+            "enum": [
+              "venice_x402_usdc"
+            ],
+            "description": "allocate: the route. Only venice_x402_usdc counts calls; the other routes are prepared steps, read them with net_vvv_status."
+          },
+          "units": {
+            "type": "number",
+            "description": "allocate: whole inference units to allocate, at least 1. It cannot take the allocations past the allowance."
+          },
+          "receiptId": {
+            "type": "string",
+            "description": "receipt: the call's id, which you choose."
+          },
+          "signedUnits": {
+            "type": "number",
+            "description": "receipt: the amount you signed for this call, a whole number of USDC base units. It counts even if the call did not settle."
+          },
+          "settled": {
+            "type": "boolean",
+            "description": "receipt: true when Venice answered with a success. Kept for your books; it never changes what counts."
+          },
+          "threwAfterSigning": {
+            "type": "boolean",
+            "description": "receipt: true when the call threw after you signed. Kept for your books; it never changes what counts."
+          },
+          "paymentRef": {
+            "type": "string",
+            "description": "receipt: the payment reference of the call you signed, 0x and 64 hex digits. Required: no reference, no record."
+          },
+          "reason": {
+            "type": "string",
+            "description": "close: optional, one plain sentence, up to 280 characters."
+          }
+        },
+        "required": [
+          "act",
+          "principal",
+          "optInId"
+        ]
+      },
+      "digest": "sha256:c22ac2426f8eef2af9258b127da550972b8ded95589d4b9761076f62477c74ac"
+    },
+    {
+      "name": "submit_net_vvv",
+      "title": "Submit the signed inference allowance act (step 2 of 2)",
+      "description": "Complete the act: pass the BODY_JSON from prepare_net_vvv UNCHANGED and the signature your wallet produced over MESSAGE_TO_SIGN. Relays to the same public door any HTTP client uses (POST /labor/net/vvv-compute); this server holds no keys and no funds, and the door checks the signature itself. Free with a valid body-bound signature from the agent wallet. An opt-in moves no NET and holds none. Ask net_vvv_status where it stands, because Vealth sends no email. Cost and signer: free, no gas; signed by the person's own wallet or passkey, and the house never holds a key.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_net_vvv, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:86519d6712b50da42f0884197b0867418c523900d1a0121847d7c98c8ae83d2b"
+    },
+    {
+      "name": "net_vvv_status",
+      "title": "Where an inference allowance opt-in stands, or the program and its routes",
+      "description": "Read one inference allowance opt-in by its id: open, exhausted, closed or expired, the NET it names, the cap, what is allocated and what is counted, in inference units. With no id, the program page: its caps, its unit and the routes written as prepared steps, each with its source, the day it was read and what was NOT READ. Free, keyless, nothing to sign. It shows no wallet, no payee and no payment reference, and there is no list by wallet. It says plainly that the NET is not held and that Vealth holds no VVV, DIEM or USDC and is never the payee. Cost and signer: free and keyless, nothing to sign.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "optInId": {
+            "type": "string",
+            "description": "The opt-in's id (the optInId it was opened under). Leave it out to read the program and its routes."
+          }
+        }
+      },
+      "digest": "sha256:48eff7d59adb0240b7b8e93465977918e837bdd984cb563b4892d32926d452f3"
+    },
+    {
+      "name": "prepare_net_swap_quote",
+      "title": "Ask for a swap quote on our own NET pools (keyless, nothing to sign)",
+      "description": "BRANDED SWAP DOOR over our own NET pools: ask for a quote on a pair they serve and get the quote, the pool it routes through and the exact transactions for your own wallet to sign and send. It does not sign, hold, advise or promise, it takes no fee, and it is built but not switched on yet. It serves one hop with NET on one side, through four pinned pools (NET with WETH, ETH, ECO or VVV; the buying in NET's pools is the house's own), in both directions. NET also has a pool with HYDROC that this door does not serve. A quote moves its pool by at most one percent and is good for two minutes; a larger amount is refused, not split. The door asks its provider to put a minimum you receive, computed from the quote, into the transaction, but this door does not decode or verify the transaction data, so that minimum is the provider's and is not checked here: read each transaction in your own wallet before you sign it. The pools are thin, so quotes are small, and a quote is one read at one moment: the swap can fill differently, and another trader can trade ahead of you. The live quote provider, and the independent reference reader every quote is checked against, are not built yet: until both are, every quote is refused and says so. Every quote shows its fee line, and the fee is none today. The pinned NET holder disclosure comes with every quote. A swap through this door is never needed to hold NET, claim a job, vote or work. Free and keyless. You sign and send the swap yourself, from your own wallet, and pay the gas. Cost and signer: free and keyless, nothing to sign here; the person signs and sends the swap with their own wallet, and the house never holds a key.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tokenIn": {
+            "type": "string",
+            "description": "The token you send: NET, ECO, WETH, ETH or VVV, by symbol or 0x address. One side of the pair must be NET."
+          },
+          "tokenOut": {
+            "type": "string",
+            "description": "The token you receive: NET, ECO, WETH, ETH or VVV, by symbol or 0x address. One side of the pair must be NET."
+          },
+          "amountIn": {
+            "type": "string",
+            "description": "How much you send, a whole number in the token's smallest unit (18 decimals for these tokens), sent as a digit string. At least 1."
+          },
+          "wallet": {
+            "type": "string",
+            "description": "The 0x address of your own wallet, the one that will sign and send the swap. Address only, never a private key."
+          }
+        },
+        "required": [
+          "tokenIn",
+          "tokenOut",
+          "amountIn",
+          "wallet"
+        ]
+      },
+      "digest": "sha256:c452a05381e35a6213b04926b16869343bf43c22d677c1c4b91e56127be996f6"
+    },
+    {
+      "name": "prepare_net_swap_record",
+      "title": "Record a swap you sent through the swap door (step 1 of 2)",
+      "description": "SWAP RECORD: say that you sent a swap you were quoted, so the swap door can show it routed. You give the transaction hash you sent, the quoteHash, validUntil and pair the quote showed. FREE, a signed statement, no fee, no gas. It is recorded once per wallet and transaction, as your own statement: nothing here checks the transaction onchain, so it reads unverified, and no reward is paid or promised for it. The door refuses a record while it is not switched on or the kill switch is on, for a house wallet, and for a quote that ended more than 15 minutes ago. Returns MESSAGE_TO_SIGN and BODY_JSON; sign with the wallet that sent the swap using personal_sign, then call submit_net_swap_record within 5 minutes. Cost and signer: free, no gas; the person signs the result with their own wallet or passkey, and the house never holds a key.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "principal": {
+            "type": "string",
+            "description": "The 0x… address that signs: the wallet that sent the swap. Address only, never a private key."
+          },
+          "txHash": {
+            "type": "string",
+            "description": "The hash of the transaction you sent: 0x and 64 hex digits."
+          },
+          "quoteHash": {
+            "type": "string",
+            "description": "The quoteHash the quote showed: 64 hex digits."
+          },
+          "pair": {
+            "type": "string",
+            "description": "The pair the quote showed: the token you sent, then >, then the token you received (written TOKEN_A>TOKEN_B)."
+          },
+          "validUntil": {
+            "type": "string",
+            "description": "The validUntil time the quote showed, as an ISO time."
+          }
+        },
+        "required": [
+          "principal",
+          "txHash",
+          "quoteHash",
+          "pair",
+          "validUntil"
+        ]
+      },
+      "digest": "sha256:a84da10952d96c431e88aa590a1ba3ed619994e2ffbb806217b8212b2fe79ba1"
+    },
+    {
+      "name": "submit_net_swap_record",
+      "title": "Submit the signed swap record (step 2 of 2)",
+      "description": "Complete the record: pass the BODY_JSON from prepare_net_swap_record UNCHANGED and the signature your wallet produced over MESSAGE_TO_SIGN. Relays to the same public door any HTTP client uses (POST /labor/net/swap-records); this server holds no keys and no funds, and the door checks the signature itself. Free with a valid body-bound signature from the wallet that sent the swap. A record moves no token and holds none, and it reads unverified. Cost and signer: free, no gas; signed by the person's own wallet or passkey, and the house never holds a key.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "bodyJson": {
+            "type": "string",
+            "description": "The exact BODY_JSON string from prepare_net_swap_record, unchanged."
+          },
+          "signature": {
+            "type": "string",
+            "description": "The 0x… personal_sign output over MESSAGE_TO_SIGN."
+          }
+        },
+        "required": [
+          "bodyJson",
+          "signature"
+        ]
+      },
+      "digest": "sha256:e22adf2c0d7660592a0727ab978a2e7115d7a926eb1ccc1714a1ff609f9ca60c"
+    },
+    {
+      "name": "net_swap_status",
+      "title": "Where the swap door stands: its state, fee, caps, pairs and counts",
+      "description": "Read the BRANDED SWAP DOOR's state: whether it is off or dry, the fee (none), its caps, the four NET pools and eight pairs it serves with their sources and what was NOT READ (the buying in NET's pools is the house's own), whether any reward for swaps is offered (none is paid) and counts of swaps wallets say they sent. Free, keyless, nothing to sign. It shows no wallet, no id and no transaction hash, and there is no list by wallet. It says plainly that the door does not sign, hold, advise or promise, that neither the live quote provider nor the independent reference reader is built, and that a recorded swap is the wallet's own statement and reads unverified. Cost and signer: free and keyless, nothing to sign.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "digest": "sha256:7d2f75bc14d8614ce776d3733335d60debb4c5506afcb6936b039b4bc5385007"
+    },
+    {
+      "name": "prepare_net_workers_coin_plan",
+      "title": "Read a dry launch plan for a coin of your own (keyless, nothing to sign)",
+      "description": "A WORKER'S OWN COIN: give the public address of your own wallet, a name and a symbol and read the plan for a coin of your own: a supply of 1,000, 900 into the first floor and 100 kept whole in your wallet, the first floor against ECO worth $10 at a priced read (ECO is EcoWealth's own token: EcoWealth holds it and gains if it rises), the second floor's rule, and what your own wallet would sign, in order. It launches nothing. The house holds, signs, buys, sells and launches nothing, there is no fee and no reward, and nothing here is advice. The live priced read of ECO and the launch provider are not built yet: until the priced read is, the plan is refused and says so, and nothing is guessed; and no transaction is ever built here. The program is built but not switched on, and a legal read comes before any live step. Free and keyless: it takes an address only, never a private key, and it stores nothing. Cost and signer: free and keyless, nothing to sign here; if a coin is ever launched, the person signs with their own wallet, and the house never holds a key.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "The public 0x address of your own wallet, the one that would sign. Address only, never a private key."
+          },
+          "name": {
+            "type": "string",
+            "description": "The coin's name: 3 to 32 letters, numbers, spaces, dots, apostrophes or dashes. It does not borrow the house's names."
+          },
+          "symbol": {
+            "type": "string",
+            "description": "The coin's symbol: 2 to 8 capital letters or numbers. It does not borrow the house's names."
+          }
+        },
+        "required": [
+          "wallet",
+          "name",
+          "symbol"
+        ]
+      },
+      "digest": "sha256:f25e34856c5f2ca528208effde04c5e7d66f5743940db4cb6215611b0956aed0"
+    },
+    {
+      "name": "net_workers_coin_status",
+      "title": "Where the worker's own coin program stands: built dry, off, and what is not built",
+      "description": "Read the A WORKER'S OWN COIN program's state in plain words: built, not switched on, what is not built (the priced read of ECO and the launch provider), and that a legal read blocks any live step. Free, keyless, nothing to sign. It shows no wallet and counts nothing about any person. Cost and signer: free and keyless, nothing to sign.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "digest": "sha256:d7170aa53113f73565fdc9d1cb33c3cee813dae9c9e19e51f0ae14f06605c00a"
+    },
+    {
       "name": "provision_plan",
       "title": "Plan the governed work that answers an objective",
-      "description": "VEALTH PROVISION: send an objective in plain words (any spelling; English, Spanish or Swahili) and get back a PLAN: a verdict (plan, authority_required, clarify, no_home, or entry_work when the objective only offers help, such as 'I want to help', and names no work), ONE exact next call, the governed work units that answer it (method, safety stops, the authority each needs, whether it is executable) and any live board packets near the place you name with their posted price and what a stranger may do now. Regulated work (lead paint, gas, asbestos, electrical, needles and similar) is never presented as freely doable: the plan names whose authority it needs. Nothing in a plan has happened; no place or price is invented; corpus units have no price until posted. The same plan GET /labor/provision returns. Free, keyless, read-only, moves no money. Not provision_work, which builds a funding path for one packet. Cost and signer: free and keyless, nothing to sign.",
+      "description": "VEALTH PROVISION: send an objective in plain words (any spelling, and in more than one language) and get back a PLAN: a verdict (plan, authority_required, clarify, no_home, or entry_work when the objective only offers help, such as 'I want to help', and names no work), ONE exact next call, the governed work units that answer it (method, safety stops, the authority each needs, whether it is executable) and any live board packets near the place you name with their posted price and what a stranger may do now. Regulated work (lead paint, gas, asbestos, electrical, needles and similar) is never presented as freely doable: the plan names whose authority it needs. Nothing in a plan has happened; no place or price is invented; corpus units have no price until posted. The same plan GET /labor/provision returns. Free, keyless, read-only, moves no money. Not provision_work, which builds a funding path for one packet. Cost and signer: free and keyless, nothing to sign.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -5673,7 +6070,7 @@
           },
           "place": {
             "type": "string",
-            "description": "Optional place name, e.g. 'Kibera' or 'Los Angeles'. Used as an address filter, never scored as work."
+            "description": "Optional place name, e.g. 'Boyle Heights' or 'Los Angeles'. Used as an address filter, never scored as work."
           },
           "latitude": {
             "type": "number",
@@ -5700,7 +6097,7 @@
           "objective"
         ]
       },
-      "digest": "sha256:655451f470c5296bf6534bd74f1c4b4e29f602cc6e2ca1633b6670a02ecda8a2"
+      "digest": "sha256:74e39e5007c7363ba633bdac8109915c95e847407b558f8db6ef72c9f3ada340"
     },
     {
       "name": "understand_need",
