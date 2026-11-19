@@ -123,6 +123,17 @@ Klima spends the quote, not the maximum. The unspent part of your approval stays
 - kVCM is a token. Its market price can go down. Nothing here says otherwise.
 - A quote and a simulation are not promises. Klima can change the list and the price between your read and your send.
 
+## Carbonmark's own door for agents
+
+Carbonmark publishes a page for agents at carbonmark.com/ai-agents. This kit does not use that door and has not tested it. The four lines below are what that page says, read on 2026-11-17. Each one is that page's own claim. None was checked against the chain.
+
+- Discovery, quotes and the prepare step are free and move no funds. Only the signed retirement spends USDC. (Carbonmark's claim.)
+- A quote is the credit price plus a fee. Its example from 17 November 2026: 1 kg of a wind-energy credit quoted 0.010041 USDC in total, of which 0.01 USDC was the fee. It also says the smallest real retirement, 1 kg, costs a few US cents. (Carbonmark's claim.)
+- You sign one authorization, and its executor submits the retirement onchain. (Carbonmark's claim.)
+- It says the executor covers gas, no ETH is required, and the wallet needs USDC on Base. Next to that example it also says the gasless relay added about 0.017 USDC to reimburse gas. (Carbonmark's claim.)
+
+Read that page yourself before you rely on any of it.
+
 ## Left for later (guide text only, the program exits with code 2)
 
 - **Staking and locks.** Staking kVCM, K2 or LP tokens goes through the staking manager and the zkMe check above. Not prepared.

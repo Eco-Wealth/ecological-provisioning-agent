@@ -2,7 +2,7 @@
 
 Never an offer or advice, no return promised. This page gives instructions and reads. It does not say you should run any of them. The thesis and its limits: https://vealth.net/tokens.html
 
-Written on 2026-11-17 from the acts and guides in this folder. Every command below is checked against the real program by this folder's tests: they parse each one, with no network and no key (the three `net-circle` commands are checked when the sibling kit is installed beside this one). `node protocol-guide.mjs recipes` prints the same recipes, so a bot can read them from the program itself.
+Written on 2026-11-17 from the acts and guides in this folder, and the Hydrex recipe (5) extended on 2026-11-18 with `hydrex rank`. Every command below is checked against the real program by this folder's tests: they parse each one, with no network and no key (the three `net-circle` commands are checked when the sibling kit is installed beside this one). `node protocol-guide.mjs recipes` prints the same recipes, so a bot can read them from the program itself.
 
 ## What a recipe is
 
@@ -14,7 +14,7 @@ The aim of these recipes is capital loops: capital that goes out through a proto
 
 A loop is a path with its costs, never a profit. Every leg has fees and gas, a pool can move before the second leg, and a loop can return less than it took. No recipe promises a return. A sink is a path that ends the capital by design: a retirement on Klima or on Regen is gone for good and does not come back. `node protocol-guide.mjs map` lists the loops and sinks this kit knows, with the live state of each pool leg. This kit builds no loop pricing tool: it prices nothing.
 
-In the commands, `0xYOU` is your own address, `regen1YOU` is your own Regen Ledger address, `0xCLASS` and `0xCREDIT` are a Klima class and credit you read in an earlier step, and `0xPOOL` is a Hydrex pool you chose. The amounts are examples and are not advice.
+In the commands, `0xYOU` is your own address, `regen1YOU` is your own Regen Ledger address, `0xCLASS` and `0xCREDIT` are a Klima class and credit you read in an earlier step, and `0xPOOL` is a Hydrex pool, one that `hydrex rank` names or one you chose. The amounts are examples and are not advice.
 
 ## Rules for every recipe
 
@@ -136,7 +136,7 @@ Stop when your kVCM budget is spent, when a quote is far above the last one, or 
 
 ## 5. A Hydrex lock keeper for your own lock
 
-Claim, then vote, once per epoch. This recipe needs a veHYDX lock you already hold. This kit creates no lock (guide text only) and delegates nothing. EcoWealth holds a veHYDX position.
+Claim, then vote for the pools that paid their voters most last epoch, once per epoch. This recipe needs a veHYDX lock you already hold. This kit creates no lock (guide text only) and delegates nothing. EcoWealth holds a veHYDX position.
 
 Shape: a loop of the lock's reward. Your lock votes, and the fees and bribes of the pools you voted in come back to you to claim. The locked HYDX stays locked, so what loops is the lock's reward, and it can be zero. It is a path with its costs, not a return.
 
@@ -147,7 +147,7 @@ node protocol-guide.mjs hydrex epoch --json
 node protocol-guide.mjs hydrex locks --address 0xYOU --json
 node protocol-guide.mjs hydrex claimable --address 0xYOU
 node protocol-guide.mjs hydrex prepare claim --from 0xYOU --json
-node protocol-guide.mjs hydrex pools --limit 15
+node protocol-guide.mjs hydrex rank --json
 node protocol-guide.mjs hydrex prepare vote --from 0xYOU --vote 0xPOOL:10000 --json
 ```
 
@@ -155,10 +155,10 @@ node protocol-guide.mjs hydrex prepare vote --from 0xYOU --vote 0xPOOL:10000 --j
 - `hydrex locks`: no lock in the list means stop. Otherwise read your votes. They do not carry over to the new epoch.
 - `hydrex claimable`: what you could claim in the pools you vote in now.
 - `hydrex prepare claim`: exit `0` prints one step per reward contract, and you send each exactly as printed. Exit `10`: nothing earned yet, or a claim that reverts. Read `prepared.reason` and the problem lines.
-- `hydrex pools`: the pools and their gauges. The kit names none to vote for and gives no view. Pick by your own rule, and judge a pool by last epoch's weight, never the live figure (`guides/hydrex.md`).
-- `hydrex prepare vote`: exit `0`, send it. A new vote replaces your previous one, and the basis points must sum to exactly 10000. Exit `10`: no lock, no live gauge for a pool, or the vote reverts. Read `prepared.reason`.
+- `hydrex rank`: the rule, written out. For the last completed epoch it reads, from each pool's own fee and bribe contracts, what the pool paid its voters (fees plus bribes, in USD) and divides it by the pool's final votes, then lists the top pools by pay per 1000 votes. With `--json` its `vote` string is `0xPOOL:bps,0xPOOL:bps,...`, shared equally, summing to exactly 10000. Pass that string unchanged to `--vote` in the next step, in place of the example. Only USD stablecoins are priced, so the figures are lower bounds, and `unpriced` lists every reward left out. It leaves tokenized equity out, so the string always passes the equity screen of `hydrex prepare vote`. Exit `10`: no pool paid enough to rank, so do not run the vote step from this rank. In the three epochs observed from 2026-09-17 to 2026-10-01, paying pools often settled near one rate, so the rank mostly kept voters off pools that paid nothing, and a pool's pay last epoch is a reading of the past, not a promise. As of 2026-11-18 the Hydrex community, in a thread in Hydrex's Discord, reads about six weeks of runway in the reserve that funds most voter rewards. That is their reading, not this program's: check it yourself.
+- `hydrex prepare vote`: exit `0`, send it, after you have sent the claim above (a claim sees only the pools you vote in now). A new vote replaces your previous one, and the basis points must sum to exactly 10000. Exit `10`: no lock, no live gauge for a pool, or the vote reverts. Read `prepared.reason`.
 
-Caps: at most 10 pools in one vote. A claim covers only the pools you vote in now, so pass an older pool to your own tool.
+Caps: at most 10 pools in one vote, so `hydrex rank --top` is 1 to 10. A claim covers only the pools you vote in now, and a new vote replaces them, so send the claim first and pass an older pool to your own tool.
 
 What it can cost you: gas only. A careless vote can drop votes you meant to keep.
 

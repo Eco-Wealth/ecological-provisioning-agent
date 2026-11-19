@@ -8,7 +8,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  decodeAbiParameters, decodeFunctionData, encodeErrorResult, formatUnits, parseAbi, parseAbiParameters, parseEther, toFunctionSelector,
+  decodeAbiParameters, decodeFunctionData, encodeErrorResult, formatUnits, parseAbi, parseAbiParameters, parseEther, parseUnits, toFunctionSelector,
 } from "viem";
 import * as pg from "./protocol-guide.mjs";
 
@@ -119,6 +119,9 @@ describe("registry and refusals", () => {
       ["hydrex", "locks", "--address", "0x1"],
       ["hydrex", "pools", "--bogus", "1"],
       ["hydrex", "pools", "--limit", "9999"],
+      ["hydrex", "rank", "--top", "0"], ["hydrex", "rank", "--top", "11"], ["hydrex", "rank", "--top", "abc"], ["hydrex", "rank", "--include-equity"], // rank: 1 to 10 pools, and no way to bring tokenized equity back
+      ["hydrex", "prepare", "vote", "--from", FROM, "--vote", `${POOL_A}:5000,${POOL_B}:4000`], // a comma-joined vote must still sum to 10000
+      ["hydrex", "prepare", "vote", "--from", FROM, "--vote", `${POOL_A}:5000,`], // a trailing comma is an empty pair, not ignored
       // klima: below Klima's smallest retirement, above the starter cap, a missing flag, junk in a number, a bad address, a nameless retirement
       ["klima", "prepare", "retire", "--from", FROM, "--class", KCLASS, "--credit", KCREDIT, "--tonnes", "0.0001", "--beneficiary-name", "x"],
       ["klima", "prepare", "retire", "--from", FROM, "--class", KCLASS, "--credit", KCREDIT, "--tonnes", "5", "--beneficiary-name", "x"],
@@ -305,6 +308,270 @@ describe("hydrex", () => {
     const e = await pg.readEpoch(c);
     assert.equal(e.secondsToFlip, 1_799_999_000n + 604_800n - 1_800_000_000n);
     assert.equal(e.weeklyOhydx, "300000");
+  });
+});
+
+// ---- hydrex rank -----------------------------------------------------------------------------------------------------
+describe("hydrex rank", () => {
+  const E = (1_800_000_000n / 604_800n) * 604_800n - 604_800n; // the stub's clock is 1_800_000_000: the last completed epoch starts here
+  const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", WETH = "0x4200000000000000000000000000000000000006";
+  const BETR = "0x9999999999999999999999999999999999999999", WTX = "0x8888888888888888888888888888888888888888", FAKE_USDC = "0x7777777777777777777777777777777777777777";
+  const TOKENS = { [lower(USDC)]: ["USDC", 6], [lower(WETH)]: ["WETH", 18], [lower(BETR)]: ["BETR", 18], [lower(WTX)]: ["wtABC", 18], [lower(FAKE_USDC)]: ["USDC", 6] };
+  const addr = (kind, i) => `0x${kind}${String(i).padStart(39, "0")}`;
+  /** specs: { title, votes, fees: { token: amount }, bribes: { token: amount }, alive, equity, supplyVotes, failBribe } -> a stub chain and the API's pool list. */
+  function chain(specs, { block = 1_800_000_000n } = {}) {
+    const rows = specs.map((s, i) => ({ ...s, pool: addr(1, i + 1), gauge: addr(2, i + 1), fee: addr(3, i + 1), bribe: addr(4, i + 1) }));
+    const byGauge = new Map(rows.map((r) => [lower(r.gauge), r])), byPool = new Map(rows.map((r) => [lower(r.pool), r])), byContract = new Map();
+    for (const r of rows) { byContract.set(lower(r.fee), { r, paid: r.fees ?? {}, supply: r.supplyVotes ?? r.votes }); byContract.set(lower(r.bribe), { r, paid: r.bribes ?? {}, supply: r.supplyVotes ?? r.votes, bribe: true }); }
+    const units = (token, amount) => parseUnits(String(amount), TOKENS[lower(token)][1]);
+    const tokenList = (c) => Object.keys(byContract.get(lower(c.address)).paid);
+    const calls = {
+      weightsAt: (c) => (c.args[1] === E ? parseUnits(String(byPool.get(lower(c.args[0])).votes), 18) : 0n),
+      gauges: (c) => byPool.get(lower(c.args[0])).gauge,
+      isAlive: (c) => byGauge.get(lower(c.args[0])).alive !== false,
+      internal_bribes: (c) => byGauge.get(lower(c.args[0])).fee,
+      external_bribes: (c) => byGauge.get(lower(c.args[0])).bribe,
+      rewardsListLength: (c) => BigInt(tokenList(c).length),
+      rewardTokens: (c) => tokenList(c)[Number(c.args[0])],
+      rewardData: (c) => {
+        const k = byContract.get(lower(c.address));
+        if (k.bribe && k.r.failBribe) throw new Error("rate limited");
+        return c.args[1] === E && k.paid[c.args[0]] !== undefined ? [0n, units(c.args[0], k.paid[c.args[0]]), 0n] : [0n, 0n, 0n];
+      },
+      totalSupplyAt: (c) => (c.args[0] === E ? parseUnits(String(byContract.get(lower(c.address)).supply), 18) : 0n),
+      decimals: (c) => TOKENS[lower(c.address)][1],
+      symbol: (c) => TOKENS[lower(c.address)][0],
+      balanceOf: () => 1n,
+    };
+    const apiPools = rows.map((r) => ({ address: r.pool, chainId: 8453, title: r.title, isEquity: Boolean(r.equity), gauge: { address: r.gauge, bribesInUsd: r.apiBribes ?? 0 } }));
+    return { client: stub({ calls, getBlock: async () => ({ timestamp: block }) }), apiPools, rows };
+  }
+  const usdc = (n) => ({ [USDC]: n });
+  /** A quiet market: four bribed pools, one pool below the 100 USD floor with a dust-sized vote count. */
+  const market = () => [
+    { title: "AAA/USDC", votes: 1_000_000, bribes: usdc(900) },
+    { title: "BBB/USDC", votes: 1_000_000, bribes: usdc(1000) },
+    { title: "CCC/USDC", votes: 500_000, fees: usdc(25), bribes: usdc(400) },
+    { title: "DUST/USDC", votes: 10_000, bribes: usdc(90) },
+  ];
+
+  it("reads pay from the reward contracts at the completed epoch and ranks by USD per 1,000 votes, with a 100 USD floor", async () => {
+    const w = chain(market());
+    const read = await pg.readRank(w.client, { apiPools: w.apiPools });
+    assert.equal(read.epochStart, E);
+    assert.equal(read.epochEnd, E + 604_800n);
+    const { report } = pg.rankReport(read);
+    assert.deepEqual(report.pools.map((p) => p.pool), [w.rows[1].pool, w.rows[0].pool, w.rows[2].pool], "BBB 1.00, AAA 0.90, CCC 0.85; the dust pool paid 90 USD and is not ranked");
+    assert.deepEqual(report.pools.map((p) => p.usdPer1kVotes), [1, 0.9, 0.85]);
+    assert.deepEqual(report.pools.map((p) => [p.feesUsd, p.bribesUsd]), [[0, 1000], [0, 900], [25, 400]]);
+    assert.deepEqual(report.pools.map((p) => p.finalWeight), ["1000000", "1000000", "500000"]);
+    assert.deepEqual(report.pools.map((p) => p.gauge), [w.rows[1].gauge, w.rows[0].gauge, w.rows[2].gauge]);
+  });
+
+  it("asks the reward contracts for the epoch itself: any other epoch reads as nothing paid, and an epoch not yet over is refused", async () => {
+    const w = chain(market());
+    const older = await pg.readRank(w.client, { apiPools: w.apiPools, epochStart: E - 604_800n });
+    assert.equal(older.rows.length, 0);
+    const nothing = pg.rankReport(older);
+    assert.equal(nothing.report.vote, null);
+    assert.match(nothing.report.reason, /no pool paid more than 100 USD/);
+    await assert.rejects(pg.readRank(w.client, { apiPools: w.apiPools, epochStart: E + 604_800n }), /has not ended/);
+  });
+
+  it("never uses the API's pay figures: a pool the API shows with a huge bribe and the contracts show nothing is not ranked", async () => {
+    const w = chain([...market(), { title: "API/USDC", votes: 1_000_000, apiBribes: 999_999 }]);
+    const { report } = pg.rankReport(await pg.readRank(w.client, { apiPools: w.apiPools }));
+    assert.ok(!report.vote.includes(w.rows[4].pool));
+    const src = readFileSync(SRC, "utf8");
+    assert.ok(!/\/epochs/.test(src), "the program never calls the API's epoch totals");
+    assert.equal((src.match(/HYDREX_API\}\/[a-z]+/g) ?? []).filter((x, i, a) => a.indexOf(x) === i).sort().join(","), "HYDREX_API}/strategies", "the only API path used anywhere is the pool list");
+  });
+
+  it("prices only address-matched USD stablecoins at face value, and lists every other reward as unpriced without counting it", async () => {
+    const w = chain([
+      { title: "MIX/USDC", votes: 1_000_000, fees: { [USDC]: 10, [WETH]: 0.5 }, bribes: { [USDC]: 990, [BETR]: 5000 } },
+      { title: "LOOKALIKE/WETH", votes: 1_000_000, bribes: { [FAKE_USDC]: 5000 } }, // a token that calls itself USDC at another address is not cash
+      { title: "BETR/WETH", votes: 1_000_000, bribes: { [BETR]: 9000 } },
+    ]);
+    const read = await pg.readRank(w.client, { apiPools: w.apiPools });
+    const { report, detail } = pg.rankReport(read);
+    assert.deepEqual(report.pools.map((p) => [p.feesUsd, p.bribesUsd, p.usdPer1kVotes]), [[10, 990, 1]]);
+    assert.deepEqual(report.unpriced.map((u) => [u.pool, u.token, u.amount]).sort(), [[w.rows[0].pool, BETR, "5000"], [w.rows[0].pool, WETH, "0.5"]].sort());
+    assert.equal(detail.onlyUnpriced, 2, "two pools paid only in tokens that are not priced, so they are not ranked and the count says so");
+    assert.match(pg.renderRank(report, detail), /left unpriced \(not counted, so the rates above are lower bounds\): 2 reward/);
+  });
+
+  it("leaves tokenized equity out three ways: Hydrex's flag, a stock wrapper in the pool's name, a stock wrapper in what it paid", async () => {
+    const w = chain([
+      ...market().slice(0, 2),
+      { title: "FLAG/USDC", votes: 1_000_000, bribes: usdc(1500), equity: true },
+      { title: "wtQQQM/USDC", votes: 1_000_000, bribes: usdc(1500) },
+      { title: "PLAIN/USDC", votes: 1_000_000, fees: { [WTX]: 3 }, bribes: usdc(1500) },
+    ]);
+    const { report, detail } = pg.rankReport(await pg.readRank(w.client, { apiPools: w.apiPools }));
+    assert.equal(report.pools.length, 2);
+    assert.deepEqual(detail.excludedEquity.map((x) => x.title), ["FLAG/USDC", "wtQQQM/USDC", "PLAIN/USDC"]);
+    assert.match(detail.excludedEquity[2].reason, /pays wtABC/);
+  });
+
+  it("leaves out a dead gauge and a pool whose two weight reads disagree, and a failed read is a problem line, never a zero", async () => {
+    const w = chain([
+      ...market().slice(0, 2),
+      { title: "DEAD/USDC", votes: 1_000_000, bribes: usdc(5000), alive: false },
+      { title: "SKEW/USDC", votes: 1_000_000, supplyVotes: 900_000, bribes: usdc(5000) },
+      { title: "FAIL/USDC", votes: 1_000_000, bribes: usdc(5000), failBribe: true },
+    ]);
+    const read = await pg.readRank(w.client, { apiPools: w.apiPools });
+    assert.equal(read.stats.notAlive, 1);
+    assert.equal(read.problems.length, 1);
+    assert.match(read.problems[0], new RegExp(`${w.rows[4].pool}: bribes contract: rewardData failed`));
+    const { report, detail } = pg.rankReport(read);
+    assert.equal(report.pools.length, 2);
+    assert.deepEqual(detail.mismatched, [w.rows[3].pool]);
+    const allFail = chain(market()); allFail.client.multicall = async ({ contracts }) => contracts.map(() => ({ status: "failure", error: new Error("down") }));
+    await assert.rejects(pg.readRank(allFail.client, { apiPools: allFail.apiPools }), /every weightsAt read failed/);
+    const onlyFail = chain([{ title: "FAIL/USDC", votes: 1_000_000, bribes: usdc(5000), failBribe: true }]);
+    const failedRead = await pg.readRank(onlyFail.client, { apiPools: onlyFail.apiPools });
+    assert.equal(failedRead.rows.length, 0);
+    assert.throws(() => pg.rankReport(failedRead), /nothing was decided/, "a failed read that leaves nothing to rank is exit 1, never 'nothing paid'");
+  });
+
+  it("splits 10000 basis points equally, the first pools taking the remainder, for 1 to 10 pools", () => {
+    for (let n = 1; n <= 10; n++) {
+      const b = pg.splitBps(n);
+      assert.equal(b.length, n);
+      assert.equal(b.reduce((s, x) => s + x, 0), 10000, `n=${n}`);
+      assert.ok(b.every((x) => x >= 1), `n=${n}`);
+      assert.ok(Math.max(...b) - Math.min(...b) <= 1, `n=${n}`);
+      assert.deepEqual(b, [...b].sort((x, y) => y - x), "the extra basis points go to the first pools");
+    }
+    assert.deepEqual(pg.splitBps(3), [3334, 3333, 3333]);
+    assert.throws(() => pg.splitBps(0), /1 to 10/);
+    assert.throws(() => pg.splitBps(11), /1 to 10/);
+  });
+
+  it("the report has a fixed shape a bot can rely on, and --top cuts the list to 1 to 10 pools", async () => {
+    const w = chain([...market().slice(0, 3), { title: "MIX/USDC", votes: 1_000_000, fees: { [WETH]: 0.5 }, bribes: usdc(950) }]);
+    const read = await pg.readRank(w.client, { apiPools: w.apiPools });
+    const { report } = pg.rankReport(read);
+    assert.deepEqual(Object.keys(report), ["act", "epochStart", "epochEnd", "method", "split", "vote", "pools", "unpriced"]);
+    assert.equal(report.act, "hydrex rank");
+    assert.equal(typeof report.epochStart, "number");
+    assert.equal(report.epochStart, Number(E));
+    assert.equal(report.epochEnd, report.epochStart + 604_800);
+    assert.ok(report.method.endsWith(".") && report.split.endsWith("."));
+    assert.match(report.method, /only USD stablecoins are priced/);
+    assert.match(report.split, /equally/);
+    for (const p of report.pools) {
+      assert.deepEqual(Object.keys(p), ["pool", "gauge", "usdPer1kVotes", "feesUsd", "bribesUsd", "finalWeight", "bps"]);
+      assert.ok(typeof p.usdPer1kVotes === "number" && typeof p.feesUsd === "number" && typeof p.bribesUsd === "number" && Number.isInteger(p.bps));
+      assert.match(p.finalWeight, /^\d+(\.\d+)?$/);
+    }
+    for (const u of report.unpriced) { assert.deepEqual(Object.keys(u), ["pool", "token", "amount"]); assert.equal(typeof u.amount, "string"); }
+    assert.equal(report.vote.split(",").length, report.pools.length);
+    assert.equal(report.pools.reduce((s, p) => s + p.bps, 0), 10000);
+    assert.equal(report.vote, report.pools.map((p) => `${p.pool}:${p.bps}`).join(","));
+    const two = pg.rankReport(read, { top: 2 }).report;
+    assert.deepEqual(two.pools.map((p) => p.bps), [5000, 5000]);
+    assert.equal(pg.rankReport(read, { top: 1 }).report.vote, `${report.pools[0].pool}:10000`);
+    assert.throws(() => pg.rankReport(read, { top: 11 }), /1 to 10/);
+    assert.throws(() => pg.rankReport(read, { top: 0 }), /1 to 10/);
+    const none = pg.rankReport(await pg.readRank(w.client, { apiPools: w.apiPools, epochStart: E - 604_800n })).report;
+    assert.deepEqual(Object.keys(none).sort(), ["act", "epochEnd", "epochStart", "method", "pools", "reason", "split", "unpriced", "vote"]);
+    assert.equal(none.vote, null);
+    assert.equal(typeof none.reason, "string");
+    assert.deepEqual([none.pools, none.unpriced], [[], []]);
+  });
+
+  it("the vote string goes unchanged through parseArgs, preflight, parseVotes and prepare vote, as one --vote or as many", async () => {
+    const w = chain(market());
+    const { report } = pg.rankReport(await pg.readRank(w.client, { apiPools: w.apiPools }));
+    const asOne = pg.parseArgs(["hydrex", "prepare", "vote", "--from", FROM, "--vote", report.vote]);
+    const asMany = pg.parseArgs(["hydrex", "prepare", "vote", "--from", FROM, ...report.vote.split(",").flatMap((v) => ["--vote", v])]);
+    assert.deepEqual(asOne.votes, asMany.votes);
+    assert.equal(asOne.votes.join(","), report.vote);
+    pg.preflight(asOne);
+    const { pools, bps } = pg.parseVotes(asOne.votes);
+    assert.deepEqual(pools, report.pools.map((p) => p.pool));
+    assert.deepEqual(bps, report.pools.map((p) => p.bps));
+    const prepared = await pg.prepareVote(w.client, { from: FROM, votes: asOne.votes, apiPools: w.apiPools });
+    assert.equal(prepared.sendable, true, prepared.reason);
+    assert.deepEqual(decodeFunctionData({ abi: pg.VOTER_ABI, data: prepared.tx.data }).args[1], report.pools.map((p) => BigInt(p.bps)));
+  });
+
+  it("the act prints one JSON object on stdout with --json (the reserve note and problems go to stderr), exit 0, and exit 10 with vote null when nothing ranks", async () => {
+    const w = chain([...market().slice(0, 2), { title: "FAIL/USDC", votes: 1_000_000, bribes: usdc(5000), failBribe: true }]);
+    const fetcher = fetcherFor({ "/strategies": w.apiPools });
+    const out = [], err = [];
+    const code = await pg.rankAct(w.client, { flags: { json: true, top: 10 }, fetcher, out: (x) => out.push(x), err: (x) => err.push(x) });
+    assert.equal(code, 0);
+    assert.equal(out.length, 1);
+    const parsed = JSON.parse(out[0]);
+    assert.equal(parsed.act, "hydrex rank");
+    assert.ok(err.some((l) => /^problem: /.test(l)));
+    assert.ok(err.some((l) => l.includes("As of 2026-11-18 the Hydrex community, in a thread in Hydrex's Discord, reads about six weeks of runway")));
+    const nothing = chain([{ title: "DUST/USDC", votes: 10_000, bribes: usdc(90) }]);
+    const o2 = [], e2 = [];
+    const code2 = await pg.rankAct(nothing.client, { flags: { json: true, top: 10 }, fetcher: fetcherFor({ "/strategies": nothing.apiPools }), out: (x) => o2.push(x), err: (x) => e2.push(x) });
+    assert.equal(code2, 10);
+    assert.equal(JSON.parse(o2[0]).vote, null);
+    assert.equal(e2.length, 0, "no reserve note when there is no vote");
+    const brokenApi = fetcherFor({ "/strategies": { not: "a list" } });
+    await assert.rejects(pg.rankAct(w.client, { flags: { json: true, top: 10 }, fetcher: brokenApi, out() {}, err() {} }), /not an array/);
+  });
+
+  it("the words say the rule, the split, what was left unpriced, the vote string and the next command, and carry the standing line beside kVCM", async () => {
+    const w = chain([{ title: "kVCM/USDC", votes: 1_000_000, bribes: usdc(1000) }, { title: "BBB/USDC", votes: 1_000_000, bribes: usdc(900), fees: { [WETH]: 0.1 } }]);
+    const { report, detail } = pg.rankReport(await pg.readRank(w.client, { apiPools: w.apiPools }));
+    const text = pg.renderRank(report, detail);
+    for (const want of [/^last completed epoch: /, /rule: Pools are ranked by what they actually paid/, /split: The vote is shared equally/, /left unpriced/, /vote string \(pass it unchanged\): /, /next: node protocol-guide\.mjs hydrex prepare vote --from 0xYOU --vote /, /As of 2026-11-18 the Hydrex community, in a thread in Hydrex's Discord, reads about six weeks of runway/]) assert.match(text, want);
+    assert.ok(text.split("\n").find((l) => /kVCM\/USDC/.test(l)).includes(pg.KVCM_DISCLOSURE));
+    assert.ok(!text.includes(EM_DASH));
+  });
+
+  it("checks the ranked-vote calculation against recorded historical samples and reproduces its table of realized pay per 1,000 votes for the epoch of 2026-10-01", async () => {
+    // the historical samples' fixtures (its test file's clearing samples and band values, its equity and cash cases)
+    assert.ok(Math.abs(pg.clearingRateFromSamples([{ usd: 1000, supply: 1_300_000 }, { usd: 1000, supply: 1_250_000 }, { usd: 2000, supply: 3_000_000 }, { usd: 50, supply: 10 }]) - (1000 / 1_300_000) * 1000) < 1e-9);
+    assert.equal(pg.clearingRateFromSamples([{ usd: 1000, supply: 1e6 }, { usd: 1000, supply: 1e6 }]), null);
+    assert.equal(pg.clearingRateFromSamples([{ usd: 100, supply: 1e6 }, { usd: 100, supply: 1e6 }, { usd: 100, supply: 1e6 }]), null, "exactly 100 USD is not above the floor");
+    assert.equal(pg.boundClearingRate(0.65), 0.65);
+    for (const bad of [0.02, 40, null, Number.NaN, undefined]) assert.equal(pg.boundClearingRate(bad), null);
+    for (const s of ["wtNKE", "wtPPLT", "GOOGLc"]) assert.equal(pg.isEquityToken(s), true, s);
+    assert.equal(pg.isEquityToken("USDC", USDC), false);
+    assert.equal(pg.isEquityToken("kVCM", "0x00fBAC94Fec8D4089d3fe979F39454F48c71A65d"), false);
+    assert.equal(pg.equityReason({ title: "wtNKE/USDC" }), "pairs wtNKE");
+    assert.equal(pg.equityReason({ title: "WETH/AAPLc" }), "pairs AAPLc");
+    assert.equal(pg.equityReason({ title: "PLAIN/USDC", paidTokens: [{ address: WTX, symbol: "wtNKE" }] }), "pays wtNKE");
+    assert.ok(pg.equityReason({ title: "X/USDC", apiEquity: true }));
+    for (const t of ["WETH/USDC", "kVCM/USDC", "AUDF/frxUSD"]) assert.equal(pg.equityReason({ title: t }), null, t);
+    assert.deepEqual([...pg.USD_STABLES].sort(), ["0x50c5725949a6f0c72e6c4a641f24049a917db0cb", "0x6bb7a212910682dcfdbd5bcbb3e28fb4e8da10ee", "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca", "0xe5020a6d073a794b6e7f05678707de47986fb0b6", "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2"]);
+    // the historical sample table for the epoch of 2026-10-01: fees and bribes in USD, final weight in votes, realized USD per 1,000 votes
+    const table = [
+      ["WETH/SERV", 37, 1000, 1_254_855, 0.826], ["AUDF/frxUSD", 2, 1033, 1_276_406, 0.811], ["WETH/FACY", 71, 1000, 1_328_469, 0.806], ["DRB/WETH", 95, 1999, 2_603_218, 0.805],
+      ["AVNT/USDC", 42, 1000, 1_299_967, 0.801], ["kVCM/USDC", 62, 1000, 1_336_471, 0.794], ["WETH/cbBTC", 284, 1999, 3_583_780, 0.637], ["cbETH/WETH", 541, 3999, 7_204_580, 0.630],
+      ["USDC (Steakhouse)", 364, 1999, 3_831_142, 0.617], ["WETH/USDC", 66, 1000, 2_302_191, 0.463],
+    ];
+    const shuffled = [...table].reverse();
+    const w = chain(shuffled.map(([title, fees, bribes, votes]) => ({ title, votes, fees: usdc(fees), bribes: usdc(bribes) })));
+    const { report } = pg.rankReport(await pg.readRank(w.client, { apiPools: w.apiPools }));
+    const titleOf = new Map(w.rows.map((r) => [r.pool, r.title]));
+    assert.deepEqual(report.pools.map((p) => titleOf.get(p.pool)), table.map((t) => t[0]), "the same order the historical sample table reads");
+    report.pools.forEach((p, i) => assert.ok(Math.abs(p.usdPer1kVotes - table[i][4]) < 0.0015, `${table[i][0]}: ${p.usdPer1kVotes} against the recorded sample's ${table[i][4]}`));
+  });
+
+  it("holds no house address, no key word and no signing call, and the CLI refuses what it cannot rank", () => {
+    const src = readFileSync(SRC, "utf8");
+    const rank = src.slice(src.indexOf("// HYDREX RANK"), src.indexOf("// REGEN (axlREGEN"));
+    assert.ok(rank.length > 3000);
+    assert.ok(!/privateKey|sendTransaction|signMessage|createWalletClient|mnemonic/.test(rank));
+    // (the phrases are assembled so this file itself carries none of them)
+    for (const banned of ["EcoWealth", ["our", "vote"].join(" "), ["copy", "our"].join(" "), ["the", "house"].join(" ")]) assert.ok(!rank.toLowerCase().includes(banned.toLowerCase()), `the rank code names no house position or vote: ${banned}`);
+    assert.equal(run(["hydrex", "rank", "--top", "11"]).code, 2);
+    assert.match(run(["hydrex", "rank", "--include-equity"]).err, /no flag to bring it back/);
+    const dead = run(["hydrex", "rank", "--json"]);
+    assert.equal(dead.code, 1, "a dead node is a failed read, never 'nothing paid'");
+    assert.match(dead.err, /read failed, nothing decided/);
+    assert.match(run(["list"]).out, /hydrex\s+rank\s+read\s+needs: nothing/);
   });
 });
 
@@ -1048,7 +1315,11 @@ describe("verify", () => {
 describe("the guides", () => {
   const dir = join(HERE, "guides");
   const files = readdirSync(dir).filter((f) => f.endsWith(".md")).sort();
-  it("there is one guide per protocol, and one for bots", () => assert.deepEqual(files, ["bots.md", "gmx.md", "hydrex.md", "klima.md", "regen.md", "uniswap.md"]));
+  it("the public copy includes the six released guides; the two held Regen guides are optional", () => {
+    const released = ["bots.md", "gmx.md", "hydrex.md", "klima.md", "regen.md", "uniswap.md"];
+    for (const file of released) assert.ok(files.includes(file), `missing released guide: ${file}`);
+    for (const file of files) assert.ok([...released, "regen-anchor-records.md", "regen-vsh-credits.md"].includes(file), `unexpected guide: ${file}`);
+  });
   for (const f of files) {
     const text = readFileSync(join(dir, f), "utf8");
     it(`${f} carries the house line, no em dash, no key words, and only addresses the program verifies`, () => {
@@ -1103,10 +1374,10 @@ describe("the guides", () => {
     assert.match(skill, /A missing pool is "no road"/);
   });
   it("exit code 10 has one meaning in the skill table, the program header and the help text: the act ran and found nothing to act on, which includes a quote with no quote", () => {
-    assert.match(read("SKILL.md"), /\| `10` \|[^\n]*prepare act with no sendable step[^\n]*`klima quote` or `uniswap quote` with no quote/);
-    assert.match(readFileSync(SRC, "utf8"), /10 the act ran and found nothing to act on now\n\/\/ \(a prepare act with no sendable step, or a klima or uniswap quote with no quote\)/);
+    assert.match(read("SKILL.md"), /\| `10` \|[^\n]*prepare act with no sendable step[^\n]*`klima quote` or `uniswap quote` with no quote[^\n]*`hydrex rank` with no pool to rank/);
+    assert.match(readFileSync(SRC, "utf8"), /10 the act ran and found nothing to act on now\n\/\/ \(a prepare act with no sendable step, a klima or uniswap quote with no quote, or a hydrex rank with no pool to rank\)/);
     const help = execFileSync(process.execPath, [SRC, "--help"], { encoding: "utf8", env: DEAD_ENV });
-    assert.match(help, /10 the act ran and found nothing to act on now \(a prepare act with no sendable step,\nor a klima or uniswap quote with no quote\)/);
+    assert.match(help, /10 the act ran and found nothing to act on now \(a prepare act with no sendable step,\na klima or uniswap quote with no quote, or a hydrex rank with no pool to rank\)/);
   });
   it("the skill file says --max-impact-bps can raise the 300 default to at most 1000, for both swap acts", () => {
     const rows = read("SKILL.md").split("\n").filter((l) => l.startsWith("| `regen prepare buy-regen`") || l.startsWith("| `uniswap prepare swap`"));
@@ -1123,6 +1394,20 @@ describe("the guides", () => {
     }
     assert.match(close, /execution fee/);
     assert.match(close, /plus gas/);
+  });
+  it("the Hydrex pages and the bots page put the rank step before the vote step, after the claim, state the split rule and the reserve sentence, and none says the kit names no pool to vote for", () => {
+    const reserve = "As of 2026-11-18 the Hydrex community, in a thread in Hydrex's Discord, reads about six weeks of runway in the reserve that funds most voter rewards. That is their reading, not this program's: check it yourself.";
+    for (const rel of ["guides/hydrex.md", "guides/bots.md"]) assert.ok(read(rel).includes(reserve), rel);
+    assert.ok(!/names none to vote for/.test(read("guides/bots.md") + read("guides/hydrex.md") + read("SKILL.md") + readFileSync(SRC, "utf8")));
+    const bots = read("guides/bots.md");
+    assert.ok(bots.indexOf("hydrex rank --json") > bots.indexOf("hydrex prepare claim --from 0xYOU --json"));
+    assert.ok(bots.indexOf("hydrex rank --json") < bots.indexOf("hydrex prepare vote --from 0xYOU --vote 0xPOOL:10000"));
+    assert.match(read("guides/hydrex.md"), /equally between the pools listed/);
+    assert.match(read("guides/hydrex.md"), /do not build this on the API's epoch totals/);
+    assert.match(read("SKILL.md"), /`hydrex rank`/);
+    const runs = pg.RECIPES.find((x) => x.id === "hydrex-lock-keeper").steps.map((s) => s.run);
+    const at = (needle) => runs.findIndex((r) => r.includes(needle));
+    assert.ok(at("hydrex prepare claim") >= 0 && at("hydrex prepare claim") < at("hydrex rank") && at("hydrex rank") < at("hydrex prepare vote"));
   });
   it("the skill file is a router with the same house line and an exact cost table", () => {
     const skill = readFileSync(join(HERE, "SKILL.md"), "utf8");
