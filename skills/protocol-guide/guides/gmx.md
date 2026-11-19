@@ -34,7 +34,7 @@ From GMX's addresses page (https://docs.gmx.io/docs/api/contracts/addresses). Ev
 | Reader | `0xfA26cBb46e2614609406de08CA1Dc7f70a684184` | read positions and orders |
 | USDC | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831` | the collateral this program uses |
 
-GMX warns that addresses change when its logic contracts are upgraded. It has done this: it retired one ExchangeRouter in September. On 2026-11-16 its interface repo listed a newer ExchangeRouter, `0x6776c2b52179BC737193DE3bc75262681006AA27`, while its docs page still listed the one above. The RoleStore listed both as controllers that day. `verify gmx` prints both. The program checks the RoleStore before it prepares anything and refuses if the docs router is no longer a controller. Re-run `verify` and compare GMX's pages whenever you come back.
+GMX warns that addresses change when its logic contracts are upgraded. It has done this: it retired one ExchangeRouter in September. On 2026-11-16 its interface repo listed a newer ExchangeRouter, `0x6776c2b52179BC737193DE3bc75262681006AA27`, while its docs page still listed the one above. The RoleStore listed both as controllers that day. On 2026-11-18 that same SDK file also listed a different `SyntheticsReader` than the Reader above, and different addresses for other contracts. That was not checked against GMX's docs page or the chain, so `verify gmx` and GMX's addresses page decide which list is current. `verify gmx` prints both. The program checks the RoleStore before it prepares anything and refuses if the docs router is no longer a controller. Re-run `verify` and compare GMX's pages whenever you come back.
 
 GMX also publishes its own agent kit: `github.com/gmx-io/gmx-ai` (MIT). It uses GMX's SDK, `@gmx-io/sdk`, and its Express orders go through GMX's own relay, which this program does not use. Its address snapshot is dated 2026-10-13, and it names the same ExchangeRouter and Router (the Router is called `SyntheticsRouter` there) as the docs page above. The RoleStore listed both the docs router and the newer interface repo router as controllers on 2026-11-16, so a newer router in one list is not a sign that the older one is dead. The kit says to re-check GMX's address list before any write after an upgrade, and so does this guide. If you want GMX's own tooling, use theirs. This program prepares the classic wallet-sent steps only. GMX's kit is written for Arbitrum, Avalanche and MegaETH, and its skills cover market, limit, stop and TP/SL orders, Express orders, subaccounts and liquidity. [CHECKED: its README and its gmx-trading `SKILL.md` (version 0.3.0, validated by GMX against `@gmx-io/sdk` 2.2.1 on 2026-10-13), read 2026-11-17]
 
@@ -61,7 +61,7 @@ Read 2026-11-17. Each line says how.
 
 ### The GMX Account contracts
 
-From GMX's agent kit address list (a snapshot dated 2026-10-13) and its SDK config. Every address had code on 2026-11-17, and each Stargate pool's `token()` named the token below (`verify gmx` re-reads all of it, on Arbitrum and on Base). [CHECKED: `verify gmx`, run 2026-11-17, every row passed]
+From GMX's agent kit address list (a snapshot dated 2026-10-13). GMX's SDK config, read 2026-11-18, lists different Arbitrum addresses for MultichainTransferRouter and LayerZeroProvider, so this table is that snapshot and not GMX's newest list. Every address had code on 2026-11-17, and each Stargate pool's `token()` named the token below (`verify gmx` re-reads all of it, on Arbitrum and on Base). [CHECKED: `verify gmx`, run 2026-11-17, every row passed]
 
 | Name | Chain | Address |
 |---|---|---|

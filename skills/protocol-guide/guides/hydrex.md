@@ -2,7 +2,7 @@
 
 Never an offer or advice, no return promised. This guide says how Hydrex works and how to use it. It does not say you should. The thesis and its limits: https://vealth.net/tokens.html
 
-Read on 2026-11-16 from the chain, from Hydrex's own docs and API, and from Hydrex's published contract interfaces. Run `node protocol-guide.mjs verify hydrex` to re-check every address below against the live chain.
+Read on 2026-11-16 from the chain, from Hydrex's own docs and API, and from Hydrex's published contract interfaces. Run `node protocol-guide.mjs verify hydrex` to re-check every address below against the live chain. Section 4a (the pay rank) was read from the chain on 2026-11-18.
 
 ## What Hydrex is for
 
@@ -41,7 +41,7 @@ Every address below had code on 2026-11-16. Explorer: `https://basescan.org/addr
 
 veHYDX is a proxy, so calls go to the address above, not to its implementation. It is an ERC-721 NFT: `ownerOf`, `balanceOf` and `tokenOfOwnerByIndex` read like any NFT.
 
-Pool, gauge, fee and bribe addresses change. Do not copy them from here. The pool list is at `https://api.hydrex.fi/strategies`. A pool's gauge comes from `Voter.gauges(pool)`, and the gauge's fee and bribe contracts come from `Voter.internal_bribes(gauge)` and `Voter.external_bribes(gauge)`. The program reads them from the Voter, never from the API.
+Pool, gauge, fee and bribe addresses change. Do not copy them from here. The pool list is at `https://api.hydrex.fi/strategies`. A pool's gauge comes from `Voter.gauges(pool)`, and the gauge's fee and bribe contracts come from `Voter.internal_bribes(gauge)` and `Voter.external_bribes(gauge)`. The program reads them from the Voter, never from the API. The API is used only to list the pools.
 
 ## The acts
 
@@ -50,6 +50,7 @@ Pool, gauge, fee and bribe addresses change. Do not copy them from here. The poo
 ```
 node protocol-guide.mjs hydrex pools --limit 15      pools by size, from Hydrex's API
 node protocol-guide.mjs hydrex proposals             governance proposals
+node protocol-guide.mjs hydrex rank --top 10         the pools that paid their voters most last epoch, and a vote string (section 4a)
 node protocol-guide.mjs hydrex locks --address 0x..  an address's veHYDX locks and current votes
 node protocol-guide.mjs hydrex claimable --address 0x..
 ```
@@ -114,11 +115,30 @@ Voting is the act the program prepares:
 node protocol-guide.mjs hydrex prepare vote --from 0xYOU --vote 0xPOOL:6000 --vote 0xPOOL2:4000
 ```
 
-The votes are basis points and must sum to exactly 10000. A new vote replaces your previous one. The program checks you hold a lock, that each pool has a live gauge, and that the call does not revert as you. Read your votes with `hydrex locks` after the flip, and do not assume they carry over.
+The votes are basis points and must sum to exactly 10000. One `--vote` can also carry several pairs joined by commas, which is the form `hydrex rank` prints (section 4a). A new vote replaces your previous one. The program checks you hold a lock, that each pool has a live gauge, and that the call does not revert as you. Read your votes with `hydrex locks` after the flip, and do not assume they carry over.
 
 A trap that costs people money: the current epoch's total weight is only the votes cast so far, and it fills through the week. On 2026-11-16, about four days into the epoch, `Voter.totalWeight()` read roughly one eighth of the last full epoch. Judge a pool's share with `weightsAt(pool, previousEpochStart)`, never with the live figure or the API's `liveVotingWeight`, and ignore any APR built on it.
 
 A merge function exists (`merge(uint256 from, uint256 to)`). A simulation of it passed for one pair of permanent locks and reverted without a reason for another pair on the same day. Simulate your own pair and do not plan around it.
+
+### 4a. Pick the pools by what they actually paid
+
+```
+node protocol-guide.mjs hydrex rank --top 10 --json
+node protocol-guide.mjs hydrex prepare vote --from 0xYOU --vote <the vote string rank printed, unchanged>
+```
+
+This is the rule written out, so you can run it and read it. For the last completed epoch, `hydrex rank` reads what each pool actually paid its voters, fees plus bribes in USD, and divides it by the pool's final votes in that epoch. That is the pay per 1000 votes. It lists the top pools (`--top` is 1 to 10, default 10) and prints a `vote` string, `0xPOOL:bps,0xPOOL:bps,...`, that `hydrex prepare vote --vote` takes unchanged.
+
+How it reads pay: from the chain, the way you could check it yourself. For each pool's fee and bribe contract it calls `rewardData(token, epochStart)` for every reward token the contract lists, and `totalSupplyAt(epochStart)` for the votes. The Voter's `weightsAt(pool, epochStart)` must agree with that vote count, or the pool is left out. A read that fails leaves its pool out with a problem line. It never counts as zero. The pool list is the only thing taken from Hydrex's API.
+
+A trap: do not build this on the API's epoch totals. For the epoch that ended on 2026-11-12, the API's `/epochs` answer gave a `totalBribesUsd` of about 1,615 USD, while the bribe contracts paid about 100,655 USD in USD stablecoins for the same epoch (both read on 2026-11-18). A check of the epoch of 2026-10-01 found the same kind of gap, about 97%. The API total leaves out most of the USDC bribes, so a ranking built on it is a wrong list.
+
+What it prices: only USD stablecoins, matched by address and counted at face value. Every other reward is left unpriced and listed under `unpriced`, so the rates are lower bounds. A pool must have paid more than 100 USD to be ranked, which keeps a pool with a handful of votes off the top. Tokenized equity pools are left out and there is no flag to bring them back, so the vote string always passes the equity screen of `hydrex prepare vote`.
+
+How it splits the vote: equally between the pools listed, in basis points that sum to exactly 10000. When 10000 does not divide evenly, the first pools in the list take one extra basis point each. Equal shares are the plain choice, because the three observed epochs from 2026-09-17 through 2026-10-01 showed late voters spreading across paying pools, so ranked pools often sat close together then.
+
+What it can and cannot tell you: that same filling is why the rank mostly keeps you off pools that paid nothing, and does not find a pool that pays much more than the rest. A pool's pay last epoch is a reading of the past, not a promise. As of 2026-11-18 the Hydrex community, in a thread in Hydrex's Discord, reads about six weeks of runway in the reserve that funds most voter rewards. That is their reading, not this program's: check it yourself. Send your claim before the vote, because a claim sees only the pools you vote in now and a new vote replaces them.
 
 ### 5. Claim fees and bribes
 
@@ -163,7 +183,7 @@ Cost: gas only. A claim loops over your locks and every reward token, so it is h
 
 ## What EcoWealth holds
 
-EcoWealth holds a veHYDX position. It also holds some HYDROC, a token it launched on Hydrex's launcher, and it gains if HYDROC rises. It never touches your wallet, and this program never signs or sends anything for you.
+EcoWealth holds a veHYDX position and some kVCM vault shares. It also holds some HYDROC, a token it launched on Hydrex's launcher, and it gains if HYDROC rises. It never touches your wallet, and this program never signs or sends anything for you.
 
 ## What this program does and does not do
 

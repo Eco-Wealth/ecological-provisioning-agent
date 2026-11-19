@@ -20,7 +20,7 @@
       "let you read, verify and anchor for free, forever: the process refuses to mount a paywall on a verification or discovery path"
     ],
     "will_not": [
-      "request a token approval or spending allowance for an x402 payment (GMX order preparation is a separate disclosed exception)",
+      "request a token approval or spending allowance for an x402 payment (the GMX order tools were withdrawn on 2026-10-26)",
       "charge for verification or for discovery of how to pay",
       "charge you for an error response",
       "move funds on a signature that is not bound to one amount and one recipient"
@@ -44,7 +44,7 @@
   "never_asks_for": [
     "seed phrase or private key",
     "password or account",
-    "token approval or allowance for an x402 payment; GMX order tools may require a one-time GMX Router approval",
+    "token approval or allowance for an x402 payment; the GMX order tools were withdrawn on 2026-10-26, so no vealth.net tool call can ask you to approve the GMX Router",
     "exchange or bank login",
     "your file when you anchor a proof, only its hash; the one file this site does receive is a worker's own photo evidence of physical work",
     "identity documents"
@@ -265,9 +265,9 @@
     },
     {
       "id": "no-allowance",
-      "claim": "An x402 payment is one exact amount to one named recipient, never a spending allowance. GMX order tools are outside this claim and can require a one-time Router approval.",
+      "claim": "An x402 payment is one exact amount to one named recipient, never a spending allowance. The GMX order tools were withdrawn from the published door on 2026-10-26. If they ever return, an order can need a one-time Router approval, and that stays outside this claim.",
       "check": "read the 402 body: scheme exact, a fixed maxAmountRequired, a fixed payTo, a maxTimeoutSeconds",
-      "expect": "no approve or allowance anywhere in the x402 payment flow; GMX order preparation is a separately disclosed exception",
+      "expect": "no approve or allowance anywhere in the x402 payment flow; the GMX order tools were withdrawn on 2026-10-26",
       "vouched_by": "the EIP-3009 standard",
       "independently_verifiable": true,
       "browser_check": {
@@ -353,7 +353,7 @@
   "admitted_gaps": [
     {
       "id": "gmx-router-approval",
-      "gap": "NARROWED by withdrawal. The GMX order tools were taken off the published door on 2026-10-26, so no public tool call can ask you to approve the GMX Router. If they ever return, an order can require a one-time approve() transaction authorizing the Router to spend USDC collateral. That is separate from x402 payments, which use exact expiring EIP-3009 authorizations and never require an allowance.",
+      "gap": "NARROWED by withdrawal. The GMX order tools were taken off the published door on 2026-10-26, so no vealth.net tool call can ask you to approve the GMX Router. If they ever return, an order can require a one-time approve() transaction authorizing the Router to spend USDC collateral. That is separate from x402 payments, which use exact expiring EIP-3009 authorizations and never require an allowance.",
       "why_it_matters": "A token allowance can outlive one order. Inspect the Router address and allowance amount, approve only what you intend, and revoke it when you are finished. Vealth prepares or relays caller-signed transactions but does not hold the signing key.",
       "independently_verifiable": true,
       "check": "POST https://vealth.net/mcp with {\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"} and confirm no tool name starts with prepare_gmx or submit_gmx. If one ever appears, inspect its approval warning and transaction target before signing anything."

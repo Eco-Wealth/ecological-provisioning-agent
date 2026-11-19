@@ -7,7 +7,7 @@ description: Plain guides and one program for using Hydrex, Klima and Uniswap v4
 
 Never an offer or advice, no return promised. These are guides to how five protocols work and a program that prepares steps. They do not say you should do anything. The thesis and its limits: https://vealth.net/tokens.html
 
-EcoWealth holds some of the tokens named here and gains if they rise: ECO (its own token), kVCM and HYDROC. For NET, the buying in NET's pools is the house's own. The full list is at the end of this page, and each guide and each program output repeats the line where it first points at the token.
+EcoWealth holds some of the tokens named here and gains if they rise: ECO (its own token), kVCM and HYDROC. For NET, the buying in NET's pools is the house's own. The full list is at the end of this page, and each guide and each program output repeats the line where it first points at one of these tokens. EcoWealth also holds REGEN and gains if it rises: the Regen guides say so, and this program's REGEN steps print no holding line of their own. It also holds a stake in GMX and a stake in Klima and gains if they rise; this program's GMX steps print no holding line of their own, and its Klima steps print only the kVCM line.
 
 You bring a wallet. The program never sees a key. It reads the chain or an API, then prints the unsigned transaction (Base or Arbitrum) or the exact message (Regen Ledger) for you to sign yourself. Before it prints a transaction it simulates it as your address, and it prints nothing that fails.
 
@@ -26,15 +26,18 @@ One read answers "where can a holding go next, and which command prepares that s
 | **Make your own**: a coin of your own, the way the house made NET (the buying in NET's pools is the house's own) | the section "The agent programs at vealth.net/mcp" below | `prepare_net_workers_coin_plan`, then `net_workers_coin_status`, at https://vealth.net/mcp. A dry plan only, built and not switched on, and not yet served there on 2026-11-17 |
 | Find the NET program that fits what you want to do (the buying in NET's pools is the house's own) | the section "The agent programs at vealth.net/mcp" below | `net_programs`, then `net_mechanism`, at https://vealth.net/mcp |
 | Run a capital loop on a timer from the acts below (a path with its costs, never a profit), or see which paths are sinks | `guides/bots.md` | `recipes` |
-| Understand Hydrex, read its pools, epoch, proposals | `guides/hydrex.md` | `hydrex epoch`, `pools`, `proposals` |
+| Understand Hydrex, read its pools, epoch, proposals | `guides/hydrex.md` | `hydrex epoch`, `pools`, `proposals`, `rank` |
 | See your veHYDX locks, votes and what you could claim | `guides/hydrex.md` section 4 and 5 | `hydrex locks`, `hydrex claimable` |
 | Claim Hydrex fees and bribes | `guides/hydrex.md` section 5 | `hydrex prepare claim` |
+| Rank the pools by what they actually paid their voters last epoch, and get a vote string | `guides/hydrex.md` section 4a | `hydrex rank` |
 | Vote your veHYDX | `guides/hydrex.md` section 4 | `hydrex prepare vote` |
 | Swap, add or remove liquidity, lock HYDX on Hydrex | `guides/hydrex.md` sections 2, 3, 4 | guide text only |
 | Understand Regen, read credit sell orders and balances | `guides/regen.md` | `regen credits`, `regen balances`, `regen pools` |
 | Buy REGEN as axlREGEN on Base | `guides/regen.md` section 2 | `regen prepare buy-regen` |
 | Retire credits you hold | `guides/regen.md` section 5 | `regen prepare retire` |
+| Anchor a hash of your own record on Regen Ledger and read it back | `guides/regen-anchor-records.md` (not in the public copy yet; it ships in a later release) | guide text only |
 | Bridge REGEN, buy credits on the marketplace | `guides/regen.md` sections 3 and 4 | guide text only |
+| Understand verified stewardship hour credits on Regen Ledger, read the class and batches, retire or put one in the basket | `guides/regen-vsh-credits.md` (not in the public copy yet; it ships in a later release) | guide text only |
 | Understand GMX, read markets, prices, positions, orders | `guides/gmx.md` | `gmx markets`, `prices`, `positions`, `orders` |
 | Trade GMX from Base: what a GMX Account is, how funds get there, Express orders and subaccounts, what it costs and what can go wrong | `guides/gmx.md`, "Trading GMX from Base" | guide text only; GMX's own kit (github.com/gmx-io/gmx-ai) prepares it, and `gmx fund-account` and `gmx express` exit 2 |
 | Open or close a GMX position with USDC in your own Arbitrum wallet (a Classic order, not a GMX Account balance) | `guides/gmx.md` sections 2 and 3 | `gmx prepare open`, `gmx prepare close` |
@@ -74,13 +77,14 @@ npm test                                 # offline tests, no network, no key
 node protocol-guide.mjs list             # every act, what it needs, what it can cost you
 node protocol-guide.mjs map              # the five protocols, their tokens and the roads between them, read live
 node protocol-guide.mjs recipes          # short complete recipes a bot can run on a timer, from these acts (a read, offline)
+node protocol-guide.mjs hydrex rank      # the Hydrex pools that paid their voters most last epoch, read from the chain, and a vote string
 node protocol-guide.mjs verify           # live check of every address the guides name, all five protocols (gmx reads Arbitrum and Base)
 node protocol-guide.mjs --help
 ```
 
 Pick the node with `--rpc <url>` (for `verify gmx` it picks the Arbitrum node, and the Base side reads `BASE_RPC_URL` or the default), or `BASE_RPC_URL` and `ARBITRUM_RPC_URL`. Defaults: `https://mainnet.base.org` and `https://arb1.arbitrum.io/rpc`. For Regen Ledger use `--lcd <url>` or `REGEN_LCD_URL` (https only; default `https://rest.cosmos.directory/regen`). Use nodes you trust: a node can lie about prices and simulations.
 
-Add `--json` for machine output. A prepare act prints `{ "sendable": true|false, "prepared": {...} }`.
+Add `--json` for machine output. A prepare act prints `{ "sendable": true|false, "prepared": {...} }`. `hydrex rank --json` prints one report (`act`, `epochStart`, `epochEnd`, `method`, `split`, `vote`, `pools`, `unpriced`; exit 10 also provides `reason`) whose `vote` string goes unchanged into `hydrex prepare vote --vote`; `hydrex rank` reads only the pools' own reward contracts and Hydrex's pool list, and it signs nothing.
 
 **Exit codes:**
 
@@ -90,7 +94,7 @@ Add `--json` for machine output. A prepare act prints `{ "sendable": true|false,
 | `2` | bad arguments, or an act this program does not know |
 | `3` | the RPC or the LCD is on the wrong chain |
 | `4` | `verify`: a check failed |
-| `10` | the act ran and found nothing to act on now: a prepare act with no sendable step, or a `klima quote` or `uniswap quote` with no quote |
+| `10` | the act ran and found nothing to act on now: a prepare act with no sendable step, a `klima quote` or `uniswap quote` with no quote, or a `hydrex rank` with no pool to rank |
 | `1` | a read failed; nothing was decided |
 
 ## What each prepared act can cost you
@@ -149,8 +153,8 @@ For the Regen bridge, which this kit does not prepare, our MCP server at https:/
 
 - Hydrex: a veHYDX position.
 - Regen: REGEN on Regen Ledger, and it anchors its own work records there.
-- GMX: this program sets no UI fee and no referral code, so nothing is taken from you.
-- Klima: some kVCM, and a share of a Hydrex vault that holds kVCM against USDC.
+- GMX: a stake in GMX. This program also sets no UI fee and no referral code, so nothing is taken from you.
+- Klima: a stake in Klima, at times some kVCM, and a share of a Hydrex vault that holds kVCM against USDC.
 - Hydrex also: HYDROC, a token launched on Hydrex's launcher by EcoWealth, which holds some.
 - Uniswap: ECO is EcoWealth's own token and it holds it. Its wallet also buys in NET's pools: the buying in NET's pools is the house's own.
 

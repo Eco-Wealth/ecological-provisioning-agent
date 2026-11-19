@@ -10,6 +10,7 @@
 //   node protocol-guide.mjs recipes [id]                      short complete recipes a bot can run on a timer from these acts (a read, offline)
 //   node protocol-guide.mjs verify [hydrex|regen|gmx|klima|uniswap]   live check of every address the guides name (gmx reads Base and Arbitrum)
 //   node protocol-guide.mjs hydrex epoch | pools | proposals | locks --address 0x.. | claimable --address 0x..
+//   node protocol-guide.mjs hydrex rank [--top N]                  the pools that paid their voters most last epoch, and a vote string
 //   node protocol-guide.mjs hydrex prepare claim --from 0x.. [--kind fees|bribes|both] [--include-equity]
 //   node protocol-guide.mjs hydrex prepare vote --from 0x.. --vote 0xPOOL:5000 --vote 0xPOOL:5000
 //   node protocol-guide.mjs regen balances --address 0x.. [--regen regen1..] | pools | credits [--limit N]
@@ -27,7 +28,7 @@
 //
 // Exit codes: 0 ok (prepare: a sendable step was printed) | 2 bad arguments or an act this program does not know |
 // 3 the RPC or LCD is on the wrong chain | 4 verify: a check failed | 10 the act ran and found nothing to act on now
-// (a prepare act with no sendable step, or a klima or uniswap quote with no quote) | 1 a read failed (nothing was decided).
+// (a prepare act with no sendable step, a klima or uniswap quote with no quote, or a hydrex rank with no pool to rank) | 1 a read failed (nothing was decided).
 //
 // Never an offer or advice, no return promised. The guides next to this file say how each protocol works.
 
@@ -205,6 +206,7 @@ export const ACTS = [
   { protocol: "hydrex", act: "epoch", kind: "read", needs: "nothing", loss: "none" },
   { protocol: "hydrex", act: "pools", kind: "read", needs: "nothing", loss: "none" },
   { protocol: "hydrex", act: "proposals", kind: "read", needs: "nothing", loss: "none" },
+  { protocol: "hydrex", act: "rank", kind: "read", needs: "nothing (optional --top N, 1 to 10)", loss: "none" },
   { protocol: "hydrex", act: "locks", kind: "read", needs: "--address", loss: "none" },
   { protocol: "hydrex", act: "claimable", kind: "read", needs: "--address", loss: "none" },
   { protocol: "hydrex", act: "prepare claim", kind: "prepare", needs: "--from (owns a veHYDX lock)", loss: "gas only; the transaction calls the Voter and sends nothing out of your wallet" },
@@ -519,6 +521,263 @@ export async function prepareVote(client, { from, votes, apiPools, includeEquity
   const failed = await simulate(client, tx, from);
   if (failed) return { sendable: false, reason: `the vote reverts in simulation (${failed})` };
   return { sendable: true, reason: null, pools, bps, replacesPreviousVote: true, tx: await finalizeTx(client, "base", tx, from) };
+}
+
+// =====================================================================================================================
+// HYDREX RANK: which pools paid their voters most in the last completed epoch, read from the reward contracts
+// =====================================================================================================================
+// The rule: for the last COMPLETED epoch, (fees + bribes paid to the pool's voters, in USD) divided by the pool's final votes in
+// that epoch, per 1,000 votes. Pay is read from each gauge's fee and bribe contract (rewardData(token, epochStart) and
+// totalSupplyAt(epochStart)) and from the Voter (weightsAt), never from Hydrex's API epoch totals: a check against the contracts
+// found that the API's epoch bribe totals missed most of the USDC bribes (about 97% in one epoch we read), so a ranking built on
+// them is a wrong list. The API is used here only to list the pools.
+
+/** A pool counts as paying only above this many USD in an epoch, so a dust pool with a handful of votes stays off the top. */
+export const RANK_MIN_PAID_USD = 100;
+/** A market-wide median pay per 1,000 votes outside this band is flagged as a broken reading, never trusted. */
+export const RANK_SANE_MIN_USD_PER_1K = 0.05;
+export const RANK_SANE_MAX_USD_PER_1K = 5;
+const MAX_RANK_POOLS = 1000;
+/** USD stablecoins priced at face value, matched by ADDRESS and never by symbol, so a look-alike "USDC" cannot pass as cash. */
+export const USD_STABLES = new Set([
+  "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", // USDC
+  "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca", // USDbC
+  "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2", // USDT
+  "0x50c5725949a6f0c72e6c4a641f24049a917db0cb", // DAI
+  "0xe5020a6d073a794b6e7f05678707de47986fb0b6", // frxUSD
+  "0x6bb7a212910682dcfdbd5bcbb3e28fb4e8da10ee", // GHO
+]);
+/** Tokens that are never read as tokenized equity by their symbol (by address): ETH and its staked forms, cbBTC, EURC, AUDF, kVCM. */
+export const KNOWN_NON_EQUITY = new Set([
+  "0x4200000000000000000000000000000000000006", // WETH
+  "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22", // cbETH
+  "0xc1cba3fcea344f92d9239c08c0568f6f2f0ee452", // wstETH
+  "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf", // cbBTC
+  "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42", // EURC
+  "0xd2a530170d71a9cfe1651fb468e2b98f7ed7456b", // AUDF
+  "0x00fbac94fec8d4089d3fe979f39454f48c71a65d", // kVCM
+]);
+export const RANK_METHOD = "Pools are ranked by what they actually paid their voters in the last completed epoch: fees plus bribes, in USD, divided by the pool's final votes in that epoch, read from the pool's own fee and bribe contracts; only USD stablecoins are priced, and a pool must have paid more than 100 USD to be ranked.";
+export const RANK_SPLIT = "The vote is shared equally between the pools listed, in basis points that sum to exactly 10000; when 10000 does not divide evenly, the first pools in the list take one extra basis point each.";
+export const RANK_RESERVE_NOTE = "As of 2026-11-18 the Hydrex community, in a thread in Hydrex's Discord, reads about six weeks of runway in the reserve that funds most voter rewards. That is their reading, not this program's: check it yourself.";
+
+const VOTER_HISTORY_ABI = parseAbi(["function weightsAt(address _pool, uint256 _time) view returns (uint256)"]);
+const PAID_ABI = parseAbi([
+  "function totalSupplyAt(uint256 _time) view returns (uint256)",
+  "function rewardData(address token, uint256 epochStart) view returns (uint256 periodFinish, uint256 rewardsPerEpoch, uint256 lastUpdateTime)",
+]);
+
+/** Median pay per 1,000 votes over the pools that paid more than the floor, or null with fewer than three such pools. Pure. */
+export function clearingRateFromSamples(samples) {
+  const rates = samples
+    .filter((x) => x.usd > RANK_MIN_PAID_USD && x.supply > 0)
+    .map((x) => (x.usd / x.supply) * 1000)
+    .sort((a, b) => a - b);
+  if (rates.length < 3) return null;
+  return rates[Math.floor((rates.length - 1) / 2)];
+}
+/** A market median inside the sane band, or null. Pure. */
+export function boundClearingRate(rate) {
+  if (typeof rate !== "number" || !Number.isFinite(rate)) return null;
+  return rate >= RANK_SANE_MIN_USD_PER_1K && rate <= RANK_SANE_MAX_USD_PER_1K ? rate : null;
+}
+/** True when a token is a tokenized equity by its symbol. Known cash and blue chips, by address, are never flagged. Pure. */
+export function isEquityToken(symbol, address) {
+  const a = address?.toLowerCase();
+  if (a && (USD_STABLES.has(a) || KNOWN_NON_EQUITY.has(a))) return false;
+  return EQUITY_SYMBOL.test(symbol ?? "");
+}
+/** Why a pool counts as tokenized equity, or null: Hydrex's own flag, a stock wrapper in the pool's name, or one in what it paid. Pure. */
+export function equityReason({ title, apiEquity, paidTokens = [] }) {
+  if (apiEquity === true) return "Hydrex flags it as tokenized equity";
+  const hit = String(title ?? "").split("/").map((x) => x.trim()).find((sym) => isEquityToken(sym));
+  if (hit) return `pairs ${clean(hit, 16)}`;
+  const t = paidTokens.find((x) => isEquityToken(x.symbol, x.address));
+  return t ? `pays ${clean(t.symbol, 16)}` : null;
+}
+/** Equal shares of 10000 basis points over n pools: the first pools take the remainder, one basis point each. Pure. */
+export function splitBps(n) {
+  if (!Number.isInteger(n) || n < 1 || n > MAX_VOTE_POOLS) throw new ArgError(`a vote has from 1 to ${MAX_VOTE_POOLS} pools`);
+  const base = Math.floor(10000 / n), extra = 10000 - base * n;
+  return Array.from({ length: n }, (_, i) => base + (i < extra ? 1 : 0));
+}
+/** The pools worth reading, from Hydrex's pool list: Base only, one row per address, only pools that list a gauge. Text is cleaned. Pure. */
+export function listRankPools(list) {
+  if (!Array.isArray(list)) throw new Error("the Hydrex pool list is not an array; refusing");
+  const seen = new Set(), out = [];
+  for (const s of list) {
+    if (!s || s.chainId !== 8453 || !isAddress(String(s.address)) || !s.gauge) continue;
+    const pool = getAddress(s.address);
+    if (seen.has(pool)) continue;
+    seen.add(pool);
+    out.push({ pool, title: clean(s.title, 48), apiEquity: Boolean(s.isEquity) });
+  }
+  return out;
+}
+/** Batched reads in wide chunks: a ranking is a few thousand cheap reads, so each node request carries about 200 of them, not 15. */
+async function multiWide(client, calls, size = 1000) {
+  const out = [];
+  for (let i = 0; i < calls.length; i += size) out.push(...(await client.multicall({ contracts: calls.slice(i, i + size), allowFailure: true, batchSize: 16_384 })));
+  return out;
+}
+
+/**
+ * What every pool with votes paid its voters in one completed epoch, read from the chain. Fails closed: a pool whose read fails is
+ * left out with a problem line, never counted as zero, and a run where nothing could be read throws (exit 1). `epochStart` is for
+ * tests and for replaying an older epoch; the command reads the last completed epoch.
+ */
+export async function readRank(client, { apiPools, epochStart } = {}) {
+  const listed = listRankPools(apiPools);
+  if (!listed.length) throw new Error("the Hydrex pool list holds no pool with a gauge; refusing");
+  if (listed.length > MAX_RANK_POOLS) throw new Error(`the Hydrex pool list holds ${listed.length} pools; this program reads at most ${MAX_RANK_POOLS}`);
+  const block = await client.getBlock({ blockTag: "latest" });
+  const E = epochStart !== undefined ? BigInt(epochStart) : (block.timestamp / EPOCH_SECONDS) * EPOCH_SECONDS - EPOCH_SECONDS;
+  if (!(E > 0n) || E + EPOCH_SECONDS > block.timestamp) throw new Error("that epoch has not ended yet: a ranking reads completed epochs only");
+  const problems = [], stats = { listed: listed.length, voted: 0, noGauge: 0, notAlive: 0 };
+  const note = (pool, why) => problems.push(`${pool}: ${why}`);
+
+  // 1. the votes each pool held at the flip into that epoch
+  const wRes = await multiWide(client, listed.map((p) => ({ address: HYDREX.Voter, abi: VOTER_HISTORY_ABI, functionName: "weightsAt", args: [p.pool, E] })));
+  if (wRes.every((r) => r.status !== "success")) throw new Error("every weightsAt read failed; nothing was decided");
+  const voted = [];
+  listed.forEach((p, i) => { if (wRes[i].status !== "success") note(p.pool, "weightsAt read failed"); else if (wRes[i].result > 0n) voted.push({ ...p, weightUnits: wRes[i].result }); });
+  stats.voted = voted.length;
+
+  // 2. each voted pool's gauge, whether it is alive now, and its fee and bribe contracts, all from the Voter
+  const gRes = await multiWide(client, voted.map((p) => ({ address: HYDREX.Voter, abi: VOTER_ABI, functionName: "gauges", args: [p.pool] })));
+  const gauged = [];
+  voted.forEach((p, i) => { if (gRes[i].status !== "success") note(p.pool, "gauges read failed"); else if (gRes[i].result === ZERO) stats.noGauge += 1; else gauged.push({ ...p, gauge: gRes[i].result }); });
+  const cRes = await multiWide(client, gauged.flatMap((p) => ["isAlive", "internal_bribes", "external_bribes"].map((functionName) => ({ address: HYDREX.Voter, abi: VOTER_ABI, functionName, args: [p.gauge] }))));
+  const live = [];
+  gauged.forEach((p, i) => {
+    const [alive, fee, bribe] = [cRes[3 * i], cRes[3 * i + 1], cRes[3 * i + 2]];
+    if ([alive, fee, bribe].some((r) => r.status !== "success")) return note(p.pool, "the gauge's liveness or reward contracts could not be read");
+    if (alive.result !== true) { stats.notAlive += 1; return; }
+    if (fee.result === ZERO) return note(p.pool, "the Voter lists no fee contract");
+    live.push({ ...p, fee: fee.result, bribe: bribe.result === ZERO ? null : bribe.result });
+  });
+
+  // 3. every reward token each contract lists (the API lists the current epoch's only), and what it paid for that epoch
+  const contracts = live.flatMap((p) => [{ p, kind: "fees", address: p.fee, tokens: [], err: null }, ...(p.bribe ? [{ p, kind: "bribes", address: p.bribe, tokens: [], err: null }] : [])]);
+  const lens = await multiWide(client, contracts.map((c) => ({ address: c.address, abi: REWARD_ABI, functionName: "rewardsListLength" })));
+  const slots = [];
+  contracts.forEach((c, i) => {
+    if (lens[i].status !== "success") { c.err = "rewardsListLength failed"; return; }
+    const n = Number(lens[i].result);
+    if (n > MAX_REWARD_TOKENS) { c.err = `a reward list of ${n} is not a real list`; return; }
+    for (let k = 0; k < n; k++) slots.push({ c, k });
+  });
+  const toks = await multiWide(client, slots.map(({ c, k }) => ({ address: c.address, abi: REWARD_ABI, functionName: "rewardTokens", args: [BigInt(k)] })));
+  slots.forEach(({ c }, j) => { if (toks[j].status === "success") c.tokens.push({ address: toks[j].result, units: 0n }); else c.err = "rewardTokens failed"; });
+  const paidReads = contracts.filter((c) => !c.err).flatMap((c) => c.tokens.map((t) => ({ c, t })));
+  const pRes = await multiWide(client, paidReads.map(({ c, t }) => ({ address: c.address, abi: PAID_ABI, functionName: "rewardData", args: [t.address, E] })));
+  paidReads.forEach(({ c, t }, j) => { if (pRes[j].status === "success") t.units = pRes[j].result[1]; else c.err = "rewardData failed"; });
+  const sRes = await multiWide(client, live.map((p) => ({ address: p.fee, abi: PAID_ABI, functionName: "totalSupplyAt", args: [E] })));
+  live.forEach((p, i) => { if (sRes[i].status === "success") p.supplyUnits = sRes[i].result; else p.err = "totalSupplyAt failed"; });
+
+  // 4. decimals for every token that paid, and the symbol of every one that is neither a stablecoin nor a known blue chip
+  const paid = new Map();
+  for (const c of contracts) if (!c.err) for (const t of c.tokens) if (t.units > 0n) paid.set(t.address.toLowerCase(), t.address);
+  const addrs = [...paid.values()];
+  const needSymbol = (a) => !USD_STABLES.has(a.toLowerCase()) && !KNOWN_NON_EQUITY.has(a.toLowerCase());
+  const metaCalls = addrs.flatMap((a) => [{ address: a, abi: ERC20_ABI, functionName: "decimals" }, ...(needSymbol(a) ? [{ address: a, abi: ERC20_ABI, functionName: "symbol" }] : [])]);
+  const mRes = await multiWide(client, metaCalls);
+  const meta = new Map();
+  let at = 0;
+  for (const a of addrs) {
+    const d = mRes[at++], s = needSymbol(a) ? mRes[at++] : null;
+    meta.set(a.toLowerCase(), { decimals: d.status === "success" ? Number(d.result) : null, symbol: s ? (s.status === "success" ? clean(s.result, 16) : null) : "", stable: USD_STABLES.has(a.toLowerCase()) });
+  }
+
+  // 5. one row per live pool
+  const rows = [];
+  for (const p of live) {
+    const mine = contracts.filter((c) => c.p === p);
+    const bad = mine.find((c) => c.err);
+    if (bad) { note(p.pool, `${bad.kind} contract: ${bad.err}`); continue; }
+    if (p.err) { note(p.pool, p.err); continue; }
+    let feesUsd = 0, bribesUsd = 0, broken = null;
+    const unpriced = new Map(), paidTokens = [];
+    for (const c of mine) for (const t of c.tokens) {
+      if (!(t.units > 0n)) continue;
+      const m = meta.get(t.address.toLowerCase());
+      if (m.decimals === null || (!m.stable && m.symbol === null)) { broken = `could not read decimals or symbol of reward token ${t.address}`; continue; }
+      paidTokens.push({ address: t.address, symbol: m.symbol });
+      if (m.stable) { const v = Number(formatUnits(t.units, m.decimals)); if (c.kind === "fees") feesUsd += v; else bribesUsd += v; }
+      else { const u = unpriced.get(t.address) ?? { units: 0n, decimals: m.decimals }; u.units += t.units; unpriced.set(t.address, u); }
+    }
+    if (broken) { note(p.pool, broken); continue; }
+    const equity = equityReason({ title: p.title, apiEquity: p.apiEquity, paidTokens });
+    rows.push({
+      pool: p.pool, title: p.title, gauge: p.gauge, feesUsd, bribesUsd, usd: feesUsd + bribesUsd, supplyUnits: p.supplyUnits, votes: Number(formatUnits(p.supplyUnits, 18)),
+      weightAgrees: p.supplyUnits === p.weightUnits, equity, unpriced: [...unpriced].map(([token, u]) => ({ token, amount: formatUnits(u.units, u.decimals) })),
+    });
+  }
+  return { epochStart: E, epochEnd: E + EPOCH_SECONDS, stats, problems, rows };
+}
+
+const round6 = (n) => Math.round(n * 1e6) / 1e6;
+/**
+ * The ranking and the contract-shaped report. `report` is what `--json` prints and a bot reads (its keys are fixed): the vote string is
+ * ready to pass unchanged as `--vote` to `hydrex prepare vote`. `detail` carries the rest for the words. Pure.
+ */
+export function rankReport(read, { top = MAX_VOTE_POOLS } = {}) {
+  const n = Number(top);
+  if (!Number.isInteger(n) || n < 1 || n > MAX_VOTE_POOLS) throw new ArgError(`--top is a whole number from 1 to ${MAX_VOTE_POOLS}`);
+  const excludedEquity = read.rows.filter((r) => r.equity).map((r) => ({ pool: r.pool, title: r.title, reason: r.equity }));
+  const mismatched = read.rows.filter((r) => !r.equity && !r.weightAgrees).map((r) => r.pool);
+  const eligible = read.rows
+    .filter((r) => !r.equity && r.weightAgrees && r.supplyUnits > 0n && r.usd > RANK_MIN_PAID_USD)
+    .map((r) => ({ ...r, rate: (r.usd / r.votes) * 1000 }))
+    .sort((a, b) => b.rate - a.rate || b.usd - a.usd || (a.pool < b.pool ? -1 : 1));
+  const median = clearingRateFromSamples(eligible.map((r) => ({ usd: r.usd, supply: r.votes })));
+  const detail = { eligible, median, excludedEquity, mismatched, problems: read.problems, stats: read.stats, onlyUnpriced: read.rows.filter((r) => !r.equity && r.usd <= RANK_MIN_PAID_USD && r.unpriced.length > 0).length };
+  const base = { act: "hydrex rank", epochStart: Number(read.epochStart), epochEnd: Number(read.epochEnd), method: RANK_METHOD, split: RANK_SPLIT };
+  if (!eligible.length) {
+    if (read.problems.length) throw new Error(`reads failed for ${read.problems.length} pool(s) and no pool could be ranked from the rest; nothing was decided (${read.problems[0]})`);
+    return { report: { ...base, vote: null, reason: `no pool paid more than ${RANK_MIN_PAID_USD} USD in USD stablecoins to its voters in the epoch that began at ${Number(read.epochStart)}`, pools: [], unpriced: [] }, detail };
+  }
+  const chosen = eligible.slice(0, n), bps = splitBps(chosen.length);
+  const pools = chosen.map((r, i) => ({ pool: r.pool, gauge: r.gauge, usdPer1kVotes: round6(r.rate), feesUsd: round6(r.feesUsd), bribesUsd: round6(r.bribesUsd), finalWeight: formatUnits(r.supplyUnits, 18), bps: bps[i] }));
+  const unpriced = chosen.flatMap((r) => r.unpriced.map((u) => ({ pool: r.pool, token: u.token, amount: u.amount })));
+  return { report: { ...base, vote: pools.map((p) => `${p.pool}:${p.bps}`).join(","), pools, unpriced }, detail: { ...detail, chosen } };
+}
+export function renderRank(report, detail) {
+  const day = (s) => new Date(s * 1000).toISOString().slice(0, 10);
+  const lines = [`last completed epoch: ${day(report.epochStart)} to ${day(report.epochEnd)} (UTC)`, `rule: ${report.method}`];
+  if (detail.median !== null) lines.push(`market: the median pool above ${RANK_MIN_PAID_USD} USD paid ${detail.median.toFixed(4)} USD per 1,000 votes (${detail.eligible.length} pools ranked of ${detail.stats.voted} with votes)${boundClearingRate(detail.median) === null ? " (OUTSIDE the usual 0.05 to 5 band: read it with care)" : ""}`);
+  if (!report.vote) { lines.push(`nothing to rank: ${report.reason}`); return lines.join("\n"); }
+  report.pools.forEach((p, i) => {
+    const r = detail.chosen[i];
+    const row = `  ${String(i + 1).padStart(2)}. ${p.pool} ${r.title.padEnd(24)} ${p.usdPer1kVotes.toFixed(4)} per 1k votes (fees ${p.feesUsd.toFixed(2)}, bribes ${p.bribesUsd.toFixed(2)}, final votes ${Math.round(r.votes)}) share ${p.bps} bps`;
+    const s = standingLinesFor(row);
+    lines.push(s ? `${row} (${s})` : row);
+  });
+  const left = report.unpriced.length;
+  lines.push(left ? `left unpriced (not counted, so the rates above are lower bounds): ${left} reward(s) across these pools, listed under "unpriced" with --json; every USD figure here is a USD stablecoin at face value` : "left unpriced: none in these pools; every USD figure here is a USD stablecoin at face value");
+  if (detail.onlyUnpriced) lines.push(`${detail.onlyUnpriced} other pool(s) paid ${RANK_MIN_PAID_USD} USD or less in USD stablecoins and the rest in tokens this program does not price, so they are not ranked`);
+  if (detail.excludedEquity.length) lines.push(`left out as tokenized equity: ${detail.excludedEquity.length} pool(s) (the vote string passes the equity screen of hydrex prepare vote)`);
+  if (detail.mismatched.length) lines.push(`left out because the pool's two weight reads disagree: ${detail.mismatched.length}`);
+  lines.push(`split: ${report.split}`, `vote string (pass it unchanged): ${report.vote}`, `next: node protocol-guide.mjs hydrex prepare vote --from 0xYOU --vote ${report.vote}`, `note: ${RANK_RESERVE_NOTE} A pool's pay last epoch is a reading of the past, not a promise.`);
+  return lines.join("\n");
+}
+
+/**
+ * The whole `hydrex rank` act, with its output channels passed in so a test can read them. With --json, stdout is the fixed report and
+ * nothing else; what a person should also know (read problems, the reserve note) goes to stderr. Exit 0 with a vote string, exit 10 with
+ * none, and a failed read throws (the caller turns that into exit 1).
+ */
+export async function rankAct(client, { flags, fetcher, out = console.log, err = console.error }) {
+  const { report, detail } = rankReport(await readRank(client, { apiPools: await getJson(`${HYDREX_API}/strategies`, { fetcher }) }), { top: flags.top });
+  const say = flags.json ? err : out;
+  if (flags.json) out(bigJson(report)); else out(renderRank(report, detail));
+  for (const x of detail.problems.slice(0, 5)) say(`problem: ${clean(x, 200)}`);
+  if (detail.problems.length > 5) say(`problem: and ${detail.problems.length - 5} more pools left out because a read failed`);
+  if (flags.json) {
+    if (detail.median !== null && boundClearingRate(detail.median) === null) err(`note: the market median of ${detail.median.toFixed(4)} USD per 1,000 votes is outside the usual 0.05 to 5 band: read it with care`);
+    if (report.vote) err(`note: ${RANK_RESERVE_NOTE}`);
+  }
+  return report.vote ? 0 : 10;
 }
 
 // =====================================================================================================================
@@ -1079,7 +1338,7 @@ export const MAP_LOOPS = [
   { id: "eth-axlregen-two-pools", kind: "loop", path: "ETH to axlREGEN on Uniswap v4, and axlREGEN back to WETH (then ETH) through a V2 style pool", legs: ["eth-axlregen", "v2-axlregen-weth"], prepared: "uniswap prepare swap --pool eth-axlregen (the way out only)", note: "the way back is not prepared here" },
   { id: "gmx-position", kind: "loop", path: "USDC in your own Arbitrum wallet into a GMX Classic position, and back to USDC when you close", legs: [], prepared: "gmx prepare open, then gmx prepare close", note: "what comes back is the collateral less fees, plus or minus the position's result; a liquidation can take all of it" },
   { id: "net-circle", kind: "loop", path: "ETH through NET's pools and back to ETH in one transaction (NET/WETH, then NET/ETH)", legs: ["net-weth", "net-eth"], prepared: "skills/net-circle", note: "the transaction reverts unless at least the input plus gas comes back" },
-  { id: "hydrex-lock", kind: "loop", path: "your veHYDX lock votes in an epoch, and the fees and bribes of the pools you voted in come back to you to claim", legs: [], prepared: "hydrex prepare vote, then hydrex prepare claim", note: "the locked HYDX does not leave: what loops is the lock's reward, and it can be zero" },
+  { id: "hydrex-lock", kind: "loop", path: "your veHYDX lock votes in an epoch, and the fees and bribes of the pools you voted in come back to you to claim", legs: [], prepared: "hydrex rank, then hydrex prepare vote, then hydrex prepare claim", note: "the locked HYDX does not leave: what loops is the lock's reward, and it can be zero" },
   { id: "klima-retire", kind: "sink", path: "kVCM to carbon retired for good on Klima", legs: [], prepared: "klima prepare retire", note: "a retirement ends the capital by design: it does not come back" },
   { id: "regen-retire", kind: "sink", path: "Regen credits to credits retired for good on Regen Ledger", legs: [], prepared: "regen prepare retire", note: "a retirement ends the capital by design: it does not come back" },
 ];
@@ -1266,7 +1525,7 @@ export const RECIPES = [
   },
   {
     id: "hydrex-lock-keeper",
-    title: "A Hydrex lock keeper for your OWN lock: claim, then vote, once per epoch",
+    title: "A Hydrex lock keeper for your OWN lock: claim, then vote for the pools that paid most last epoch, once per epoch",
     shape: { kind: "loop", path: "Your lock votes, and the fees and bribes of the pools you voted in come back to you to claim. The locked HYDX stays locked, so what loops is the lock's reward, and it can be zero. It is a path with its costs, not a return." },
     signer: "Your own signer on Base, for a veHYDX lock you already hold. This kit creates no lock (guide text only) and delegates nothing. EcoWealth holds a veHYDX position.",
     steps: [
@@ -1274,10 +1533,10 @@ export const RECIPES = [
       { run: "node protocol-guide.mjs hydrex locks --address 0xYOU --json", on: { 0: "no lock in the list means stop; otherwise read your votes, which do not carry over to the new epoch" } },
       { run: "node protocol-guide.mjs hydrex claimable --address 0xYOU", on: { 0: "what you could claim in the pools you vote in now" } },
       { run: "node protocol-guide.mjs hydrex prepare claim --from 0xYOU --json", on: { 0: "one step per reward contract: send each tx exactly as printed", 10: "nothing earned yet, or a claim that reverts: read prepared.reason and the problem lines" } },
-      { run: "node protocol-guide.mjs hydrex pools --limit 15", on: { 0: "the pools and their gauges; the kit names none to vote for and gives no view, so pick by your own rule, and judge a pool by last epoch's weight, never the live figure (guides/hydrex.md)" } },
-      { run: "node protocol-guide.mjs hydrex prepare vote --from 0xYOU --vote 0xPOOL:10000 --json", on: { 0: "send the vote: it replaces your previous vote, and the basis points must sum to exactly 10000", 10: "no lock, no live gauge for a pool, or the vote reverts: read prepared.reason" } },
+      { run: "node protocol-guide.mjs hydrex rank --json", on: { 0: "the pools that paid their voters most per 1,000 votes in the last completed epoch, read from their own reward contracts; its `vote` string goes unchanged into --vote of the next step in place of the example, and `unpriced` lists the rewards left out of the figures (which are USD stablecoins only, so they are lower bounds); As of 2026-11-18 the Hydrex community, in a thread in Hydrex's Discord, reads about six weeks of runway in the reserve that funds most voter rewards. That is their reading, not this program's: check it yourself.", 10: "no pool paid enough to rank: do not run the vote step from this rank; vote by your own rule or not at all this epoch" } },
+      { run: "node protocol-guide.mjs hydrex prepare vote --from 0xYOU --vote 0xPOOL:10000 --json", on: { 0: "send the vote: it replaces your previous vote, and the basis points must sum to exactly 10000; send the claim above first, because a claim sees only the pools you vote in now", 10: "no lock, no live gauge for a pool, or the vote reverts: read prepared.reason" } },
     ],
-    caps: "At most 10 pools in one vote. A claim covers only the pools you vote in now: pass an older pool to your own tool.",
+    caps: "At most 10 pools in one vote (`hydrex rank --top` is 1 to 10). A claim covers only the pools you vote in now, and a new vote replaces them: send the claim before the vote, and pass an older pool to your own tool.",
     cost: "Gas only. A new vote replaces the last one, so a careless vote can drop votes you meant to keep.",
     stop: "Run once per epoch. Stop when no lock is found, or on exit 2.",
   },
@@ -1410,7 +1669,7 @@ export async function verifyProtocol(protocol, { client, baseClient, lcd, fetche
 // =====================================================================================================================
 // command line
 // =====================================================================================================================
-const KNOWN_FLAGS = new Set(["json", "rpc", "lcd", "from", "address", "regen", "owner", "size", "slippage-bps", "max-impact-bps", "deadline-seconds", "vote", "kind", "include-equity", "market", "side", "collateral", "leverage", "batch", "amount", "jurisdiction", "reason", "limit", "class", "credit", "token-id", "tonnes", "beneficiary-name", "pool"]);
+const KNOWN_FLAGS = new Set(["json", "rpc", "lcd", "from", "address", "regen", "owner", "size", "slippage-bps", "max-impact-bps", "deadline-seconds", "vote", "kind", "include-equity", "market", "side", "collateral", "leverage", "batch", "amount", "jurisdiction", "reason", "limit", "top", "class", "credit", "token-id", "tonnes", "beneficiary-name", "pool"]);
 export function parseArgs(argv) {
   const words = [], flags = {}, votes = [];
   for (let i = 0; i < argv.length; i++) {
@@ -1421,7 +1680,8 @@ export function parseArgs(argv) {
     if (name === "json" || name === "include-equity") { flags[name] = true; continue; }
     const v = argv[i + 1];
     if (v === undefined || v.startsWith("--")) throw new ArgError(`--${name} needs a value`);
-    if (name === "vote") votes.push(v); else flags[name] = v;
+    // one --vote may carry the whole comma-joined string `hydrex rank` prints, or each POOL:BPS may be its own --vote
+    if (name === "vote") votes.push(...v.split(",")); else flags[name] = v;
     i++;
   }
   for (const k of ["from", "address", "class", "credit"]) if (flags[k] !== undefined && !isAddress(flags[k])) throw new ArgError(`--${k} must be an address (a mixed-case address must have a valid checksum)`);
@@ -1433,6 +1693,7 @@ export function parseArgs(argv) {
   flags.maxImpactBps = int("max-impact-bps", 1, MAX_IMPACT_BPS, 300);
   flags.deadlineSeconds = int("deadline-seconds", 5, MAX_DEADLINE_SECONDS, 60);
   flags.limit = int("limit", 1, 100, 15);
+  flags.top = int("top", 1, MAX_VOTE_POOLS, MAX_VOTE_POOLS);
   if (flags.kind !== undefined && !["fees", "bribes", "both"].includes(flags.kind)) throw new ArgError("--kind is fees, bribes or both");
   if (flags.side !== undefined && !["long", "short"].includes(flags.side)) throw new ArgError("--side is long or short");
   if (flags.collateral !== undefined && !/^\d+(\.\d{1,6})?$/.test(flags.collateral)) throw new ArgError("--collateral is an amount of USDC, e.g. 5");
@@ -1448,6 +1709,7 @@ Holds no key, signs nothing, sends nothing. Never an offer or advice, no return 
   recipes [id|all]                        short complete recipes a bot can run on a timer from these acts (a read, offline)
   verify [hydrex|regen|gmx|klima|uniswap] live check of every address the guides name (gmx reads Base and Arbitrum)
   hydrex epoch | pools [--limit N] [--include-equity] | proposals [--limit N] | locks --address 0x | claimable --address 0x
+  hydrex rank [--top N]                   the pools that paid their voters most last epoch (N 1 to 10) and a --vote string for hydrex prepare vote
   hydrex prepare claim --from 0x [--kind fees|bribes|both] [--include-equity]
   hydrex prepare vote --from 0x --vote 0xPOOL:BPS [--vote 0xPOOL:BPS ...]     (BPS sum to 10000)
   regen balances [--address 0x] [--regen regen1...] | pools | credits [--limit N]
@@ -1465,7 +1727,7 @@ Holds no key, signs nothing, sends nothing. Never an offer or advice, no return 
 
 Exit codes: 0 ok (prepare: a sendable step was printed) | 2 bad arguments or an act this program does not know |
 3 wrong chain | 4 verify failed | 10 the act ran and found nothing to act on now (a prepare act with no sendable step,
-or a klima or uniswap quote with no quote) | 1 a read failed (nothing decided).`;
+a klima or uniswap quote with no quote, or a hydrex rank with no pool to rank) | 1 a read failed (nothing decided).`;
 
 const need = (flags, ...names) => { for (const n of names) if (flags[n] === undefined) throw new ArgError(`--${n} is needed for this act`); };
 const REQUIRED = {
@@ -1488,6 +1750,7 @@ export function preflight({ words, flags, votes }) {
   need(flags, ...(REQUIRED[key] || []));
   if (key === "regen balances" && !flags.address && !flags.regen) throw new ArgError("--address and/or --regen is needed");
   if (key === "hydrex prepare vote") parseVotes(votes);
+  if (key === "hydrex rank" && flags["include-equity"]) throw new ArgError("hydrex rank leaves tokenized equity out and has no flag to bring it back, so that its vote string always passes the equity screen of hydrex prepare vote");
   if (key === "regen prepare buy-regen") { const wei = parseEther(flags.size); if (!(wei > 0n) || wei > MAX_BUY_REGEN_WEI) throw new ArgError(`--size must be above 0 and at most ${formatEther(MAX_BUY_REGEN_WEI)} ETH`); }
   if (key === "regen prepare retire") buildRetireMessage({ owner: flags.owner, batchDenom: flags.batch, amount: flags.amount, jurisdiction: flags.jurisdiction, reason: flags.reason });
   if (key === "gmx prepare open") {
@@ -1561,6 +1824,7 @@ export async function main(argv, io = { fetcher: globalThis.fetch }) {
       if (verb === "epoch") { const r = await readEpoch(client); show(flags, r, () => `epoch started ${new Date(Number(r.epochStart) * 1000).toISOString()}; flips in ${r.secondsToFlip}s; weekly emission ${r.weeklyOhydx} oHYDX (read it, never project it)`); return 0; }
       if (verb === "pools") { const r = trimPools(await getJson(`${HYDREX_API}/strategies`, { fetcher: io.fetcher }), { limit: flags.limit, includeEquity: Boolean(flags["include-equity"]) }); show(flags, r, () => r.map((p) => `${p.pool} ${p.title.padEnd(24)} ${p.type.padEnd(12)} tvl $${Math.round(p.tvlUsd)} ${p.gaugeAlive ? "gauge alive" : "no live gauge"}${p.isEquity ? " TOKENIZED EQUITY" : ""}`).join("\n")); return 0; }
       if (verb === "proposals") { const r = trimProposals(await getJson(HYDREX_GOVERNANCE_API, { fetcher: io.fetcher }), { limit: flags.limit }); show(flags, r, () => r.map((p) => `${p.id.slice(0, 12)} ${p.state.padEnd(10)} for ${p.forVotes} against ${p.againstVotes} quorum ${p.quorumVotes} | ${p.title}`).join("\n")); return 0; }
+      if (verb === "rank") return rankAct(client, { flags, fetcher: io.fetcher });
       if (verb === "locks") { need(flags, "address"); const r = await readLocks(client, flags.address); show(flags, r, () => `${r.nfts.length} lock(s), last vote ${r.lastVoted}\n` + r.nfts.map((n) => `  #${n.tokenId} locked ${formatUnits(n.lockedAmountUnits, 18)} HYDX, voting power ${formatUnits(n.votingPowerUnits, 18)}, lockType ${n.lockType}, endTime ${n.endTime}`).join("\n") + "\n" + r.votes.map((v) => `  vote ${v.pool} weight ${v.weightUnits}`).join("\n")); return 0; }
       if (verb === "claimable") { need(flags, "address"); const r = await readClaimable(client, flags.address); const shown = r.contracts.filter((c) => c.readError || c.tokens.some((t) => t.earnedUnits > 0n)); show(flags, r, () => shown.map((c) => `${c.kind} ${c.contract} (pool ${c.pool})${c.readError ? ` READ ERROR: ${c.readError}` : ""}\n` + c.tokens.filter((t) => t.earnedUnits > 0n).map((t) => `    ${t.symbol} ${formatUnits(t.earnedUnits, t.decimals)}`).join("\n")).join("\n") || "nothing earned in the pools this address votes in"); return 0; }
       if (prepared && act === "claim") { need(flags, "from"); return done(await prepareClaim(client, { from: flags.from, kind: flags.kind || "both", includeEquity: Boolean(flags["include-equity"]) })); }

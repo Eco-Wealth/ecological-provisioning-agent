@@ -1,0 +1,35 @@
+{
+  "name": "protocol-bot",
+  "version": "0.1.0",
+  "description": "One loop over Hydrex, Klima, Regen, ECO, NET's circle and GMX, run on your own machine with your own key. Dry by default; it signs only the contract calls on its own list.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "protocol-bot": "bot.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "list": "node bot.mjs list",
+    "test": "node --test bot.test.mjs"
+  },
+  "dependencies": {
+    "viem": "2.57.10"
+  },
+  "keywords": [
+    "base",
+    "arbitrum",
+    "hydrex",
+    "klima",
+    "regen",
+    "gmx",
+    "uniswap",
+    "bot",
+    "agent"
+  ],
+  "files": [
+    "bot.mjs",
+    "README.md"
+  ]
+}
