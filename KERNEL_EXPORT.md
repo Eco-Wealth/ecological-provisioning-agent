@@ -1,6 +1,6 @@
 # Kernel export
 
-Files below are copied verbatim from the private Vealth repository by `scripts/publish/kernel-export.sh` at that repo's commit `261931588fdf7ea1ca4c170b392ac85fad0e0a50` on 2026-11-19T06:27:17Z.
+Files below are copied verbatim from the private Vealth repository by `scripts/publish/kernel-export.sh` at that repo's commit `bbf67b6f557ac0460501ad955ac2b4889b042552` on 2026-11-19T08:21:14Z.
 Most of them are also served live at https://vealth.net (the standard at /labor/standard, the tool list at /mcp, the client at /vealth-agent.mjs), and the live site stays the authority for those. The constitution, the worker sidecar and the packet-review skill are not served there; they are published here. This copy gives every file a home with history.
 
 | Path | sha256 |
@@ -26,10 +26,10 @@ Most of them are also served live at https://vealth.net (the standard at /labor/
 | `skills/ewp-packet-review/review-packet.mjs` | `95e369474065d520148c62808e678af89a06a039a8d414ef52205d183a13fb2d` |
 | `skills/ewp-packet-review/fixture-packet.json` | `68043432dfd73a39b3aba65d853c8d239f15d2e230e53f21ec20d4ca8ac5948b` |
 | `skills/ewp-packet-review/README.md` | `c6aa88aad833fcb240967d873567f6b6dcd22aabf8df0d13ee4bc59ad8c2c8c7` |
-| `skills/net-circle/SKILL.md` | `91dc91260b6d44cb987cdb56740f5425f0fd954b4ca981489b143398f85f97c4` |
-| `skills/net-circle/net-circle.mjs` | `cf5ba3d016c37f0040e3dd3369574922c6af32221635ee03be8f21144362eaf1` |
+| `skills/net-circle/SKILL.md` | `b72bb9e6acbc1e9927fde21a72f808dc46586fc99c4acae4c49412ab10a30c3b` |
+| `skills/net-circle/net-circle.mjs` | `8c59d54f208f8e3afe98134d23af2da6288fbea2f1f506bb0d4f6d5025197be0` |
 | `skills/net-circle/package.json` | `7a715759db00c30298c29f882669bb5c728e3119353ba73aac724c088f70053b` |
-| `skills/net-circle/net-circle.test.mjs` | `3e1d8598576439e6f2e4980d4fba77853bc0fe834f3f49d35f706d4c8d37645b` |
+| `skills/net-circle/net-circle.test.mjs` | `37e1cdfa8e743ffc983b05a80ba7efe23f71a3cf7001bb2d80392dcd713c73eb` |
 | `skills/net-circle/package-lock.json` | `8e2e32be9481f18e656b7224ba6b5fcb4900eaef887d71833ba56d311328a2a3` |
 | `docs/human-reviewed-ai-safety-report-v0.md` | `33f208eb1882a8b320d02ec8f5937e8305941dddb1be4d7f215f886090953b5a` |
 | `schemas/human-reviewed-ai-safety-report-v0.schema.json` | `610ebf3b876e1d26f871b3a16d1da01507e11f6d593755fd3091ea2e460491db` |
@@ -91,10 +91,12 @@ Most of them are also served live at https://vealth.net (the standard at /labor/
 | `skills/protocol-guide/guides/klima.md` | `f8d19cb592061ba8524acf87c7058d556c67a883287d25a2432ec406827605ae` |
 | `skills/protocol-guide/guides/uniswap.md` | `690282b6905a40a5e4d269e1fc4ad02a192f8dd594cbe03deeb15fb1e8ad585c` |
 | `skills/protocol-guide/guides/bots.md` | `23decee78ec210dedca39bd97f2aab13db6aed69257dfb5ecdbd9f722d104108` |
-| `packages/protocol-bot/bot.mjs` | `1c2efa6bd181c13cc8962fe22ba298d54aa35fc8c2be8c652a47f7e0c5728cbd` |
-| `packages/protocol-bot/README.md` | `8bad5bbe28aa4d48ba764920358a0a69f8ced5204ebdedfa21b0785c8162eaac` |
-| `packages/protocol-bot/bot.test.mjs` | `b16c59df34aac835eac8070f45aafd2a15db9fa289579f1182ff5d110891aa96` |
-| `packages/protocol-bot/package.json` | `d1da38bb2515209f1d41de345c7393a0f65798168f9075999e3a47861ba18943` |
+| `packages/protocol-bot/bot.mjs` | `50efc26f0470cf7df8e4f45976c2026491417d5daae84d49397a7fdc9826a5ba` |
+| `packages/protocol-bot/README.md` | `007199037427eac67ea8a27cb0f7b59b7a1f158ac6a4639ba324a703f1b52cba` |
+| `packages/protocol-bot/bot.test.mjs` | `cc427544f92698d9221f563a41180d0fc0f95412e5147bc3dc91add9fab51b1f` |
+| `packages/protocol-bot/package.json` | `b4a3f6159dbedec7aea61519ee8aa613304ae89e525c598bb4c78b2ea28e1834` |
 | `packages/protocol-bot/package-lock.json` | `42cf3b800796b1ca52b1f4ac59f8f1840b3afe6e7edada00c8d4afe1a9403c8a` |
+| `packages/protocol-bot/journal-archive.mjs` | `85656c4075ca7ab3f82ea0febec6e1a288b3f4993e8b5905b258575ee7010e8c` |
+| `packages/protocol-bot/journal-archive.test.mjs` | `6291fe83fa6dbe907d5f174a0f359778b829a485f6d13b8e8cdb4aebe67490d4` |
 
 Verify a file: fetch it from vealth.net and compare the hash, or diff it against this repo. Nothing here is a promise of funding, certification or completed work; see docs/truth-boundaries.md.

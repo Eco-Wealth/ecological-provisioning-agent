@@ -12,7 +12,8 @@
   },
   "scripts": {
     "list": "node bot.mjs list",
-    "test": "node --test bot.test.mjs"
+    "test": "node --test bot.test.mjs journal-archive.test.mjs",
+    "test:archive": "node --test journal-archive.test.mjs"
   },
   "dependencies": {
     "viem": "2.57.10"
@@ -30,6 +31,7 @@
   ],
   "files": [
     "bot.mjs",
+    "journal-archive.mjs",
     "README.md"
   ]
 }

@@ -6,11 +6,13 @@
 //   node net-circle.mjs prepare --from 0xYOU [--loop mft] [--size 0.0001] [--min-profit-wei N] [--json]
 //   node net-circle.mjs watch --from 0xYOU [--every 30]   one JSON line on stdout per trade worth sending
 //   node net-circle.mjs selftest --from 0xYOU             prove every loop's path executes today (simulation)
+//   node net-circle.mjs buy --token NET|ECO --from 0xYOU --size 0.001 [--slippage-bps 100] [--max-impact-bps 300] [--json]
+//                                                          one-way: ETH into NET or ECO, one unsigned tx with a floor inside it
 //   node net-circle.mjs loops                              list the loops
 //   --rpc https://... or BASE_RPC_URL (default https://mainnet.base.org)
 //
-// Exit codes: 0 ok (prepare: a sendable tx was printed) · 2 bad arguments · 3 wrong chain · 10 prepare: nothing worth
-// sending right now · 1 any other failure (a read failed: nothing was decided).
+// Exit codes: 0 ok (prepare, buy: a sendable tx was printed) · 2 bad arguments · 3 wrong chain · 10 prepare, buy: nothing
+// sendable right now · 1 any other failure (a read failed: nothing was decided).
 
 import {
   createPublicClient, http, parseAbi, parseAbiParameters, encodeAbiParameters, encodeFunctionData, encodePacked,
@@ -153,6 +155,27 @@ const v3Packed = (seg) => encodePacked(
 const segOut = (seg) => (seg.v === 4 ? seg.hops[seg.hops.length - 1].to : seg.tokens[seg.tokens.length - 1]);
 
 /**
+ * The router steps for a path's segments, in order: the first trades exactly amountInWei, each later one the router's
+ * whole balance (CONTRACT_BALANCE). payerIsUser is false everywhere: a swap spends only what the router already holds.
+ * Every intermediate recipient is the router itself (ADDRESS_THIS). Shared by the loops and by `buy`.
+ */
+function swapSteps(segs, amountInWei) {
+  const steps = [];
+  segs.forEach((seg, k) => {
+    const amount = k === 0 ? amountInWei : CONTRACT_BALANCE;
+    if (seg.v === 4) {
+      const settle = enc("address, uint256, bool", [addr(seg.tokenIn), amount, false]);
+      const swap = enc("(address, (address, uint24, int24, address, bytes)[], uint128, uint128)", [[addr(seg.tokenIn), seg.hops.map((h) => { const p = pathKey(h); return [p.intermediateCurrency, p.fee, p.tickSpacing, p.hooks, p.hookData]; }), OPEN_DELTA, 0n]]);
+      const take = enc("address, address, uint256", [addr(segOut(seg)), ADDRESS_THIS, OPEN_DELTA]);
+      steps.push([CMD.V4_SWAP, enc("bytes, bytes[]", [encodePacked(["uint8", "uint8", "uint8"], [ACT.SETTLE, ACT.SWAP_EXACT_IN, ACT.TAKE]), [settle, swap, take]])]);
+    } else {
+      steps.push([CMD.V3_SWAP_EXACT_IN, enc("address, uint256, uint256, bytes, bool", [ADDRESS_THIS, amount, 0n, v3Packed(seg), false])]);
+    }
+  });
+  return steps;
+}
+
+/**
  * The whole loop as one Universal Router call, with exactly amountInWei traded and the payout floor enforced last.
  *  - starts in WETH: WRAP_ETH(amountIn), then SWEEP any extra msg.value straight back to the sender;
  *  - starts in native ETH: the first V4 segment settles exactly amountIn; extra msg.value is swept back at the end;
@@ -176,17 +199,7 @@ export function buildLoopTx({ loop, pools, amountInWei, minEthOutWei, deadline, 
     steps.push([CMD.WRAP_ETH, enc("address, uint256", [ADDRESS_THIS, amountInWei])]);
     steps.push([CMD.SWEEP, enc("address, address, uint256", [ETH, MSG_SENDER, 0n])]); // refund any extra msg.value now
   }
-  segs.forEach((seg, k) => {
-    const amount = k === 0 ? amountInWei : CONTRACT_BALANCE;
-    if (seg.v === 4) {
-      const settle = enc("address, uint256, bool", [addr(seg.tokenIn), amount, false]);
-      const swap = enc("(address, (address, uint24, int24, address, bytes)[], uint128, uint128)", [[addr(seg.tokenIn), seg.hops.map((h) => { const p = pathKey(h); return [p.intermediateCurrency, p.fee, p.tickSpacing, p.hooks, p.hookData]; }), OPEN_DELTA, 0n]]);
-      const take = enc("address, address, uint256", [addr(segOut(seg)), ADDRESS_THIS, OPEN_DELTA]);
-      steps.push([CMD.V4_SWAP, enc("bytes, bytes[]", [encodePacked(["uint8", "uint8", "uint8"], [ACT.SETTLE, ACT.SWAP_EXACT_IN, ACT.TAKE]), [settle, swap, take]])]);
-    } else {
-      steps.push([CMD.V3_SWAP_EXACT_IN, enc("address, uint256, uint256, bytes, bool", [ADDRESS_THIS, amount, 0n, v3Packed(seg), false])]);
-    }
-  });
+  steps.push(...swapSteps(segs, amountInWei));
   if (end === "WETH") {
     steps.push([CMD.UNWRAP_WETH, enc("address, uint256", [MSG_SENDER, minEthOutWei])]);
     steps.push([CMD.SWEEP, enc("address, address, uint256", [ETH, MSG_SENDER, 0n])]); // refund extra msg.value of a native start
@@ -414,6 +427,143 @@ export async function readPoolFacts(client, pools) {
   });
 }
 
+// ---- buy: one way, ETH into NET or into ECO ------------------------------------------------------------------------
+// One unsigned Universal Router transaction that spends exactly the ETH it carries and reverts unless at least a floor
+// of the token arrives. Only these commands appear (by exact byte): V3_SWAP_EXACT_IN 0x00, SWEEP 0x04, WRAP_ETH 0x0b,
+// V4_SWAP 0x10 (UNWRAP_WETH 0x0c is never used); inside V4_SWAP only SWAP_EXACT_IN 0x07, SETTLE 0x0b, TAKE 0x0e. No
+// command carries an allow-revert flag. payerIsUser is false everywhere. The LAST command is SWEEP(token, sender, floor).
+export const BUY_TOKENS = ["NET", "ECO"];
+export const MAX_BUY_WEI = parseEther("0.05");
+export const MAX_SLIPPAGE_BPS = 500;
+export const MAX_IMPACT_BPS = 1000;
+export const DEFAULT_BUY_DEADLINE_SECONDS = 60;
+/** What a buyer is told, in these exact words, in the human output and in prepared.disclosure. */
+export const BUY_DISCLOSURE = {
+  NET: "As of 2026-11-18, EcoWealth created NET and holds it. The buying in NET's pools is the house's own.",
+  ECO: "As of 2026-11-18, EcoWealth created ECO, holds it and gains if it rises. ECO bought through WETH>NET>ECO or ETH>NET>ECO passes through NET's pools, and the buying in NET's pools is the house's own. Buying through the Zora coin pool may pay ECO creator fees to EcoWealth.",
+};
+/**
+ * The routes a buy tries, a fixed table over this kit's own pools (never a search, and never in LOOPS). The rule that
+ * fixes it: each token's disclosure is fixed wording, so it must be complete for every route that token can take. NET is
+ * bought only through its own ETH and WETH pools. ECO is bought directly (ETH/ECO), through the Zora coin pool
+ * (ETH to ZORA to ECO), or through the NET pools (ETH to NET to ECO). A route starting in ETH spends native ETH in a V4
+ * pool; one starting in WETH wraps first. No route has ETH or WETH anywhere but at its start.
+ */
+export const BUY_ROUTES = {
+  NET: [
+    { id: "ETH>NET", tokens: ["ETH", "NET"], pools: ["netEth"] },
+    { id: "WETH>NET", tokens: ["WETH", "NET"], pools: ["netWeth"] },
+  ],
+  ECO: [
+    { id: "ETH>ECO", tokens: ["ETH", "ECO"], pools: ["ecoEth"] },
+    { id: "WETH>ZORA>ECO", tokens: ["WETH", "ZORA", "ECO"], pools: ["zoraWeth", "coin"] },
+    { id: "ETH>NET>ECO", tokens: ["ETH", "NET", "ECO"], pools: ["netEth", "netEco"] },
+    { id: "WETH>NET>ECO", tokens: ["WETH", "NET", "ECO"], pools: ["netWeth", "netEco"] },
+  ],
+};
+
+/**
+ * The buy as one Universal Router call: WRAP_ETH(amountIn) only for a WETH start, the swap steps, then
+ * SWEEP(token, sender, minOutWei) LAST, so the floor is enforced after everything else. The value equals amountInWei
+ * exactly and the swap settles exactly amountInWei, so no ETH is left over to refund.
+ */
+export function buildBuyTx({ token, route, pools, amountInWei, minOutWei, deadline }) {
+  if (!BUY_TOKENS.includes(token)) throw new Error(`token must be one of ${BUY_TOKENS.join(", ")}`);
+  if (!(amountInWei > 0n) || amountInWei > MAX_BUY_WEI) throw new Error(`amountInWei must be positive and at most ${formatEther(MAX_BUY_WEI)} ETH`);
+  if (!(minOutWei > 0n)) throw new Error("minOutWei must be positive: it is the floor that makes a bad fill revert");
+  const first = route.tokens[0];
+  if (!isEthLike(first)) throw new Error(`route ${route.id} must start in ETH or WETH`);
+  if (route.tokens[route.tokens.length - 1] !== token) throw new Error(`route ${route.id} does not end in ${token}`);
+  if (route.tokens.slice(1).some(isEthLike)) throw new Error(`route ${route.id} may hold ETH or WETH only at its start`);
+  const segs = segmentsOf(route, pools);
+  if (first === "ETH" && segs[0].v !== 4) throw new Error(`route ${route.id} starts in native ETH but its first leg is not V4`);
+  const steps = [];
+  if (first === "WETH") steps.push([CMD.WRAP_ETH, enc("address, uint256", [ADDRESS_THIS, amountInWei])]);
+  steps.push(...swapSteps(segs, amountInWei));
+  steps.push([CMD.SWEEP, enc("address, address, uint256", [addr(token), MSG_SENDER, minOutWei])]);
+  const commands = encodePacked(steps.map(() => "uint8"), steps.map(([c]) => c));
+  const data = encodeFunctionData({ abi: ABI.router, functionName: "execute", args: [commands, steps.map(([, i]) => i), deadline] });
+  return { to: CONTRACTS.UNIVERSAL_ROUTER, data, value: amountInWei, chainId: CHAIN_ID };
+}
+
+/** The probe a price impact is measured against: one hundredth of the size, but not below MIN_SIZE_WEI, and never above the size. */
+export function probeSizeOf(amountInWei) {
+  const hundredth = amountInWei / 100n;
+  const probe = hundredth > MIN_SIZE_WEI ? hundredth : MIN_SIZE_WEI;
+  return probe < amountInWei ? probe : amountInWei;
+}
+
+/**
+ * How much worse the fill is than the probe's, in basis points (0 or more, rounded against the buyer): the token you get
+ * per ETH at your size, against the token you get per ETH at the probe size, on the same route. Pure BigInt. Null when
+ * either quote is missing or pays nothing. The probe's own small impact is not counted, so the figure reads a little low.
+ */
+export function buyImpactBps({ amountInWei, quoteOut, probeInWei, probeOut }) {
+  if (!(quoteOut > 0n) || !(probeOut > 0n) || !(amountInWei > 0n) || !(probeInWei > 0n)) return null;
+  const keptBps = (quoteOut * probeInWei * 10_000n) / (probeOut * amountInWei);
+  return keptBps >= 10_000n ? 0 : Number(10_000n - keptBps);
+}
+
+/**
+ * Quote every route of the token at the size and at the probe, exactly, with the kit's own quoters. A route whose quote
+ * reverts or pays nothing is LEFT OUT with a plain line and never counted as zero. Any other failure (a node error, a
+ * rate limit) throws: it says nothing about the route.
+ */
+export async function quoteBuyRoutes(client, { token, pools, amountInWei }) {
+  const routes = BUY_ROUTES[token];
+  if (!routes) throw new Error(`token must be one of ${BUY_TOKENS.join(", ")}`);
+  const probeInWei = probeSizeOf(amountInWei);
+  const results = await mapLimit(routes, 3, (route) => quoteLoop(client, route, pools, [amountInWei, probeInWei]));
+  const quoted = [], leftOut = [];
+  routes.forEach((route, i) => {
+    const [main, probe] = results[i];
+    if (main.out === null || main.out === 0n) leftOut.push(`${route.id} left out: its quote at your size reverted or pays nothing`);
+    else if (probe.out === null || probe.out === 0n) leftOut.push(`${route.id} left out: its small probe could not be quoted, so its price impact cannot be measured`);
+    else quoted.push({ route, out: main.out, probeInWei, probeOut: probe.out });
+  });
+  return { quoted, leftOut };
+}
+
+/** Price a transaction the way a wallet would, from the node, with the kit's caps. The result has the same fields `prepare` prints. */
+async function priceTx(client, tx, from) {
+  const gas = await client.estimateGas({ account: getAddress(from), to: tx.to, data: tx.data, value: tx.value, blockTag: "pending", stateOverride: [{ address: getAddress(from), balance: tx.value + parseEther("1") }] });
+  const fees = await client.estimateFeesPerGas();
+  if (fees.maxFeePerGas > MAX_FEE_PER_GAS_WEI || fees.maxPriorityFeePerGas > MAX_FEE_PER_GAS_WEI) throw new Error(`the RPC reports a fee above ${MAX_FEE_PER_GAS_WEI} wei per gas; refusing to price a transaction with it`);
+  if (gas > MAX_GAS) throw new Error(`the RPC estimates ${gas} gas, above ${MAX_GAS}; refusing`);
+  const gasLimit = (gas * GAS_LIMIT_NUM) / GAS_LIMIT_DEN;
+  return { to: tx.to, data: tx.data, value: toHex(tx.value), valueWei: tx.value, chainId: tx.chainId, gas: toHex(gasLimit), maxFeePerGas: toHex(fees.maxFeePerGas), maxPriorityFeePerGas: toHex(fees.maxPriorityFeePerGas) };
+}
+
+/**
+ * Prepare one buy. The best route by quote out is chosen and guarded: if its impact is above maxImpactBps the buy is
+ * refused (no lesser route is tried). The floor is the quote less slippageBps, enforced inside the transaction. The
+ * transaction is simulated as `from` before it is returned; it is sendable only if that succeeds.
+ */
+export async function prepareBuy(client, { token, from, amountInWei, slippageBps = 100, maxImpactBps = 300, deadlineSeconds = DEFAULT_BUY_DEADLINE_SECONDS, pools = null }) {
+  if (!BUY_TOKENS.includes(token)) throw new ArgError(`--token is one of ${BUY_TOKENS.join(", ")}`);
+  if (!(amountInWei > 0n) || amountInWei > MAX_BUY_WEI) throw new ArgError(`--size must be above 0 and at most ${formatEther(MAX_BUY_WEI)} ETH`);
+  if (!Number.isInteger(slippageBps) || slippageBps < 1 || slippageBps > MAX_SLIPPAGE_BPS) throw new ArgError(`--slippage-bps is a whole number from 1 to ${MAX_SLIPPAGE_BPS}`);
+  if (!Number.isInteger(maxImpactBps) || maxImpactBps < 1 || maxImpactBps > MAX_IMPACT_BPS) throw new ArgError(`--max-impact-bps is a whole number from 1 to ${MAX_IMPACT_BPS}`);
+  if (!Number.isInteger(deadlineSeconds) || deadlineSeconds < 5 || deadlineSeconds > MAX_DEADLINE_SECONDS) throw new ArgError(`--deadline-seconds is a whole number from 5 to ${MAX_DEADLINE_SECONDS}`);
+  const livePools = pools ?? await readPools(client);
+  const { quoted, leftOut } = await quoteBuyRoutes(client, { token, pools: livePools, amountInWei });
+  const quotes = [...quoted].sort((a, b) => (b.out > a.out ? 1 : b.out < a.out ? -1 : 0)).map((q) => ({ route: q.route.id, quoteOut: q.out }));
+  const base = { sendable: false, reason: null, token, route: null, amountInWei, quoteOut: null, minOut: null, impactBps: null, slippageBps, deadline: null, disclosure: BUY_DISCLOSURE[token], quotes, leftOut, tx: null };
+  if (!quoted.length) return { ...base, reason: "no route could be quoted at this size: every route reverted or paid nothing" };
+  const best = quoted.reduce((a, b) => (b.out > a.out ? b : a));
+  const impactBps = buyImpactBps({ amountInWei, quoteOut: best.out, probeInWei: best.probeInWei, probeOut: best.probeOut });
+  const minOut = (best.out * BigInt(10_000 - slippageBps)) / 10_000n;
+  const known = { ...base, route: best.route.id, quoteOut: best.out, minOut, impactBps };
+  if (impactBps > maxImpactBps) return { ...known, reason: `this size would get about ${impactBps} basis points less per ETH than a probe one hundredth of its size on ${best.route.id}, above your --max-impact-bps ${maxImpactBps}; try a smaller --size` };
+  if (!(minOut > 0n)) return { ...known, reason: "the quote is too small to set a floor" };
+  const block = await client.getBlock({ blockTag: "latest" });
+  const deadline = block.timestamp + BigInt(deadlineSeconds);
+  const tx = buildBuyTx({ token, route: best.route, pools: livePools, amountInWei, minOutWei: minOut, deadline });
+  const failed = await simulate(client, tx, from);
+  if (failed) return { ...known, deadline, reason: `the swap reverts in simulation (${failed}): nothing to send right now` };
+  return { ...known, sendable: true, deadline, tx: await priceTx(client, tx, from) };
+}
+
 // ---- command line ------------------------------------------------------------------------------------------------
 class ArgError extends Error {}
 function parseArgs(argv) {
@@ -429,17 +579,35 @@ function parseArgs(argv) {
     flags[a.slice(2)] = v;
     i++;
   }
-  const known = new Set(["json", "rpc", "loop", "from", "size", "min-profit-wei", "deadline-seconds", "every"]);
+  const known = new Set(["json", "rpc", "loop", "from", "size", "min-profit-wei", "deadline-seconds", "every", "token", "slippage-bps", "max-impact-bps"]);
   for (const k of Object.keys(flags)) if (!known.has(k)) throw new ArgError(`unknown flag --${clean(k)}`);
+  const buyOnly = ["token", "slippage-bps", "max-impact-bps"], notBuy = ["loop", "min-profit-wei", "every"];
+  if (cmd !== "buy") for (const k of buyOnly) if (flags[k] !== undefined) throw new ArgError(`--${k} applies only to the buy act`);
+  if (cmd === "buy") for (const k of notBuy) if (flags[k] !== undefined) throw new ArgError(`--${k} does not apply to the buy act`);
   if (flags.from !== undefined && !isAddress(flags.from)) throw new ArgError("--from must be an address");
   if (flags.size !== undefined) {
     if (!/^\d+(\.\d+)?$/.test(flags.size)) throw new ArgError("--size is an amount of ETH, e.g. 0.0001");
     flags.sizeWei = parseEther(flags.size);
-    if (flags.sizeWei <= 0n || flags.sizeWei > MAX_SIZE_WEI) throw new ArgError("--size must be above 0 and at most 1 ETH");
+    const cap = cmd === "buy" ? MAX_BUY_WEI : MAX_SIZE_WEI;
+    if (flags.sizeWei <= 0n || flags.sizeWei > cap) throw new ArgError(`--size must be above 0 and at most ${formatEther(cap)} ETH`);
+  }
+  if (cmd === "buy") {
+    if (flags.token === undefined) throw new ArgError(`buy needs --token ${BUY_TOKENS.join(" or ")}`);
+    flags.token = String(flags.token).toUpperCase();
+    if (!BUY_TOKENS.includes(flags.token)) throw new ArgError(`--token is ${BUY_TOKENS.join(" or ")}`);
+    if (flags.sizeWei === undefined) throw new ArgError("buy needs --size <ETH>");
+    const wholeBps = (name, dflt, max) => {
+      const raw = flags[name] ?? String(dflt);
+      const n = /^\d+$/.test(raw) ? Number(raw) : NaN;
+      if (!Number.isInteger(n) || n < 1 || n > max) throw new ArgError(`--${name} is a whole number from 1 to ${max}`);
+      return n;
+    };
+    flags.slippageBps = wholeBps("slippage-bps", 100, MAX_SLIPPAGE_BPS);
+    flags.maxImpactBps = wholeBps("max-impact-bps", 300, MAX_IMPACT_BPS);
   }
   if (flags["min-profit-wei"] !== undefined && !/^\d+$/.test(flags["min-profit-wei"])) throw new ArgError("--min-profit-wei is a whole number of wei, 0 or more");
   flags.minProfitWei = BigInt(flags["min-profit-wei"] ?? "0");
-  const dl = Number(flags["deadline-seconds"] ?? 30);
+  const dl = Number(flags["deadline-seconds"] ?? (cmd === "buy" ? DEFAULT_BUY_DEADLINE_SECONDS : 30));
   if (!Number.isInteger(dl) || dl < 5 || dl > MAX_DEADLINE_SECONDS) throw new ArgError(`--deadline-seconds is a whole number from 5 to ${MAX_DEADLINE_SECONDS}`);
   flags.deadlineSeconds = dl;
   const every = Number(flags.every ?? 30);
@@ -457,28 +625,56 @@ Holds no key, signs nothing, sends nothing.
                                          the best loop as one unsigned tx, simulated; printed only when sendable
   node net-circle.mjs watch --from 0xYOU [--every 30] [--min-profit-wei <wei>]
                                          stdout: one JSON line per sendable tx; stderr: one status line per reading
+  node net-circle.mjs buy --token NET|ECO --from 0xYOU --size <ETH> [--slippage-bps 100] [--max-impact-bps 300] [--deadline-seconds 60]
+                                         one-way: ETH into NET or ECO as one unsigned tx that reverts unless at least the
+                                         printed minimum arrives; size above 0 and at most 0.05 ETH; simulated before it prints
   node net-circle.mjs selftest --from 0xYOU    prove every loop's path executes on chain today (simulation)
   node net-circle.mjs pools              every pool's id and liquidity; the NET pools' holdings and burned founding positions
   node net-circle.mjs loops              the loop ids and their legs
   --json  machine-readable output   --rpc <url> or BASE_RPC_URL (default https://mainnet.base.org; use a node you trust)
 
-Exit codes: 0 ok (prepare: a sendable tx was printed) · 2 bad arguments · 3 the RPC is not Base · 4 selftest: a loop's path
-fails · 10 prepare: nothing worth sending now · 1 a read failed or the RPC returned something implausible (nothing decided).`;
+Exit codes: 0 ok (prepare, buy: a sendable tx was printed) · 2 bad arguments · 3 the RPC is not Base · 4 selftest: a loop's path
+fails · 10 prepare, buy: nothing sendable now · 1 a read failed or the RPC returned something implausible (nothing decided).`;
 
 const eth = (wei) => (wei === null || wei === undefined ? "-" : `${Number(formatEther(wei)).toPrecision(4)} ETH`);
 const bigJson = (o) => JSON.stringify(o, (k, v) => (typeof v === "bigint" ? v.toString() : v));
+
+/** The human output of one buy: what it does, the floor, what was left out, the verdict, the tx and the disclosure. */
+export function renderBuy(p) {
+  const units = (n) => Number(formatEther(n)).toLocaleString("en-US", { maximumSignificantDigits: 6, maximumFractionDigits: 20, useGrouping: false });
+  const route = p.route ? BUY_ROUTES[p.token].find((r) => r.id === p.route) : null;
+  const lines = [`net-circle buy · ${p.token} · ${eth(p.amountInWei)} in · reads and a simulation only, nothing is sent`];
+  if (p.quotes.length) lines.push(`  quotes, best first: ${p.quotes.map((q) => `${q.route} ${units(q.quoteOut)}`).join(" · ")}`);
+  if (route) lines.push(`  route ${route.id}: ${route.pools.map((n) => POOLS[n].name).join(", then ")}`);
+  for (const l of p.leftOut) lines.push(`  ${l}`);
+  if (p.quoteOut !== null) {
+    lines.push(`  quote ${units(p.quoteOut)} ${p.token} for ${eth(p.amountInWei)}; the floor is about ${units(p.minOut)} ${p.token} (the quote less ${p.slippageBps} bps; the transaction carries the exact figure)`);
+    lines.push(`  price impact about ${p.impactBps} bps: that much less ${p.token} per ETH than a probe one hundredth of your size would get`);
+  }
+  lines.push(`  at least the floor arrives in one transaction, or the whole transaction reverts; you pay the ETH stated and gas`);
+  lines.push(p.sendable ? `  SENDABLE: sign and send the tx below with its fee fields, before the deadline (unix ${p.deadline})` : `  not sendable: ${p.reason}`);
+  if (p.tx) lines.push("  tx: " + bigJson(p.tx));
+  lines.push(`  ${p.disclosure}`);
+  return lines.join("\n");
+}
 
 async function main(argv) {
   let parsed;
   try { parsed = parseArgs(argv); } catch (e) { if (e instanceof ArgError) { console.error(`net-circle: ${e.message}`); return 2; } throw e; }
   const { cmd, flags } = parsed;
   if (cmd === "help") { console.log(HELP); return 0; }
-  if (!["quote", "prepare", "watch", "selftest", "loops", "pools"].includes(cmd)) { console.error(`net-circle: unknown command ${clean(cmd)} (quote | prepare | watch | selftest | pools | loops | help)`); return 2; }
+  if (!["quote", "prepare", "watch", "selftest", "loops", "pools", "buy"].includes(cmd)) { console.error(`net-circle: unknown command ${clean(cmd)} (quote | prepare | watch | buy | selftest | pools | loops | help)`); return 2; }
   if (cmd === "loops") { for (const l of LOOPS) console.log(`${l.id.padEnd(19)} ${l.tokens.join(" -> ")}`); return 0; }
-  if (["prepare", "watch", "selftest"].includes(cmd) && !flags.from) { console.error(`net-circle: ${cmd} needs --from 0xYourAddress (the simulation runs as you)`); return 2; }
+  if (["prepare", "watch", "selftest", "buy"].includes(cmd) && !flags.from) { console.error(`net-circle: ${cmd} needs --from 0xYourAddress (the simulation runs as you)`); return 2; }
   const client = makeClient(flags.rpc);
   const chainId = await client.getChainId();
   if (chainId !== CHAIN_ID) { console.error(`net-circle: the RPC is on chain ${chainId}, not Base (${CHAIN_ID})`); return 3; }
+
+  if (cmd === "buy") {
+    const p = await prepareBuy(client, { token: flags.token, from: flags.from, amountInWei: flags.sizeWei, slippageBps: flags.slippageBps, maxImpactBps: flags.maxImpactBps, deadlineSeconds: flags.deadlineSeconds });
+    console.log(flags.json ? bigJson({ sendable: p.sendable, prepared: p }) : renderBuy(p));
+    return p.sendable ? 0 : 10;
+  }
 
   if (cmd === "pools") {
     const facts = await readPoolFacts(client, await readPools(client));

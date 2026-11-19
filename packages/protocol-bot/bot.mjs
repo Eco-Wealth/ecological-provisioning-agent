@@ -12,9 +12,15 @@
 //   klima    retire carbon on Klima with kVCM you hold (a lock that votes a kVCM pool earns kVCM): approve the exact amount,
 //            retire, take the approval back. A sink: what it retires is gone for good, by design. EcoWealth holds a stake
 //            in Klima and may gain if it rises.
+//   regen-retire  retire Regen credits you hold on Regen Ledger: asks the kit for the exact retirement message and PRINTS it
+//            ("DRY, would sign this Regen message: ..."). It never signs or sends, with or without --live: this program has no
+//            Regen signer and no Regen key, so signing is a separate step you do with your own Regen wallet. A sink, by design.
 //   regen    buy axlREGEN (Regen's token on Base) with a slice of ETH you set. EcoWealth holds REGEN and may gain if it rises.
 //   eco      buy ECO, the coin EcoWealth made on Zora, with a slice of ETH you set. EcoWealth created ECO. As of 2026-11-18
 //            it holds it and may gain if it rises; it both buys ECO and swaps ECO it holds for NET.
+//   eco-buy  buy ECO by the NET circle kit's best route (the Zora coin pool, or through NET's pools) with a slice of ETH you set.
+//            One way: you end up holding ECO. The kit prints its own holdings line with the buy.
+//   net-buy  buy NET with a slice of ETH you set. One way: you end up holding NET (the buying in NET's pools is the house's own).
 //   circle   one trip through NET's pools and back to ETH, sent only when the kit's floor says at least the input plus gas
 //            comes back (the buying in NET's pools is the house's own).
 //   gmx      one small GMX position on Arbitrum by YOUR rule: market, side, collateral, leverage and how long to hold. It
@@ -39,27 +45,69 @@
 //   - One thing at a time: it waits for each transaction, and an unconfirmed one (or a send that got no answer) blocks every later send.
 //   - The key file must be readable by you alone. The key is never printed, logged, put in a command line or sent anywhere.
 //   - STOP is checked at the start of every pass and immediately before every send.
+//   - The regen-retire leg signs nothing: it has no RULES list, no key path and no send, and the gate refuses any step named for it.
 //
 // One dependency, to sign and send: `npm ci` (viem, pinned). Node 22 or newer. No build step.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { createPublicClient, createWalletClient, decodeAbiParameters, decodeFunctionData, formatEther, http, isAddress, parseAbi, parseAbiParameters, parseEther } from "viem";
+import { createPublicClient, decodeAbiParameters, decodeFunctionData, formatEther, http, isAddress, keccak256, parseAbi, parseAbiParameters, parseEther, parseTransaction, parseUnits, recoverTransactionAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arbitrum, base } from "viem/chains";
+import { archiveJournal, verifyArchiveInventory, ARCHIVE_TRIGGER_BYTES } from "./journal-archive.mjs";
 
 export const VERSION = "0.1.0";
+export const STORAGE_SCHEMA_VERSION = 1;
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_KIT = path.resolve(HERE, "../../skills/protocol-guide/protocol-guide.mjs");
 export const DEFAULT_CIRCLE_KIT = path.resolve(HERE, "../../skills/net-circle/net-circle.mjs");
+/** Reviewed Git blobs of the exact sibling helpers. Any helper upgrade must be explicitly repinned. */
+export const PINNED_KIT_GIT_SHA1 = Object.freeze({
+  protocol: "dfbd0574389512bbd8692baa4ff5c669f9692aa9", // the kit as published 2026-11-19 (independently read at these bytes)
+  circle: "15664af0d4d77501b06acf8995c1f30273b3b7b8",
+});
+/** Hash the exact file bytes as a Git blob, not a line-normalized string. */
+export function gitBlobSha1(file) {
+  const bytes = fs.readFileSync(file);
+  return createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex");
+}
+/**
+ * A same-UID helper can read a local key. This is a pin, not a sandbox:
+ * refuse arbitrary paths or unreviewed helper changes before live key use.
+ */
+export function verifyBundledKits(protocolFile = DEFAULT_KIT, circleFile = DEFAULT_CIRCLE_KIT) {
+  for (const [file, canonical, expected] of [
+    [protocolFile, DEFAULT_KIT, PINNED_KIT_GIT_SHA1.protocol],
+    [circleFile, DEFAULT_CIRCLE_KIT, PINNED_KIT_GIT_SHA1.circle],
+  ]) {
+    if (path.resolve(file) !== canonical) throw new GuardError("live helper path is not the bundled reviewed path");
+    const st = fs.lstatSync(canonical);
+    if (!st.isFile() || st.isSymbolicLink() || st.nlink !== 1 ||
+        (typeof process.getuid === "function" && st.uid !== process.getuid()))
+      throw new GuardError("live helper must be an owner-held plain file");
+    if (gitBlobSha1(canonical) !== expected)
+      throw new GuardError("bundled helper code changed without a reviewed hash update; live signing is refused");
+  }
+  return true;
+}
 export const CHAINS = {
   base: { id: 8453, env: "BASE_RPC_URL", rpc: "https://mainnet.base.org", viem: base },
   arbitrum: { id: 42161, env: "ARBITRUM_RPC_URL", rpc: "https://arb1.arbitrum.io/rpc", viem: arbitrum },
 };
-export const LEG_ORDER = ["hydrex", "klima", "regen", "eco", "circle", "gmx"];
+export const LEG_ORDER = ["hydrex", "klima", "regen-retire", "regen", "eco", "eco-buy", "net-buy", "circle", "gmx"];
+/** Legs that sign and send nothing. They have no RULES list on purpose, so the gate refuses any step named for them. */
+export const UNSIGNED_LEGS = ["regen-retire"];
+/** The Regen Ledger retirement message the kit prints, and the patterns its fields must match (a test holds them equal to the kit's). */
+export const REGEN_RETIRE_TYPE_URL = "/regen.ecocredit.v1.MsgRetire";
+export const REGEN_RETIRE_RE = {
+  owner: /^regen1[02-9ac-hj-np-z]{38}$/,
+  batch: /^[A-Z]{1,3}\d{2,3}-\d{3}-\d{8}-\d{8}-\d{3}$/,
+  jurisdiction: /^[A-Z]{2}(-[A-Z0-9]{1,3}( [A-Za-z0-9]{1,64})?)?$/,
+  amount: /^(0|[1-9]\d{0,17})(\.\d{1,6})?$/,
+};
 
 // ---- the contracts, pinned here on purpose (a test holds each one equal to the kit's own constant) -----------------
 export const ADDR = {
@@ -72,8 +120,27 @@ export const ADDR = {
   gmxRouter: "0x7452c558d45f8afC8c83dAe62C3f8A5BE19c71f6",
   gmxOrderVault: "0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5",
   arbitrumUsdc: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  net: "0xE37A9125B6b14D5e8Ec056C744a99F4deC975022",
+  eco: "0x170dC0ca26F1247CED627D8aBcaFA90ecf1e1519",
+  axlRegen: "0x2E6C05f1f7D1f4Eb9A088bf12257f1647682b754",
 };
 const ZERO = "0x0000000000000000000000000000000000000000";
+/** Starter market addresses checked against GMX markets on 2026-11-18; explicit address also permitted. */
+export const GMX_STARTER_MARKETS = {
+  ETH: "0x70d95587d40A2caf56bd97485aB3Eec10Bee6336",
+  BTC: "0x47c031236e19d024b42f8AE6780E44A573170703",
+  ZORA: "0xac484106d935f0f20F1485b631fA6F65AeEff550",
+};
+const chosenGmxMarket = (market) => isAddress(String(market ?? "")) ? market : GMX_STARTER_MARKETS[String(market ?? "").toUpperCase()] ?? null;
+const klimaRetireIntent = (opts) => ({
+  credit: opts.klimaCredit, carbonClass: opts.klimaClass, tokenId: BigInt(opts.klimaTokenId ?? "0"),
+  tonnes: parseUnits(opts.klimaTonnes, 18), name: clean(opts.klimaName, 64),
+});
+const gmxOrderIntent = (opts, action) => ({
+  action, market: chosenGmxMarket(opts.gmxMarket), isLong: opts.gmxSide === "long",
+  collateralUnits: parseUnits(opts.gmxCollateral, 6),
+  leverageTenths: parseUnits(opts.gmxLeverage, 1),
+});
 
 // ---- the functions, by 4-byte selector (a test recomputes each from its signature) ---------------------------------
 export const SIGNATURES = {
@@ -93,6 +160,7 @@ export const SEL = {
   execute: "0x3593564c", multicall: "0xac9650d8", sendWnt: "0x7d39aaf1", sendTokens: "0xe6d66ac8", createOrder: "0xf59c48eb",
 };
 const ERC20 = parseAbi([SIGNATURES.approve]);
+const VOTER_VOTE_ABI = parseAbi([SIGNATURES.vote]);
 const KLIMA_ABI = parseAbi([SIGNATURES.retireCreditViaKlima]);
 const GMX_ABI = parseAbi([SIGNATURES.multicall, SIGNATURES.sendWnt, SIGNATURES.sendTokens, SIGNATURES.createOrder]);
 const ROUTER_ABI = parseAbi([SIGNATURES.execute]);
@@ -106,6 +174,8 @@ export const V4_ACT = { SWAP_EXACT_IN: 0x07, SETTLE: 0x0b, TAKE: 0x0e };
 /** The router's two stand-in addresses: "whoever sent this transaction" and "the router itself". */
 export const MSG_SENDER = "0x0000000000000000000000000000000000000001";
 export const ADDRESS_THIS = "0x0000000000000000000000000000000000000002";
+/** The router's "spend its whole balance" amount (1 << 255): what each later hop of a buy spends. */
+export const CONTRACT_BALANCE = 1n << 255n;
 
 // ---- caps ----------------------------------------------------------------------------------------------------------
 /** The most kVCM one approval may cover and the most USDC one GMX approval may cover: the kits' own starter caps. */
@@ -120,6 +190,48 @@ export const HARD_MAX = { dayFeeWei: parseEther("0.05"), daySpendWei: parseEther
 const KIT_TIMEOUT_MS = 180_000;
 const RECEIPT_TIMEOUT_MS = 180_000;
 const DAY_MS = 24 * 3600_000;
+const MAX_WALL_CLOCK_DRIFT_MS = 120_000;
+const MAX_CHAIN_TIME_DRIFT_MS = 300_000;
+/** Independent chain-time guard used by the real live IO, never kit prose. */
+export async function assertChainClock(ctx, chain) {
+  if (!ctx.live || typeof ctx.io.chainTime !== "function") return;
+  const chainMs = await ctx.io.chainTime(chain);
+  const wallMs = ctx.safeNow ? ctx.safeNow() : ctx.now();
+  if (!Number.isSafeInteger(chainMs) || Math.abs(chainMs - wallMs) > MAX_CHAIN_TIME_DRIFT_MS)
+    throw new GuardError(`the ${chain} node time disagrees with the bot clock by more than 5 minutes; no signing or broadcast is allowed`);
+}
+
+/**
+ * Verify an explicitly UTC, calendar-real timestamp. Do not let ambiguous
+ * locale formats or rolled-over calendar dates affect budget accounting.
+ */
+export function recordedTime(value) {
+  if (typeof value !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value))
+    throw new GuardError("transaction timestamp must be an explicit UTC ISO-8601 instant");
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString().slice(0, 19) !== value.slice(0, 19))
+    throw new GuardError("transaction timestamp has an invalid calendar date");
+  return parsed;
+}
+
+/**
+ * Detect clock leaps while this bot process is running, even if the system
+ * wall clock changes sharply during an RPC call. A restart creates a new
+ * baseline; this is not an independent source of trusted chain time.
+ */
+export function makeClockGuard(wall = () => Date.now(), monotonic = () => process.hrtime.bigint(), toleranceMs = MAX_WALL_CLOCK_DRIFT_MS) {
+  const wall0 = wall(), mono0 = monotonic();
+  if (!Number.isSafeInteger(wall0) || typeof mono0 !== "bigint" || wall0 < 0)
+    throw new GuardError("cannot establish a valid monotonic clock baseline");
+  return () => {
+    const w = wall(), m = monotonic();
+    if (!Number.isSafeInteger(w) || typeof m !== "bigint" || m < mono0 ||
+        Math.abs(w - wall0 - Number((m - mono0) / 1_000_000n)) > toleranceMs)
+      throw new GuardError("system wall clock disagrees with monotonic time; refusing to trade until the clock is repaired and the bot is restarted");
+    return w;
+  };
+}
 
 /**
  * RULES: every contract call this program can sign, per leg. `value` is "zero" (no ETH may ride along), "size" (at most the
@@ -137,6 +249,8 @@ export const RULES = {
   ],
   regen: [{ chain: "base", to: ADDR.universalRouter, fn: "execute", value: "size", router: "buy" }],
   eco: [{ chain: "base", to: ADDR.universalRouter, fn: "execute", value: "size", router: "buy" }],
+  "eco-buy": [{ chain: "base", to: ADDR.universalRouter, fn: "execute", value: "size", router: "netbuy", token: ADDR.eco }],
+  "net-buy": [{ chain: "base", to: ADDR.universalRouter, fn: "execute", value: "size", router: "netbuy", token: ADDR.net }],
   circle: [{ chain: "base", to: ADDR.universalRouter, fn: "execute", value: "size", router: "trip" }],
   gmx: [
     { chain: "arbitrum", to: ADDR.arbitrumUsdc, fn: "approve", value: "zero", spender: ADDR.gmxRouter, maxAmount: MAX_GMX_USDC },
@@ -158,7 +272,7 @@ const eth = (wei) => `${formatEther(wei)} ETH`;
  * The gate every step passes before it is signed. Returns null when the step is on the list, or the reason it is refused.
  * Pure: no network, no key. `sizeWei` is the size you set for that leg (only read by "size" rules).
  */
-export function checkTx(leg, tx, { from, sizeWei = 0n, maxTxFeeWei }) {
+export function checkTx(leg, tx, { from, sizeWei = 0n, maxTxFeeWei, gmxIntent = null, hydrexVote = null, klimaIntent = null }) {
   const rules = RULES[leg];
   if (!rules) return `no rules for a leg named ${clean(leg, 20)}`;
   if (!tx || typeof tx !== "object") return "the kit printed no step";
@@ -176,26 +290,61 @@ export function checkTx(leg, tx, { from, sizeWei = 0n, maxTxFeeWei }) {
     if (value > sizeWei || value > MAX_LEG_ETH_WEI) return `the step spends ${eth(value)}, above the ${eth(sizeWei < MAX_LEG_ETH_WEI ? sizeWei : MAX_LEG_ETH_WEI)} this leg may spend`;
   }
   if (rule.value === "fee" && value > MAX_GMX_EXECUTION_FEE_WEI) return `the execution fee ${eth(value)} is above the cap ${eth(MAX_GMX_EXECUTION_FEE_WEI)}`;
-  const l1 = big(tx.l1FeeBoundWei ?? 0) ?? 0n;
-  const feeBound = gas * feePer + (l1 > 0n ? l1 : 0n);
+  const l1 = big(tx.l1FeeBoundWei ?? 0);
+  if (l1 === null || l1 < 0n) return "the Base data-fee bound is malformed or negative; refusing to underestimate gas";
+  const feeBound = gas * feePer + l1;
   if (feeBound > maxTxFeeWei) return `the step could cost ${eth(feeBound)} in fees, above your cap of ${eth(maxTxFeeWei)} for one transaction`;
   if (rule.fn === "approve") {
     let args; try { args = decodeFunctionData({ abi: ERC20, data: tx.data }).args; } catch { return "the approval does not decode"; }
     if (!same(args[0], rule.spender)) return `the approval names ${clean(args[0], 42)} as spender, not ${rule.spender}`;
     if (args[1] > rule.maxAmount) return `the approval covers ${args[1]} units, above the cap ${rule.maxAmount}`;
+    if (leg === "gmx" && gmxIntent && typeof gmxIntent === "object" && gmxIntent.action === "open" && args[1] !== gmxIntent.collateralUnits)
+      return "the GMX USDC approval must match the owner's exact collateral size";
+  }
+  if (rule.fn === "vote") {
+    if (!validVote(hydrexVote)) return "the Hydrex vote has no valid, explicit owner intent";
+    let args;
+    try { args = decodeFunctionData({ abi: VOTER_VOTE_ABI, data: tx.data }).args; }
+    catch { return "the Hydrex vote calldata does not decode"; }
+    const expected = hydrexVote.split(",").map((part) => {
+      const [pool, weight] = part.split(":");
+      return { pool, weight: BigInt(weight) };
+    });
+    if (args[0].length !== expected.length || args[1].length !== expected.length ||
+        expected.some((v, i) => !same(args[0][i], v.pool) || args[1][i] !== v.weight))
+      return "the Hydrex vote pools or weights differ from the exact selected vote";
   }
   if (rule.fn === "retireCreditViaKlima") {
     let args; try { args = decodeFunctionData({ abi: KLIMA_ABI, data: tx.data }).args; } catch { return "the Klima retirement does not decode"; }
     if (!same(args[4], ADDR.kvcm)) return "the Klima retirement must spend kVCM, not a different input token";
     if (args[6] <= 0n || args[6] > MAX_KVCM_APPROVE) return `the Klima retirement may spend ${args[6]} kVCM units, outside the cap of ${MAX_KVCM_APPROVE}`;
+    if (!klimaIntent) return "a Klima retirement needs an explicit owner-selected credit, class, quantity and beneficiary";
+    if (!same(args[0], klimaIntent.credit) || args[1] !== klimaIntent.tokenId || args[2] !== 0n ||
+        args[3] !== klimaIntent.tonnes || !same(args[5], klimaIntent.carbonClass) || args[7] !== 0n)
+      return "the Klima retirement credit, class, token ID or tonnes differs from the selected intent";
+    const details = args[8];
+    if (!details || !same(details.retiringAddress, from) || !same(details.beneficiaryAddress, from) ||
+        details.retiringEntityString !== klimaIntent.name || details.beneficiaryString !== klimaIntent.name ||
+        details.retirementMessage !== "" || details.beneficiaryLocation !== "" || details.consumptionCountryCode !== "" ||
+        details.consumptionPeriodStart !== 0n || details.consumptionPeriodEnd !== 0n)
+      return "the Klima retirement beneficiary or public onchain details differ from the selected owner";
   }
   if (rule.gmx) {
-    const why = checkGmxMulticall(tx.data, { from, value });
+    const why = checkGmxMulticall(tx.data, { from, value, gmxIntent });
     if (why) return why;
   }
-  if (rule.router) {
-    const why = checkRouterExecute(tx.data, { from, value, shape: rule.router });
+  if (rule.router === "netbuy") {
+    const why = checkNetBuy(tx.data, { from, value, token: rule.token });
     if (why) return why;
+  } else if (rule.router) {
+    const why = checkRouterExecute(tx.data, { from, value, shape: rule.router, feeBound });
+    if (why) return why;
+    if (rule.router === "buy") {
+      const expected = leg === "regen" ? ADDR.axlRegen : leg === "eco" ? ADDR.eco : null;
+      if (!expected) return "this buy leg has no independently pinned output token";
+      const pinned = checkPinnedOneWayBuy(tx.data, { from, value, expected });
+      if (pinned) return pinned;
+    }
   }
   return null;
 }
@@ -210,7 +359,7 @@ const hex2 = (n) => `0x${n.toString(16).padStart(2, "0")}`;
  * every place tokens come out is you, or the router on the way to you. A "buy" is exactly one v4 swap that settles the ETH it
  * carries and takes the token straight to you. A "trip" must end by sweeping ETH back to you.
  */
-function checkRouterExecute(data, { from, value, shape }) {
+function checkRouterExecute(data, { from, value, shape, feeBound = 0n }) {
   let commands, inputs;
   try { [commands, inputs] = decodeFunctionData({ abi: ROUTER_ABI, data }).args; } catch { return "the swap does not decode"; }
   const cmds = bytesOf(commands);
@@ -254,20 +403,228 @@ function checkRouterExecute(data, { from, value, shape }) {
       } else return `the swap holds a command that is not on the list (${hex2(c)})`;
     }
     if (shape === "trip") {
-      if (cmds[cmds.length - 1] !== ROUTER_CMD.SWEEP) return "a trip must end by sweeping ETH back to you";
-      const [token, recipient] = dec("address, address, uint256", inputs[inputs.length - 1]);
+      // A kit's free-text claim of "profit after gas" is not an authorization.
+      // The signed calldata itself must enforce input + worst-case signed gas.
+      const last = cmds.length - 1;
+      if (cmds[last] !== ROUTER_CMD.SWEEP) return "a trip must end by sweeping ETH back to you";
+      const [token, recipient, sweepFloor] = dec("address, address, uint256", inputs[last]);
       if (!same(token, ZERO) || !you(recipient)) return "a trip must end by sweeping ETH back to you";
+      if (value <= 0n) return "a trip must carry positive ETH into the route";
+      const wraps = cmds.map((c, i) => c === ROUTER_CMD.WRAP_ETH ? i : -1).filter((i) => i >= 0);
+      const unwraps = cmds.map((c, i) => c === ROUTER_CMD.UNWRAP_WETH ? i : -1).filter((i) => i >= 0);
+      const wrapped = wraps.length === 1 && wraps[0] === 0;
+      if (wraps.length > (wrapped ? 1 : 0)) return "a trip may wrap ETH exactly once at its start";
+      if (!cmds.some((c) => c === ROUTER_CMD.V3_SWAP_EXACT_IN || c === ROUTER_CMD.V4_SWAP)) return "a trip must include a real swap, not only a refund";
+      if (wrapped) {
+        const [r, amount] = dec("address, uint256", inputs[0]);
+        if (!same(r, ADDRESS_THIS) || amount !== value) return "a trip must wrap exactly its ETH for the router";
+        // This is the kit's sole early SWEEP: refund any ETH that was not wrapped.
+        if (cmds[1] !== ROUTER_CMD.SWEEP) return "a wrapped trip must carry the kit's one ETH refund immediately after wrapping";
+        const [refundToken, refundTo, refundFloor] = dec("address, address, uint256", inputs[1]);
+        if (!same(refundToken, ZERO) || !you(refundTo) || refundFloor !== 0n) return "the wrapped trip's early refund has unexpected currency, recipient or floor";
+      } else {
+        if (cmds[0] !== ROUTER_CMD.V4_SWAP) return "a native-ETH trip must begin with a v4 swap";
+        const [actions, params] = dec("bytes, bytes[]", inputs[0]);
+        const acts = bytesOf(actions), ix = acts.indexOf(V4_ACT.SETTLE);
+        if (ix < 0) return "a native-ETH trip has no initial ETH settlement";
+        const [currency, amount, payer] = dec("address, uint256, bool", params[ix]);
+        if (!same(currency, ZERO) || amount !== value || payer) return "a native-ETH trip must settle exactly its ETH without pulling from the wallet";
+      }
+      if (unwraps.length > 1 || (unwraps.length === 1 && unwraps[0] !== last - 1)) return "a trip's ETH unwrap must be immediately before its final refund";
+      for (let i = 0; i < last; i++) {
+        if (cmds[i] === ROUTER_CMD.SWEEP && !(wrapped && i === 1)) return "a trip contains an extra early sweep";
+      }
+      const floor = unwraps.length
+        ? dec("address, uint256", inputs[last - 1])[1]
+        : sweepFloor;
+      if (unwraps.length && sweepFloor !== 0n) return "a WETH-ending trip's last ETH refund must have zero floor";
+      if (floor < value + feeBound) return "the trip's onchain minimum ETH return does not cover the input and signed gas fee";
     }
   } catch { return "the swap holds an input that does not decode"; }
   return null;
 }
 
-/** A GMX order is one multicall: the execution fee and the collateral go to GMX's order vault only, and what comes back comes to you. */
-function checkGmxMulticall(data, { from, value }) {
+/** Authorize the exact single-pool direct ETH buy, independently of the kit response text. */
+function checkPinnedOneWayBuy(data, { from, value, expected }) {
+  let args;
+  try { args = decodeFunctionData({ abi: ROUTER_ABI, data }).args; }
+  catch { return "the direct buy router calldata does not decode"; }
+  const [commands, inputs] = args;
+  if (cmdsKey(bytesOf(commands)) !== cmdsKey([ROUTER_CMD.V4_SWAP]) || inputs.length !== 1)
+    return "the direct buy must contain exactly one v4 swap";
+  try {
+    const [actions, params] = dec("bytes, bytes[]", inputs[0]);
+    if (cmdsKey(bytesOf(actions)) !== cmdsKey([V4_ACT.SETTLE, V4_ACT.SWAP_EXACT_IN, V4_ACT.TAKE]) || params.length !== 3)
+      return "the direct buy action sequence is not the pinned kit shape";
+    const [settleCurrency, amount, payer] = dec("address, uint256, bool", params[0]);
+    const [currency, hops, amountIn, minOut] = dec("(address, (address, uint24, int24, address, bytes)[], uint128, uint128)", params[1])[0];
+    const [takeCurrency, recipient, takeAmount] = dec("address, address, uint256", params[2]);
+    if (!same(settleCurrency, ZERO) || !same(currency, ZERO) || amount !== value || payer || amountIn !== 0n)
+      return "the direct buy must use exactly its native ETH and no wallet token";
+    if (!Array.isArray(hops) || hops.length !== 1)
+      return "the direct buy must use exactly one pinned pool";
+    const [tokenOut, fee, spacing, hook, hookData] = hops[0];
+    if (!same(tokenOut, expected) || Number(fee) !== 10000 || Number(spacing) !== 200 ||
+        !same(hook, ZERO) || hookData !== "0x")
+      return "the direct buy pool or output token differs from its pinned route";
+    if (!same(takeCurrency, expected) || !(same(recipient, from) || same(recipient, MSG_SENDER)) || takeAmount !== 0n)
+      return "the direct buy take does not pay its exact output token to the owner";
+    if (minOut <= 0n) return "the direct buy must enforce a positive onchain minimum output";
+  } catch { return "the direct buy has malformed inner calldata"; }
+  return null;
+}
+/**
+ * The gate for the NET circle kit's one-way BUY (`net-circle buy`): ETH in, one named token out, to you. The call is an optional
+ * WRAP_ETH, then one or more swaps (v4 or v3), then ONE sweep of that token to you with a floor above zero, last. The first
+ * swap spends exactly the ETH the step carries (a wrap of exactly that and a settle of exactly that, or a native settle of
+ * exactly that); every later hop spends the router's balance; every intermediate output stays in the router; nothing is
+ * pulled from your wallet. So the step either leaves you holding at least the floor of the leg's token, or reverts.
+ */
+function checkNetBuy(data, { from, value, token }) {
+  let commands, inputs;
+  try { [commands, inputs] = decodeFunctionData({ abi: ROUTER_ABI, data }).args; } catch { return "the buy does not decode"; }
+  const cmds = bytesOf(commands);
+  if (cmds.length < 2 || cmds.length !== inputs.length || cmds.length > 8) return "the buy's commands and inputs do not line up";
+  const last = cmds.length - 1;
+  try {
+    if (cmds[last] !== ROUTER_CMD.SWEEP) return "a buy must end by sweeping the token to you";
+    const [sweepToken, sweepTo, floor] = dec("address, address, uint256", inputs[last]);
+    if (!same(sweepToken, token)) return "the buy must end in the token this leg buys";
+    if (!same(sweepTo, from) && !same(sweepTo, MSG_SENDER)) return "the buy sweeps to an address that is not yours";
+    if (!(floor > 0n)) return "the buy has no floor: it must revert unless some of the token arrives";
+    let wrapped = false, swaps = 0;
+    for (let i = 0; i < last; i++) {
+      const c = cmds[i], input = inputs[i];
+      if (c === ROUTER_CMD.WRAP_ETH) {
+        if (i !== 0) return "a buy wraps ETH only at its start";
+        const [recipient, amount] = dec("address, uint256", input);
+        if (!same(recipient, ADDRESS_THIS)) return "the buy wraps ETH for an address that is not the router";
+        if (amount !== value) return "a buy must wrap exactly the ETH the step carries";
+        wrapped = true;
+      } else if (c === ROUTER_CMD.V4_SWAP) {
+        const first = swaps === 0;
+        swaps += 1;
+        const [actions, params] = dec("bytes, bytes[]", input);
+        if (cmdsKey(bytesOf(actions)) !== cmdsKey([V4_ACT.SETTLE, V4_ACT.SWAP_EXACT_IN, V4_ACT.TAKE]) || params.length !== 3) return "a buy's v4 swap must be exactly settle, swap, take";
+        const [currency, amount, payerIsUser] = dec("address, uint256, bool", params[0]);
+        if (payerIsUser) return "the swap would pull a token from your wallet";
+        if (first) {
+          if (wrapped === same(currency, ZERO)) return "the first swap of a buy must spend what the step started with (the wrapped ETH, or the native ETH when nothing is wrapped)";
+          if (amount !== value) return "a buy must spend exactly the ETH the step carries";
+        } else if (amount !== CONTRACT_BALANCE) return "a later hop of a buy must spend the router's balance, nothing else";
+        const [, recipient] = dec("address, address, uint256", params[2]);
+        if (!same(recipient, ADDRESS_THIS)) return "a buy's hop must pay out to the router, so the one sweep at the end is the only payout";
+      } else if (c === ROUTER_CMD.V3_SWAP_EXACT_IN) {
+        const first = swaps === 0;
+        swaps += 1;
+        const [recipient, amount, , , payerIsUser] = dec("address, uint256, uint256, bytes, bool", input);
+        if (payerIsUser) return "the swap would pull a token from your wallet";
+        if (!same(recipient, ADDRESS_THIS)) return "a buy's hop must pay out to the router, so the one sweep at the end is the only payout";
+        if (first) {
+          if (!wrapped) return "a v3 swap cannot spend native ETH: a buy that starts with one must wrap first";
+          if (amount !== value) return "a buy must spend exactly the ETH the step carries";
+        } else if (amount !== CONTRACT_BALANCE) return "a later hop of a buy must spend the router's balance, nothing else";
+      } else return `the buy holds a command that is not on the list (${hex2(c)})`;
+    }
+    if (swaps === 0) return "a buy must hold a swap that spends the ETH";
+    // Do not trust a kit's route label or the final SWEEP alone. Decode the actual swap
+    // currencies, pool fees and hook addresses, and require a known ETH-to-token route.
+    const routeWhy = checkNetBuyRoute(cmds, inputs, { wrapped, token });
+    if (routeWhy) return routeWhy;
+  } catch { return "the buy holds an input that does not decode"; }
+  return null;
+}
+const cmdsKey = (list) => list.join(",");
+
+/**
+ * Independently validate what each swap really trades, not merely what its final
+ * SWEEP asks to withdraw. The coin pool key is pinned to ECO's registered Zora
+ * pool; an arbitrary hook or fee is NOT a permitted replacement.
+ */
+const BUY_WETH = "0x4200000000000000000000000000000000000006";
+const BUY_ZORA = "0x1111111111166b7FE7bd91427724B487980aFc69";
+const BUY_ZORA_HOOK = "0xd61A675F8a0c67A73DC3B54FB7318B4D91409040";
+const BUY_EDGES = [
+  { from: ZERO, to: ADDR.net, v: 4, fee: 100, tick: 1, hook: ZERO },
+  { from: BUY_WETH, to: ADDR.net, v: 4, fee: 100, tick: 1, hook: ZERO },
+  { from: ZERO, to: ADDR.eco, v: 4, fee: 10000, tick: 200, hook: ZERO },
+  { from: ADDR.net, to: ADDR.eco, v: 4, fee: 100, tick: 1, hook: ZERO },
+  { from: BUY_WETH, to: BUY_ZORA, v: 3, fee: 3000 },
+  { from: BUY_ZORA, to: ADDR.eco, v: 4, fee: 30000, tick: 200, hook: BUY_ZORA_HOOK },
+];
+const buyPath = (...a) => a.map((v) => v.toLowerCase()).join(">");
+const BUY_PATHS = {
+  [ADDR.net.toLowerCase()]: [
+    buyPath(ZERO, ADDR.net), buyPath(BUY_WETH, ADDR.net),
+  ],
+  [ADDR.eco.toLowerCase()]: [
+    buyPath(ZERO, ADDR.eco), buyPath(ZERO, ADDR.net, ADDR.eco),
+    buyPath(BUY_WETH, ADDR.net, ADDR.eco), buyPath(BUY_WETH, BUY_ZORA, ADDR.eco),
+  ],
+};
+const buyEdge = (v, from, to, fee, tick, hook) => BUY_EDGES.some((e) =>
+  e.v === v && same(e.from, from) && same(e.to, to) && e.fee === Number(fee)
+  && (v === 3 || (e.tick === Number(tick) && same(e.hook, hook))));
+
+/** A v3 path is 20-byte token, then (3-byte fee + 20-byte token) per hop. */
+function decodeBuyV3Path(packed) {
+  if (typeof packed !== "string" || !/^0x[0-9a-fA-F]+$/.test(packed)) return null;
+  const h = packed.slice(2);
+  if (h.length < 86 || (h.length - 40) % 46 !== 0) return null;
+  const tokens = [`0x${h.slice(0, 40)}`], fees = [];
+  for (let i = 40; i < h.length; i += 46) {
+    fees.push(parseInt(h.slice(i, i + 6), 16));
+    tokens.push(`0x${h.slice(i + 6, i + 46)}`);
+  }
+  return { tokens, fees };
+}
+
+function checkNetBuyRoute(cmds, inputs, { wrapped, token }) {
+  const path = [wrapped ? BUY_WETH : ZERO];
+  let current = path[0];
+  for (let i = wrapped ? 1 : 0; i < cmds.length - 1; i++) {
+    if (cmds[i] === ROUTER_CMD.V4_SWAP) {
+      const [actions, params] = dec("bytes, bytes[]", inputs[i]);
+      if (cmdsKey(bytesOf(actions)) !== cmdsKey([V4_ACT.SETTLE, V4_ACT.SWAP_EXACT_IN, V4_ACT.TAKE]) || params.length !== 3) return "the buy's v4 actions changed";
+      const [settled] = dec("address, uint256, bool", params[0]);
+      const [exactIn, hops, amountIn, minOut] = dec("(address, (address, uint24, int24, address, bytes)[], uint128, uint128)", params[1])[0];
+      const [taken, , takeAmount] = dec("address, address, uint256", params[2]);
+      if (!same(settled, current) || !same(exactIn, current)) return "the buy's swap spends a different input token than the preceding hop produced";
+      if (!Array.isArray(hops) || !hops.length || hops.length > 2 || amountIn !== 0n || minOut !== 0n) return "the buy's v4 swap is not the kit's exact-input shape";
+      for (const [out, fee, tick, hook, hookData] of hops) {
+        if (hookData !== "0x" || !buyEdge(4, current, out, fee, tick, hook)) return "the buy's v4 pool, fee or hook is not on the permitted routes";
+        current = out;
+        path.push(current);
+      }
+      if (!same(taken, current) || takeAmount !== 0n) return "the buy's v4 take currency or amount does not match its swap output";
+    } else if (cmds[i] === ROUTER_CMD.V3_SWAP_EXACT_IN) {
+      const [, , minOut, packed] = dec("address, uint256, uint256, bytes, bool", inputs[i]);
+      const p = decodeBuyV3Path(packed);
+      if (!p || !same(p.tokens[0], current) || minOut !== 0n) return "the buy's v3 path does not begin in the token it holds";
+      for (let j = 0; j < p.fees.length; j++) {
+        if (!buyEdge(3, current, p.tokens[j + 1], p.fees[j])) return "the buy's v3 pool or fee is not on the permitted routes";
+        current = p.tokens[j + 1];
+        path.push(current);
+      }
+    } else return "the buy has an unexpected command in its route";
+  }
+  if (!same(current, token) || !BUY_PATHS[token.toLowerCase()]?.includes(buyPath(...path))) return "the buy's decoded token path is not one of the permitted routes for this token";
+  return null;
+}
+
+/**
+ * An exact GMX starter order: the wallet chooses a market and direction, but the
+ * unsigned kit must not change a market order into another order type, add a
+ * withdrawal/receiver, silently increase leverage or spend more collateral.
+ * This checks calldata, not the kit's free-text summary.
+ */
+function checkGmxMulticall(data, { from, value, gmxIntent }) {
   let calls; try { calls = decodeFunctionData({ abi: GMX_ABI, data }).args[0]; } catch { return "the GMX multicall does not decode"; }
-  let orders = 0, fee = 0n, collateral = 0n;
+  let fee = 0n, collateral = 0n, order = null;
+  const names = [];
   for (const inner of calls) {
     let d; try { d = decodeFunctionData({ abi: GMX_ABI, data: inner }); } catch { return "the GMX multicall holds a call that is not on the list"; }
+    names.push(d.functionName);
     if (d.functionName === "sendWnt") {
       if (!same(d.args[0], ADDR.gmxOrderVault)) return "the execution fee goes somewhere other than GMX's order vault";
       fee += d.args[1];
@@ -276,17 +633,51 @@ function checkGmxMulticall(data, { from, value }) {
       collateral += d.args[2];
       if (collateral > MAX_GMX_USDC) return `the total collateral ${collateral} units is above the cap ${MAX_GMX_USDC}`;
     } else if (d.functionName === "createOrder") {
-      orders += 1;
-      const a = d.args[0].addresses;
+      if (order) return "the GMX multicall must hold exactly one order";
+      order = d.args[0];
+      const a = order.addresses;
       if (!same(a.receiver, from)) return "the order pays out to an address that is not yours";
       if (!same(a.cancellationReceiver, ZERO) && !same(a.cancellationReceiver, from)) return "the order's cancellation refund goes to an address that is not yours";
       if (!same(a.callbackContract, ZERO) || !same(a.uiFeeReceiver, ZERO)) return "the order names a callback or a fee receiver";
       if (!same(a.initialCollateralToken, ADDR.arbitrumUsdc) || a.swapPath.length !== 0) return "the order's collateral is not plain USDC";
+      if (!isAddress(a.market) || same(a.market, ZERO)) return "the GMX order has no valid market address";
     } else return "the GMX multicall holds a call that is not on the list";
   }
-  // Every wei the step carries must go to the order vault as the fee: ETH left in GMX's router can be swept by anyone.
-  if (fee !== value) return "the execution fee inside the order is not exactly the ETH the step carries";
-  return orders === 1 ? null : "the GMX multicall must hold exactly one order";
+  if (!order) return "the GMX multicall must hold exactly one order";
+  if (calls.length < 2 || calls.length > 3) return "the GMX multicall must hold one exact market order";
+  // Every wei the step carries must go to the order vault as the fee; no fee can sit in the router.
+  if (fee !== value || fee !== order.numbers.executionFee || fee <= 0n) return "the execution fee inside the order is not exactly the ETH the step carries";
+  const isOpen = order.orderType === 2; // GMX MarketIncrease
+  const isClose = order.orderType === 4; // GMX MarketDecrease
+  if (!isOpen && !isClose) return "the GMX order type must be market increase or market decrease";
+  if (gmxIntent) {
+    const intentAction = typeof gmxIntent === "string" ? gmxIntent : gmxIntent.action;
+    if (intentAction !== (isOpen ? "open" : "close")) return "the GMX order type does not match the bot's open or close action";
+    if (typeof gmxIntent === "object") {
+      if (!gmxIntent.market || !same(order.addresses.market, gmxIntent.market)) return "the GMX order market does not match the owner's selected market";
+      if (order.isLong !== gmxIntent.isLong) return "the GMX order direction does not match the owner's selected side";
+    }
+  }
+  if (names.join(",") !== (isOpen ? "sendWnt,sendTokens,createOrder" : "sendWnt,createOrder")) return "the GMX order calls are not in the kit's exact fee, collateral, order sequence";
+  const n = order.numbers;
+  if (n.triggerPrice !== 0n || n.acceptablePrice <= 0n || n.callbackGasLimit !== 0n || n.minOutputAmount !== 0n || n.validFromTime !== 0n) return "the GMX order has unexpected trigger, price or callback settings";
+  if (order.shouldUnwrapNativeToken || order.autoCancel || order.referralCode !== `0x${"00".repeat(32)}` || order.dataList.length !== 0) return "the GMX order has non-starter flags, referral or data";
+  if (order.decreasePositionSwapType !== (isOpen ? 0 : 1)) return "the GMX order has an unexpected decrease swap setting";
+  if (!(n.sizeDeltaUsd > 0n)) return "the GMX order size must be positive";
+  if (isOpen) {
+    if (collateral <= 0n || n.initialCollateralDeltaAmount !== collateral) return "the GMX open order's USDC collateral does not match what was sent to the vault";
+    // The kit's exact scale: USDC 6 decimals * leverage tenths * 1e23 => GMX USD 30 decimals.
+    const baseUsd = collateral * 10n ** 23n;
+    if (n.sizeDeltaUsd < baseUsd * 10n || n.sizeDeltaUsd > baseUsd * 100n) return "the GMX open order's size implies leverage outside 1x to 10x";
+    if (gmxIntent && typeof gmxIntent === "object") {
+      if (collateral !== gmxIntent.collateralUnits) return "the GMX order collateral does not match the owner's selected USDC";
+      if (n.sizeDeltaUsd !== collateral * gmxIntent.leverageTenths * 10n ** 23n) return "the GMX order leverage does not match the owner's selected leverage";
+    }
+  } else {
+    if (collateral !== 0n || n.initialCollateralDeltaAmount !== 0n) return "the GMX close order must send no new USDC collateral";
+    if (gmxIntent && typeof gmxIntent === "object" && n.sizeDeltaUsd !== gmxIntent.closeSizeUsd) return "the GMX close order size does not match the owner's live position";
+  }
+  return null;
 }
 
 // ---- the key: read on this machine only, never printed ---------------------------------------------------------------
@@ -297,7 +688,8 @@ const validKey = (k) => KEY_RE.test(k) && BigInt(k) > 0n && BigInt(k) < CURVE_N;
 /** Read a key file. Refused unless it is a plain file that only its owner can read. The key never leaves this function's caller. */
 export function loadAccount(keyFile) {
   let st; try { st = fs.lstatSync(keyFile); } catch { throw new ArgError(`no key file at ${keyFile}: run \`node bot.mjs wallet\` to make one, or pass --key-file`); }
-  if (!st.isFile()) throw new ArgError(`${keyFile} is not a plain file`);
+  if (!st.isFile() || st.nlink !== 1 || (typeof process.getuid === "function" && st.uid !== process.getuid()))
+    throw new ArgError(`${keyFile} must be an owner-held regular file with exactly one hardlink`);
   if (process.platform !== "win32" && (st.mode & 0o077) !== 0) throw new ArgError(`${keyFile} can be read by other users of this machine: run chmod 600 on it first`);
   const key = fs.readFileSync(keyFile, "utf8").trim();
   if (!validKey(key)) throw new ArgError(`${keyFile} does not hold one private key (0x and 64 hex characters)`);
@@ -306,9 +698,21 @@ export function loadAccount(keyFile) {
 /** Make the bot's own wallet. Never overwrites a key file. Returns the address only. */
 export function makeWallet(keyFile) {
   if (fs.existsSync(keyFile)) return { address: loadAccount(keyFile).address, made: false };
-  fs.mkdirSync(path.dirname(keyFile), { recursive: true, mode: 0o700 });
+  const keyDir = path.dirname(keyFile);
+  const previouslyExisted = fs.existsSync(keyDir);
+  fs.mkdirSync(keyDir, { recursive: true, mode: 0o700 });
+  const st = fs.lstatSync(keyDir);
+  if (!st.isDirectory() || st.isSymbolicLink() ||
+      (process.platform !== "win32" && (st.mode & 0o077) !== 0) ||
+      (typeof process.getuid === "function" && st.uid !== process.getuid()))
+    throw new ArgError("key directory must be a private, owner-held real directory (mode 700)");
+  if (!previouslyExisted) syncDirectory(path.dirname(keyDir));
   let key; do { key = `0x${randomBytes(32).toString("hex")}`; } while (!validKey(key));
-  fs.writeFileSync(keyFile, `${key}\n`, { mode: 0o600, flag: "wx" });
+  const fd = fs.openSync(keyFile, "wx", 0o600);
+  try { fs.writeFileSync(fd, `${key}\n`); fs.fsyncSync(fd); }
+  finally { fs.closeSync(fd); }
+  // Report the new wallet address only after the key filename is durable.
+  syncDirectory(keyDir);
   return { address: privateKeyToAccount(key).address, made: true };
 }
 
@@ -332,91 +736,500 @@ export function runKit(file, args, rpcs) {
 }
 
 // ---- sending: your key, your node, one transaction at a time ---------------------------------------------------------
+/**
+ * Only a finalized receipt of the EXACT hash we sent can free the durable
+ * pending barrier. RPC disagreement, a replacement, missing finalized block,
+ * or a reorg leaves it unresolved. Never infer success from a 1-block receipt.
+ */
+export async function finalizedReceiptStatus(pub, receipt, expectedHash) {
+  if (!receipt || !same(receipt.transactionHash, expectedHash) ||
+      typeof receipt.blockNumber !== "bigint" || !isAddressHash(receipt.blockHash)) return null;
+  if (receipt.status !== "success" && receipt.status !== "reverted") return null;
+  const finalized = await pub.getBlock({ blockTag: "finalized" });
+  if (!finalized || typeof finalized.number !== "bigint" || finalized.number < receipt.blockNumber) return null;
+  const canonical = await pub.getBlock({ blockNumber: receipt.blockNumber });
+  if (!canonical || !same(canonical.hash, receipt.blockHash)) return null;
+  return receipt.status === "success";
+}
+const isAddressHash = (h) => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
+/** Reject a nonce already occupied by another in-flight transaction. */
+export function assertUncontendedNonce(confirmed, pending, expected = null) {
+  if (!Number.isSafeInteger(confirmed) || confirmed < 0 ||
+      !Number.isSafeInteger(pending) || pending < 0 || pending !== confirmed)
+    throw new GuardError("wallet has an unconfirmed transaction or inconsistent nonce responses; stop rather than replace it");
+  if (expected !== null && (!Number.isSafeInteger(expected) || expected !== pending))
+    throw new GuardError("wallet nonce changed since local signing; do not broadcast an outdated transaction");
+  return pending;
+}
 export function makeChainIo(account, rpcs) {
   const made = {};
   const of = (chain) => (made[chain] ??= {
     pub: createPublicClient({ chain: CHAINS[chain].viem, transport: http(rpcs[chain]) }),
-    wallet: account ? createWalletClient({ account, chain: CHAINS[chain].viem, transport: http(rpcs[chain]) }) : null,
   });
   return {
-    async send(chain, tx) {
+    async chainTime(chain) {
       const c = of(chain);
       if ((await c.pub.getChainId()) !== CHAINS[chain].id) throw new GuardError(`your ${chain} node is on another chain`);
-      return c.wallet.sendTransaction({ to: tx.to, data: tx.data, value: BigInt(tx.value ?? 0), gas: BigInt(tx.gas), maxFeePerGas: BigInt(tx.maxFeePerGas), maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas) });
+      const block = await c.pub.getBlock({ blockTag: "latest" });
+      if (typeof block?.timestamp !== "bigint" || block.timestamp <= 0n)
+        throw new GuardError(`the ${chain} node returned an invalid block timestamp`);
+      const ms = block.timestamp * 1000n;
+      if (ms > BigInt(Number.MAX_SAFE_INTEGER)) throw new GuardError("chain timestamp exceeds safe JavaScript time");
+      return Number(ms);
     },
+    /** Sign a fixed EIP-1559 transaction LOCALLY. Do not contact a broadcast RPC. */
+    async prepare(chain, tx) {
+      if (!account?.signTransaction) throw new GuardError("a local account is required to prepare a raw transaction");
+      const pub = of(chain).pub;
+      if ((await pub.getChainId()) !== CHAINS[chain].id) throw new GuardError(`your ${chain} node is on another chain`);
+      const [confirmed, pending] = await Promise.all([
+        pub.getTransactionCount({ address: account.address, blockTag: "latest" }),
+        pub.getTransactionCount({ address: account.address, blockTag: "pending" }),
+      ]);
+      const nonce = assertUncontendedNonce(confirmed, pending);
+      const raw = await account.signTransaction({
+        type: "eip1559", chainId: CHAINS[chain].id, nonce, to: tx.to, data: tx.data,
+        value: BigInt(tx.value ?? 0), gas: BigInt(tx.gas),
+        maxFeePerGas: BigInt(tx.maxFeePerGas), maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas),
+      });
+      if (typeof raw !== "string" || !/^0x02(?:[0-9a-fA-F]{2})+$/.test(raw) || raw.length > 262_146)
+        throw new GuardError("the local signer returned an invalid or oversized EIP-1559 transaction");
+      return { hash: keccak256(raw), raw, nonce };
+    },
+    /** Broadcast EXACTLY the signed bytes already fsynced in pending state. */
+    async broadcast(chain, serializedTransaction) {
+      const pub = of(chain).pub;
+      if ((await pub.getChainId()) !== CHAINS[chain].id) throw new GuardError(`your ${chain} node is on another chain`);
+      const intent = parseTransaction(serializedTransaction);
+      if (intent.type !== "eip1559" || intent.chainId !== CHAINS[chain].id ||
+          !Number.isSafeInteger(intent.nonce) || !account)
+        throw new GuardError("cannot broadcast a malformed or foreign-chain signed transaction");
+      const [confirmed, pending] = await Promise.all([
+        pub.getTransactionCount({ address: account.address, blockTag: "latest" }),
+        pub.getTransactionCount({ address: account.address, blockTag: "pending" }),
+      ]);
+      assertUncontendedNonce(confirmed, pending, intent.nonce);
+      return pub.sendRawTransaction({ serializedTransaction });
+    },
+    async send() { throw new GuardError("direct send is disabled; prepare, journal, then broadcast signed bytes"); },
+    /**
+     * true / false: the exact hash is in a FINALIZED canonical block and succeeded / reverted.
+     * null: it is included but not final yet (a chain's finalized block trails the first receipt by minutes),
+     * or it was replaced or cannot be confirmed. That is not a failure and not a rule refusal: pending stays
+     * locked, nothing more is sent, and the next pass asks again through `seen`.
+     */
     async wait(chain, hash) {
-      const r = await of(chain).pub.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS });
-      return r.status === "success";
+      const pub = of(chain).pub;
+      const receipt = await pub.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS });
+      return finalizedReceiptStatus(pub, receipt, hash);
     },
-    /** true landed, false reverted, null not seen yet. */
+    /** Finalized success/revert only. Null means unknown, replaced or not finalized. */
     async seen(chain, hash) {
-      try { const r = await of(chain).pub.getTransactionReceipt({ hash }); return r.status === "success"; } catch { return null; }
+      try {
+        const pub = of(chain).pub;
+        const receipt = await pub.getTransactionReceipt({ hash });
+        return await finalizedReceiptStatus(pub, receipt, hash);
+      } catch { return null; }
     },
   };
 }
 
 // ---- the home folder: state, the ledger of everything sent, the stop file -------------------------------------------
-const readJson = (file, fallback) => { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; } };
+const readJson = (file, fallback) => {
+  let raw;
+  try { raw = fs.readFileSync(file, "utf8"); }
+  catch (e) {
+    if (e?.code === "ENOENT") return fallback;
+    throw new GuardError(`cannot read bot state at ${file}; refusing to reset risk records`);
+  }
+  try { return JSON.parse(raw); }
+  catch { throw new GuardError(`bot state at ${file} is malformed; refusing to reset risk records`); }
+};
+/** A filename is not durable until the containing directory is flushed. */
+/** A read-only stable digest for exporting audit evidence without exposing saved signed bytes. */
+export async function hashLocalFile(file) {
+  const digest = createHash("sha256");
+  const stream = fs.createReadStream(file);
+  for await (const chunk of stream) digest.update(chunk);
+  return digest.digest("hex");
+}
+export function syncDirectory(directory) {
+  if (process.platform === "win32")
+    throw new GuardError("this local-file durability implementation requires POSIX directory fsync; live use on Windows is not supported");
+  let fd;
+  try {
+    fd = fs.openSync(directory, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY);
+    fs.fsyncSync(fd);
+  } catch (e) {
+    throw new GuardError(`cannot durably sync directory ${directory}: ${clean(e?.message ?? e, 120)}`);
+  } finally { if (fd !== undefined) fs.closeSync(fd); }
+}
+/** Keep a corrupt or years-long ledger from exhausting memory during validation. */
+export const MAX_LEDGER_BYTES = 64 * 1024 * 1024;
+const MAX_JOURNAL_ROW_BYTES = 64 * 1024;
+export function scanJournalFile(file, consume) {
+  const fd = fs.openSync(file, "r");
+  const block = Buffer.allocUnsafe(64 * 1024);
+  let pending = Buffer.alloc(0), total = 0, rowNumber = 0;
+  try {
+    for (;;) {
+      const read = fs.readSync(fd, block, 0, block.length, null);
+      if (read === 0) break;
+      total += read;
+      if (total > MAX_LEDGER_BYTES) throw new GuardError("ledger exceeds bounded validation capacity; audited archival is required before further trading");
+      let from = 0;
+      for (let i = 0; i < read; i++) {
+        if (block[i] !== 10) continue;
+        const piece = block.subarray(from, i);
+        if (pending.length + piece.length > MAX_JOURNAL_ROW_BYTES)
+          throw new GuardError("an oversized journal row cannot be verified safely");
+        const row = pending.length ? Buffer.concat([pending, piece]) : piece;
+        if (row.length) consume(row.toString("utf8"), rowNumber);
+        rowNumber++;
+        pending = Buffer.alloc(0);
+        from = i + 1;
+      }
+      const rest = block.subarray(from, read);
+      if (pending.length + rest.length > MAX_JOURNAL_ROW_BYTES)
+        throw new GuardError("an oversized journal row cannot be verified safely");
+      pending = pending.length ? Buffer.concat([pending, rest]) : Buffer.from(rest);
+    }
+    if (pending.length) consume(pending.toString("utf8"), rowNumber);
+  } finally { fs.closeSync(fd); }
+}
+/** Reject redirected special files before they reach a signer or spending ledger. */
+function assertLocalRegularFile(file) {
+  let st;
+  try { st = fs.lstatSync(file); }
+  catch (e) { if (e?.code === "ENOENT") return; throw e; }
+  if (!st.isFile() || st.isSymbolicLink() || st.nlink !== 1 ||
+      (typeof process.getuid === "function" && st.uid !== process.getuid()))
+    throw new GuardError(`bot state or ledger is not a private regular file: ${file}`);
+}
 export function openHome(home) {
+  const alreadyExists = fs.existsSync(home);
   fs.mkdirSync(home, { recursive: true, mode: 0o700 });
+  const homeStat = fs.lstatSync(home);
+  if (!homeStat.isDirectory() || homeStat.isSymbolicLink() ||
+      (process.platform !== "win32" && (homeStat.mode & 0o077) !== 0) ||
+      (typeof process.getuid === "function" && homeStat.uid !== process.getuid()))
+    throw new GuardError("bot home must be a private real directory owned by the running user (chmod 700; no symlinks)");
+  if (!alreadyExists) syncDirectory(path.dirname(home));
   const files = { state: path.join(home, "state.json"), ledger: path.join(home, "ledger.jsonl"), stop: path.join(home, "STOP"), lock: path.join(home, "lock") };
+  const lockNonce = randomBytes(16).toString("hex");
+  let ownsLock = false;
   return {
     files,
     stopped: () => fs.existsSync(files.stop),
-    state: () => readJson(files.state, {}),
-    save(state) { const tmp = `${files.state}.tmp`; fs.writeFileSync(tmp, JSON.stringify(state, null, 2), { mode: 0o600 }); fs.renameSync(tmp, files.state); },
-    record(row) { fs.appendFileSync(files.ledger, `${JSON.stringify(row)}\n`, { mode: 0o600 }); },
+    state() {
+      assertLocalRegularFile(files.state);
+      assertLocalRegularFile(files.ledger);
+      if (!fs.existsSync(files.state) && fs.existsSync(files.ledger) && fs.statSync(files.ledger).size > 0)
+        throw new GuardError("bot state is missing but a transaction ledger exists; restore or reconcile before sending");
+      const state = readJson(files.state, {});
+      if (state && state.schemaVersion !== undefined && state.schemaVersion !== STORAGE_SCHEMA_VERSION)
+        throw new GuardError("unknown bot state format version; explicit reviewed migration is required");
+      if (!state || typeof state !== "object" || Array.isArray(state))
+        throw new GuardError("bot state is not an object; refusing to forget pending transactions");
+      if (state.compaction)
+        throw new GuardError("journal rotation was interrupted; no trading until the archive is recovered under the exclusive lock");
+      if (state.ledgerExpected === true && !fs.existsSync(files.ledger))
+        throw new GuardError("the bot's transaction ledger is missing (lost, or its first reservation write failed); refusing to reset previously reserved spending. Nothing is sent until the owner reconciles it");
+      if (state.pending?.signedRaw) {
+        const pending = state.pending;
+        if (typeof pending.hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(pending.hash) ||
+            typeof pending.signedRaw !== "string" ||
+            !/^0x02(?:[0-9a-fA-F]{2})+$/.test(pending.signedRaw) ||
+            keccak256(pending.signedRaw).toLowerCase() !== pending.hash.toLowerCase() ||
+            typeof pending.nonce !== "string" || !/^(0|[1-9]\d*)$/.test(pending.nonce))
+          throw new GuardError("the pending signed transaction no longer matches its exact hash and nonce");
+      }
+      return state;
+    },
+    save(state) {
+      if (!state || typeof state !== "object" || Array.isArray(state) ||
+          (state.schemaVersion !== undefined && state.schemaVersion !== STORAGE_SCHEMA_VERSION))
+        throw new GuardError("cannot save an unknown bot state schema");
+      const versioned = { ...state, schemaVersion: STORAGE_SCHEMA_VERSION };
+      // A unique exclusive tmp avoids following a pre-planted state.tmp symlink.
+      const tmp = `${files.state}.${randomBytes(16).toString("hex")}.tmp`;
+      const fd = fs.openSync(tmp, "wx", 0o600);
+      try { fs.writeFileSync(fd, JSON.stringify(versioned, null, 2)); fs.fsyncSync(fd); }
+      finally { fs.closeSync(fd); }
+      fs.renameSync(tmp, files.state);
+      syncDirectory(home); // the renamed state file must survive a power loss before any send
+    },
+    /**
+     * The accounting home is permanently paired to one signer. A historic
+     * journal with no identity metadata is untrusted until manually migrated.
+     */
+    bindWallet(address) {
+      if (!isAddress(String(address ?? ""))) throw new GuardError("a live bot needs one valid wallet address");
+      const state = this.state();
+      if (state.walletAddress) {
+        if (!same(state.walletAddress, address))
+          throw new GuardError("the bot home is bound to a different wallet; use the original signer or a fresh home");
+        return;
+      }
+      if (fs.existsSync(files.ledger) && fs.statSync(files.ledger).size > 0)
+        throw new GuardError("a legacy ledger exists without a wallet identity; reconcile it before signing");
+      state.walletAddress = address;
+      this.save(state);
+    },
+    record(row) {
+      assertLocalRegularFile(files.ledger);
+      const newFile = !fs.existsSync(files.ledger);
+      const fd = fs.openSync(files.ledger, "a", 0o600);
+      try { fs.writeFileSync(fd, `${JSON.stringify({ ...row, schemaVersion: STORAGE_SCHEMA_VERSION })}\n`); fs.fsyncSync(fd); }
+      finally { fs.closeSync(fd); }
+      if (newFile) syncDirectory(home); // creation of ledger.jsonl is part of the durable reservation
+    },
     /** Fees (upper bound) and ETH sent in the last 24 hours, from the ledger. */
     day(now) {
-      let feeWei = 0n, spendWei = 0n;
-      let text = ""; try { text = fs.readFileSync(files.ledger, "utf8"); } catch { text = ""; }
-      for (const line of text.split("\n")) {
-        if (!line) continue;
-        let r; try { r = JSON.parse(line); } catch { continue; }
-        if (!(now - Date.parse(r.at) < DAY_MS)) continue;
-        feeWei += big(r.feeBoundWei) ?? 0n; spendWei += big(r.valueWei) ?? 0n;
+      assertLocalRegularFile(files.ledger);
+      if (!fs.existsSync(files.ledger)) {
+        if (!this.state().ledgerExpected) return { feeWei: 0n, spendWei: 0n, kvcmUnits: 0n, usdcUnits: 0n };
+        throw new GuardError("transaction ledger is missing; refusing to reset daily risk caps");
       }
-      return { feeWei, spendWei };
+      let feeWei = 0n, spendWei = 0n, kvcmUnits = 0n, usdcUnits = 0n;
+      const journal = new Map();
+      scanJournalFile(files.ledger, (line, index) => {
+        let r; try { r = JSON.parse(line); }
+        catch { throw new GuardError(`invalid transaction ledger row ${index + 1}: refusing to drop a previous spend`); }
+        if (r && r.schemaVersion !== undefined && r.schemaVersion !== STORAGE_SCHEMA_VERSION)
+          throw new GuardError(`unknown journal format at row ${index + 1}; explicit reviewed migration is required`);
+        if (typeof r?.at !== "string" || typeof r?.feeBoundWei !== "string" || typeof r?.valueWei !== "string" ||
+            !/^(0|[1-9]\d*)$/.test(r.feeBoundWei) || !/^(0|[1-9]\d*)$/.test(r.valueWei))
+          throw new GuardError(`ledger row ${index + 1} lacks canonical nonnegative decimal amounts; refusing to reset limits`);
+        const at = recordedTime(r.at);
+        const fee = BigInt(r.feeBoundWei), value = BigInt(r.valueWei);
+        for (const field of ["kvcmUnits", "usdcUnits"]) {
+          const units = r[field];
+          if (units === undefined) {
+            const relevant = (r.leg === "klima" && /^retire\b/i.test(String(r.name ?? ""))) ||
+              (r.leg === "gmx" && /^open\b/i.test(String(r.name ?? "")));
+            if (relevant && (!r.phase || r.phase === "reserved") && now - at < DAY_MS)
+              throw new GuardError(`unaccounted ${r.leg} asset spend in ledger row ${index + 1}; reconcile before trading`);
+          } else if (typeof units !== "string" || !/^(0|[1-9]\d*)$/.test(units)) {
+            throw new GuardError(`ledger row ${index + 1} has invalid ${field}`);
+          }
+        }
+        const kvcm = BigInt(r.kvcmUnits ?? "0"), usdc = BigInt(r.usdcUnits ?? "0");
+        if (at > now + MAX_WALL_CLOCK_DRIFT_MS)
+          throw new GuardError(`future transaction timestamp in ledger row ${index + 1}; the clock or accounting history is not trustworthy`);
+        if (r.phase !== undefined) {
+          if (!["reserved", "broadcast", "receipt", "reconciled"].includes(r.phase) || !/^[0-9a-f]{32}$/.test(r.id ?? ""))
+            throw new GuardError(`invalid transaction journal event at row ${index + 1}`);
+          if (r.phase !== "reserved" && (fee !== 0n || value !== 0n || kvcm !== 0n || usdc !== 0n))
+            throw new GuardError(`a non-reservation ledger event carries money at row ${index + 1}`);
+          const existing = journal.get(r.id);
+          if (r.phase === "reserved") {
+            if (existing) throw new GuardError(`duplicate journal reservation ${r.id}`);
+            if (r.hash !== null && r.hash !== undefined &&
+                (typeof r.hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(r.hash)))
+              throw new GuardError(`invalid reserved transaction hash at row ${index + 1}`);
+            if (r.nonce !== undefined &&
+                (typeof r.nonce !== "string" || !/^(0|[1-9]\d*)$/.test(r.nonce) || !r.hash))
+              throw new GuardError(`invalid reserved transaction nonce at row ${index + 1}`);
+            journal.set(r.id, { stage: "reserved", hash: r.hash ?? null, nonce: r.nonce ?? null });
+          } else {
+            if (!existing) throw new GuardError(`journal event without a reservation at row ${index + 1}`);
+            if (typeof r.hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(r.hash))
+              throw new GuardError(`journal event missing a transaction hash at row ${index + 1}`);
+            if (existing.hash && !same(existing.hash, r.hash))
+              throw new GuardError(`journal has conflicting hashes for reservation ${r.id}`);
+            if (r.phase === "broadcast" && existing.stage !== "reserved")
+              throw new GuardError(`journal broadcast event out of order at row ${index + 1}`);
+            if (r.phase === "receipt" && existing.stage !== "broadcast")
+              throw new GuardError(`journal receipt event out of order at row ${index + 1}`);
+            if (r.phase === "reconciled" && existing.stage !== "reserved" && existing.stage !== "broadcast" && existing.stage !== "receipt")
+              throw new GuardError(`journal reconciliation out of order at row ${index + 1}`);
+            journal.set(r.id, { ...existing, stage: r.phase, hash: r.hash });
+          }
+        }
+        if (!(now - at < DAY_MS)) return;
+        feeWei += fee; spendWei += value; kvcmUnits += kvcm; usdcUnits += usdc;
+      });
+      const state = this.state(), active = state.pending;
+      const unfinished = [...journal.entries()].filter(([, event]) => event.stage === "reserved" || event.stage === "broadcast");
+      if (unfinished.length > 1 || (unfinished.length === 1 && unfinished[0][0] !== active?.id))
+        throw new GuardError("journal has an unresolved send without its matching pending state; manual reconciliation is required");
+      if (active?.id && (!journal.has(active.id) ||
+          !["reserved", "broadcast", "receipt", "reconciled"].includes(journal.get(active.id).stage)))
+        throw new GuardError("pending transaction has no matching durable journal entry");
+      if (active?.id) {
+        const event = journal.get(active.id);
+        if ((event.hash && !same(active.hash, event.hash)) ||
+            (active.signedRaw && (!event.hash || active.nonce !== event.nonce)))
+          throw new GuardError("pending transaction hash or nonce conflicts with the durable journal reservation");
+      }
+      return { feeWei, spendWei, kvcmUnits, usdcUnits };
     },
-    /** One bot per home folder. A lock is another bot's while its process is alive. */
+    /** Validate the whole journal before returning an ID\'s last durable stage. */
+    journalStage(id, now) {
+      this.day(now);
+      let stage = null;
+      scanJournalFile(files.ledger, (line) => {
+        const row = JSON.parse(line);
+        if (row.id === id) stage = row.phase;
+      });
+      return stage;
+    },
+    /**
+     * One bot per home folder, acquired atomically by the OS. A stale lock
+     * requires explicit human recovery: never remove it automatically,
+     * since an in-flight send can outlive a crashed or restarted process.
+     */
     lock() {
-      const held = readJson(files.lock, null);
-      if (held && held.pid !== process.pid) { try { process.kill(held.pid, 0); return false; } catch { /* that process is gone */ } }
-      fs.writeFileSync(files.lock, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }), { mode: 0o600 });
-      return true;
+      assertLocalRegularFile(files.lock);
+      if (ownsLock) return false;
+      let fd;
+      try { fd = fs.openSync(files.lock, "wx", 0o600); }
+      catch (e) { if (e?.code === "EEXIST") return false; throw e; }
+      try {
+        fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, nonce: lockNonce, at: new Date().toISOString() }));
+        fs.fsyncSync(fd);
+        syncDirectory(home);
+        ownsLock = true;
+        return true;
+      } finally { fs.closeSync(fd); }
     },
-    unlock() { const held = readJson(files.lock, null); if (held?.pid === process.pid) fs.rmSync(files.lock, { force: true }); },
+    unlock() {
+      if (!ownsLock) return;
+      const held = readJson(files.lock, null);
+      if (held?.pid === process.pid && held.nonce === lockNonce) {
+        fs.rmSync(files.lock, { force: true });
+        syncDirectory(home);
+      }
+      ownsLock = false;
+    },
   };
 }
 
 // ---- one step: check it, count it against the day, then (only with --live) sign, send and wait ---------------------
-/** Returns "dry" | "sent" | "reverted" | "budget". STOP and pending transactions return "budget" without sending. Throws GuardError for a refused rule. */
-export async function step(ctx, leg, name, tx, { sizeWei = 0n } = {}) {
-  const why = checkTx(leg, tx, { from: ctx.address, sizeWei, maxTxFeeWei: ctx.caps.maxTxFeeWei });
+/**
+ * Verify a locally signed transaction against every owner-authorized field.
+ * A matching hash alone is not permission for a different recipient, amount,
+ * selector, nonce, fee or signer. This validates the exact bytes before they
+ * can be recorded as a transaction intended for broadcast.
+ */
+export async function verifySignedIntent(signed, tx, chain, address) {
+  if (typeof signed?.raw !== "string" || !/^0x02(?:[0-9a-fA-F]{2})+$/.test(signed.raw) ||
+      signed.raw.length > 262_146 || typeof signed.hash !== "string" ||
+      !/^0x[0-9a-fA-F]{64}$/.test(signed.hash) ||
+      !Number.isSafeInteger(signed.nonce) || signed.nonce < 0 ||
+      keccak256(signed.raw).toLowerCase() !== signed.hash.toLowerCase())
+    throw new GuardError("invalid locally signed transaction hash or nonce");
+  let parsed, signer;
+  try {
+    parsed = parseTransaction(signed.raw);
+    signer = await recoverTransactionAddress({ serializedTransaction: signed.raw });
+  } catch { throw new GuardError("the proposed signed transaction is invalid or cannot be authenticated"); }
+  if (parsed.type !== "eip1559" || parsed.chainId !== CHAINS[chain]?.id ||
+      parsed.nonce !== signed.nonce || !same(parsed.to, tx.to) ||
+      (parsed.data ?? "0x").toLowerCase() !== String(tx.data ?? "0x").toLowerCase() ||
+      parsed.value !== BigInt(tx.value ?? 0) || parsed.gas !== BigInt(tx.gas) ||
+      parsed.maxFeePerGas !== BigInt(tx.maxFeePerGas) ||
+      parsed.maxPriorityFeePerGas !== BigInt(tx.maxPriorityFeePerGas) ||
+      (parsed.accessList?.length ?? 0) !== 0 || !same(signer, address))
+    throw new GuardError("locally signed transaction differs from the exact guarded intent, chain or wallet");
+  return true;
+}
+/** Persisted completion intents are applied atomically with clearing a confirmed pending send. */
+function applyCompletion(state, completion) {
+  if (!completion) return;
+  if (!["hydrex", "klima", "regen", "eco", "eco-buy", "net-buy", "gmx"].includes(completion.bucket) ||
+      !completion.value || typeof completion.value !== "object" || Array.isArray(completion.value))
+    throw new GuardError("pending receipt has an invalid completion checkpoint");
+  state[completion.bucket] = completion.value;
+}
+/** Returns "dry" | "sent" | "reverted" | "pending" | "budget". "pending": it went out but is not final yet. STOP and pending transactions return "budget" without sending. Throws GuardError for a refused rule. */
+export async function step(ctx, leg, name, tx, { sizeWei = 0n, gmxIntent = null, hydrexVote = null, klimaIntent = null, completion = null } = {}) {
+  // An unrecognized kit step must not bypass the owner's market/side/leverage selection.
+  if (leg === "gmx" && typeof tx?.data === "string" && tx.data.slice(0, 10).toLowerCase() === SEL.multicall &&
+      (!gmxIntent || typeof gmxIntent !== "object" || !["open", "close"].includes(gmxIntent.action)))
+    throw new GuardError("gmx: GMX order has no explicit owner intent; refusing to sign");
+  const why = checkTx(leg, tx, { from: ctx.address, sizeWei, maxTxFeeWei: ctx.caps.maxTxFeeWei, gmxIntent, hydrexVote, klimaIntent });
   if (why) throw new GuardError(`${leg}: refused ${name}: ${why}`);
   const chain = RULES[leg][0].chain;
   const value = BigInt(tx.value ?? 0);
-  const l1 = big(tx.l1FeeBoundWei ?? 0) ?? 0n;
-  const feeBound = BigInt(tx.gas) * BigInt(tx.maxFeePerGas) + (l1 > 0n ? l1 : 0n);
+  const l1 = BigInt(tx.l1FeeBoundWei ?? 0);
+  const feeBound = BigInt(tx.gas) * BigInt(tx.maxFeePerGas) + l1;
+  const selector = tx.data.slice(0, 10).toLowerCase();
+  const kvcmUnits = leg === "klima" && selector === SEL.retireCreditViaKlima
+    ? decodeFunctionData({ abi: KLIMA_ABI, data: tx.data }).args[6] : 0n;
+  const usdcUnits = leg === "gmx" && selector === SEL.multicall && gmxIntent?.action === "open"
+    ? gmxIntent.collateralUnits : 0n;
+  if (ctx.live) { ctx.safeNow?.(); ctx.home.bindWallet(ctx.address); }
   const day = ctx.home.day(ctx.now());
   if (day.feeWei + feeBound > ctx.caps.dayFeeWei) { ctx.say(`${leg}: ${name} waits: the day's fee cap (${eth(ctx.caps.dayFeeWei)}) is reached`); return "budget"; }
   if (value > 0n && day.spendWei + value > ctx.caps.daySpendWei) { ctx.say(`${leg}: ${name} waits: the day's spend cap (${eth(ctx.caps.daySpendWei)}) is reached`); return "budget"; }
+  if ((day.kvcmUnits ?? 0n) + kvcmUnits > (ctx.caps.dayKvcmUnits ?? MAX_KVCM_APPROVE)) { ctx.say(`${leg}: ${name} waits: the day\'s kVCM cap is reached`); return "budget"; }
+  if ((day.usdcUnits ?? 0n) + usdcUnits > (ctx.caps.dayUsdcUnits ?? MAX_GMX_USDC)) { ctx.say(`${leg}: ${name} waits: the day\'s GMX USDC cap is reached`); return "budget"; }
   if (!ctx.live) { ctx.say(`${leg}: DRY, would send ${name}${value > 0n ? ` with ${eth(value)}` : ""} (fee at most ${eth(feeBound)})`); return "dry"; }
+  await assertChainClock(ctx, chain);
   // These checks must happen for every send, not only at the start of a pass: a prior receipt may have timed out.
   if (ctx.home.stopped()) { ctx.say(`${leg}: ${name} waits: STOP is set, nothing sent`); return "budget"; }
   if (ctx.home.state().pending) { ctx.say(`${leg}: ${name} waits: a transaction is still pending, nothing sent`); return "budget"; }
+  // Write-ahead protocol: commit the unknown-broadcast barrier and reserve the
+  // entire possible spend before invoking any remote RPC. A crash at *any*
+  // boundary is conservative: it may strand capital, but never replays blindly.
+  const signed = typeof ctx.io.prepare === "function" ? await ctx.io.prepare(chain, tx) : null;
+  if (signed) {
+    if (typeof ctx.io.broadcast !== "function")
+      throw new GuardError("signed transaction broadcaster is unavailable");
+    await verifySignedIntent(signed, tx, chain, ctx.address);
+  }
+  const at = new Date(ctx.now()).toISOString();
+  const id = randomBytes(16).toString("hex");
+  const pending = { id, chain, hash: signed?.hash ?? null,
+    ...(signed ? { nonce: String(signed.nonce), signedRaw: signed.raw } : {}),
+    leg, name, at, ...(completion ? { completion } : {}) };
+  const stateBeforeSend = ctx.home.state();
+  if (stateBeforeSend.pending) return "budget";
+  stateBeforeSend.pending = pending;
+  stateBeforeSend.ledgerExpected = true;
+  ctx.home.save(stateBeforeSend);
+  const row = (phase, fields = {}) => ({
+    id, phase, at: new Date(ctx.now()).toISOString(), leg, name, chain,
+    to: tx.to, valueWei: phase === "reserved" ? value.toString() : "0",
+    feeBoundWei: phase === "reserved" ? feeBound.toString() : "0",
+    kvcmUnits: phase === "reserved" ? kvcmUnits.toString() : "0",
+    usdcUnits: phase === "reserved" ? usdcUnits.toString() : "0", ...fields,
+  });
+  ctx.home.record(row("reserved", { hash: pending.hash, ...(signed ? { nonce: pending.nonce } : {}) }));
+  // STOP may arrive while the durable writes are made. Leave the reservation
+  // intact for manual reconciliation rather than race the kill switch.
+  if (ctx.home.stopped()) return "budget";
+  if (ctx.live) ctx.safeNow?.();
   let hash;
-  try { hash = await ctx.io.send(chain, tx); }
+  try { hash = signed ? await ctx.io.broadcast(chain, signed.raw) : await ctx.io.send(chain, tx); }
   catch (e) {
-    // The node may have taken the transaction even though no answer came back, so do not guess: remember that a send may be out,
-    // send nothing more, and let the next pass tell the owner to look at the wallet.
-    const lost = ctx.home.state(); lost.pending = { chain, hash: null, leg, name, at: new Date(ctx.now()).toISOString() }; ctx.home.save(lost);
+    // A node can broadcast and then lose its response. With local signing
+    // the exact hash and nonce were committed BEFORE contacting that node.
     throw e;
   }
-  const state = ctx.home.state(); state.pending = { chain, hash, leg, name, at: new Date(ctx.now()).toISOString() }; ctx.home.save(state);
-  ctx.home.record({ at: new Date(ctx.now()).toISOString(), leg, name, chain, to: tx.to, valueWei: value.toString(), feeBoundWei: feeBound.toString(), hash });
+  if (typeof hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(hash) ||
+      (signed && hash.toLowerCase() !== signed.hash.toLowerCase()))
+    throw new GuardError("broadcast node returned a missing or different transaction hash; the original pending hash remains reserved");
+  const submitted = ctx.home.state();
+  if (submitted.pending?.id !== id || submitted.pending.hash !== pending.hash)
+    throw new GuardError("the bot's pending send changed unexpectedly after broadcast; refusing to clear it");
+  submitted.pending = { ...pending, hash };
+  ctx.home.save(submitted);
+  ctx.home.record(row("broadcast", { hash }));
   const ok = await ctx.io.wait(chain, hash);
-  const after = ctx.home.state(); delete after.pending; ctx.home.save(after);
+  if (ok === null) {
+    ctx.say(`${leg}: ${name} ${hash} is in a block that is not final yet, or cannot be confirmed. It stays pending and nothing more is sent; the next pass checks it again`);
+    return "pending";
+  }
+  ctx.home.record(row("receipt", { hash, status: ok ? "success" : "reverted" }));
+  const settled = ctx.home.state();
+  if (settled.pending?.id !== id || settled.pending.hash !== hash)
+    throw new GuardError("pending transaction changed before confirmation; refusing to clear it");
+  if (ok) applyCompletion(settled, pending.completion);
+  delete settled.pending;
+  ctx.home.save(settled);
   ctx.say(`${leg}: ${ok ? "sent" : "REVERTED"} ${name} ${hash}`);
   return ok ? "sent" : "reverted";
 }
@@ -430,10 +1243,40 @@ function settle(ctx, leg, what, r) {
   return "halted";
 }
 const kit = (ctx, args) => ctx.kit(ctx.kitFile, args, ctx.rpcs);
-const due = (last, hours, now) => !(now - Date.parse(last ?? "") < hours * 3600_000);
+const due = (last, hours, now) => {
+  if (last === undefined || last === null) return true;
+  const at = recordedTime(last);
+  if (at > now + MAX_WALL_CLOCK_DRIFT_MS)
+    throw new GuardError("saved leg completion time is in the future; refusing to repeat an operation with an invalid clock");
+  return now - at >= hours * 3600_000;
+};
 const VOTE_RE = /^0x[0-9a-fA-F]{40}:\d{1,5}(,0x[0-9a-fA-F]{40}:\d{1,5}){0,9}$/;
 /** A vote string is pools and basis points that sum to exactly 10000. */
-export const validVote = (v) => typeof v === "string" && VOTE_RE.test(v) && v.split(",").reduce((n, p) => n + Number(p.split(":")[1]), 0) === 10000;
+export const validVote = (v) => {
+  if (typeof v !== "string" || !VOTE_RE.test(v)) return false;
+  const pairs = v.split(",").map((p) => { const [pool, bps] = p.split(":"); return { pool: pool.toLowerCase(), bps: Number(bps) }; });
+  return pairs.every((p) => p.bps > 0) && new Set(pairs.map((p) => p.pool)).size === pairs.length &&
+    pairs.reduce((total, p) => total + p.bps, 0) === 10000;
+};
+
+/**
+ * The gate for the one thing the regen-retire leg prints. Returns null when the kit's message is exactly the retirement the
+ * flags name (the retirement type, your owner address, that one batch and amount, that jurisdiction and reason, and no other
+ * field), or the reason it is refused. Pure: no network, no key. What you would sign in your own wallet is checked here first.
+ */
+export function checkRegenRetire(message, o) {
+  if (!message || typeof message !== "object" || Array.isArray(message)) return "the kit printed no message";
+  if (message.typeUrl !== REGEN_RETIRE_TYPE_URL) return "the message is not a retirement";
+  const keys = (x) => Object.keys(x).sort().join(",");
+  const v = message.value;
+  if (keys(message) !== "typeUrl,value" || !v || typeof v !== "object" || keys(v) !== "credits,jurisdiction,owner,reason") return "the message has an unexpected field, or is missing one";
+  if (v.owner !== o.regenRetireOwner) return "the message names a different owner than --regen-retire-owner";
+  if (v.jurisdiction !== o.regenRetireJurisdiction) return "the message names a different jurisdiction than --regen-retire-jurisdiction";
+  if (v.reason !== clean(o.regenRetireReason, 200)) return "the message carries a different reason than --regen-retire-reason";
+  const c = v.credits;
+  if (!Array.isArray(c) || c.length !== 1 || !c[0] || typeof c[0] !== "object" || keys(c[0]) !== "amount,batch_denom" || c[0].batch_denom !== o.regenRetireBatch || c[0].amount !== o.regenRetireAmount) return "the message must retire exactly the one batch and amount you named (credits)";
+  return null;
+}
 
 // ---- the legs ------------------------------------------------------------------------------------------------------
 export const LEGS = {
@@ -452,7 +1295,7 @@ export const LEGS = {
     if (claimed === "failed" || claimed === "halted") return;
     if (claimed === "ok") for (const s of claim.out.prepared?.steps ?? []) {
       const got = await step(ctx, leg, `claim ${clean(s.kind, 8)} ${(s.tokens ?? []).map((t) => `${clean(t.earned, 24)} ${clean(t.symbol, 12)}`).join(", ")}`, s.tx);
-      if (got === "budget") return;
+      if (got === "budget" || got === "pending") return;
     }
     let vote = ctx.opts.hydrexVote;
     if (!vote) {
@@ -464,8 +1307,7 @@ export const LEGS = {
     if (!validVote(vote)) return ctx.halt(leg, "the vote is not pools and basis points that sum to 10000");
     const v = await kit(ctx, ["hydrex", "prepare", "vote", "--from", ctx.address, "--vote", vote]);
     if (settle(ctx, leg, "vote", v) !== "ok") return;
-    const got = await step(ctx, leg, `vote ${vote}`, v.out.prepared.tx);
-    if (got === "sent") { const s = ctx.home.state(); s.hydrex = { votedEpoch: epoch, vote, at: new Date(ctx.now()).toISOString() }; ctx.home.save(s); }
+    await step(ctx, leg, `vote ${vote}`, v.out.prepared.tx, { hydrexVote: vote, completion: { bucket: "hydrex", value: { votedEpoch: epoch, vote, at: new Date(ctx.now()).toISOString() } } });
   },
 
   /** Approve the exact amount, retire, take the approval back. */
@@ -478,20 +1320,62 @@ export const LEGS = {
     for (let turn = 0; turn < 2; turn++) {
       const p = await kit(ctx, args);
       if (settle(ctx, leg, "retire", p) !== "ok") return;
-      const kind = p.out.prepared.step;
-      const got = await step(ctx, leg, kind === "approve" ? "the exact kVCM approval" : `retire ${o.klimaTonnes} tonnes`, p.out.prepared.tx);
+      const kind = p.out.prepared.step, tx = p.out.prepared.tx;
+      if (kind !== "approve" && kind !== "retire")
+        throw new GuardError("klima: the kit returned an unrecognized retirement step");
+      if (kind === "approve" ? (!same(tx?.to, ADDR.kvcm) || tx.data?.slice(0, 10).toLowerCase() !== SEL.approve) :
+          (!same(tx?.to, ADDR.klimaAggregator) || tx.data?.slice(0, 10).toLowerCase() !== SEL.retireCreditViaKlima))
+        throw new GuardError("klima: the kit step label does not match its onchain transaction");
+      const got = await step(ctx, leg, kind === "approve" ? "the exact kVCM approval" : `retire ${o.klimaTonnes} tonnes`, tx,
+        { klimaIntent: klimaRetireIntent(o), ...(kind === "retire" ? { completion: { bucket: "klima", value: { at: new Date(ctx.now()).toISOString() } } } : {}) });
       if (got === "dry" && kind === "approve") return ctx.say(`${leg}: DRY, then the retirement, then the approval is taken back`);
       if (got !== "sent") break;
-      if (kind === "retire") { const s = ctx.home.state(); s.klima = { at: new Date(ctx.now()).toISOString() }; ctx.home.save(s); break; }
+      if (kind === "retire") break;
     }
     const r = await kit(ctx, ["klima", "prepare", "revoke", "--from", ctx.address]);
-    if (r.code === 0 && r.out?.prepared?.tx) await step(ctx, leg, "take the kVCM approval back", r.out.prepared.tx);
+    if (r.code === 10) return ctx.say("klima: the kit reports no allowance left to revoke");
+    if (settle(ctx, leg, "revoke", r) !== "ok") return;
+    const revoke = r.out?.prepared;
+    if (revoke?.step !== "revoke" || !same(revoke.tx?.to, ADDR.kvcm) ||
+        revoke.tx.data?.slice(0, 10).toLowerCase() !== SEL.approve)
+      throw new GuardError("klima: revoke kit returned an unknown step or a different transaction");
+    let revokeArgs;
+    try { revokeArgs = decodeFunctionData({ abi: ERC20, data: revoke.tx.data }).args; }
+    catch { throw new GuardError("klima: revoke approval calldata does not decode"); }
+    if (!same(revokeArgs[0], ADDR.klimaAssetManager) || revokeArgs[1] !== 0n)
+      throw new GuardError("klima: revoke must set exactly zero kVCM allowance for the pinned asset manager");
+    await step(ctx, leg, "take the kVCM approval back", revoke.tx);
+  },
+
+  /**
+   * Regen Ledger retirement, prepared and printed, never signed. It asks the kit for the exact message and says what you would
+   * sign. There is no Regen signer in this program, so there is nothing to send, with or without --live.
+   */
+  async "regen-retire"(ctx) {
+    const leg = "regen-retire", o = ctx.opts;
+    const missing = [["owner", o.regenRetireOwner], ["batch", o.regenRetireBatch], ["amount", o.regenRetireAmount], ["jurisdiction", o.regenRetireJurisdiction], ["reason", o.regenRetireReason]].filter(([, v]) => !v).map(([n]) => `--regen-retire-${n}`);
+    if (missing.length) return ctx.say(`${leg}: off (set ${missing.join(", ")} to turn it on; it prepares and prints a Regen Ledger message and never signs it)`);
+    if (ctx.home.stopped()) return ctx.say(`${leg}: STOP is set, so the kit was not asked`);
+    const p = await kit(ctx, ["regen", "prepare", "retire", "--owner", o.regenRetireOwner, "--batch", o.regenRetireBatch, "--amount", o.regenRetireAmount, "--jurisdiction", o.regenRetireJurisdiction, "--reason", o.regenRetireReason, ...(o.regenLcd ? ["--lcd", o.regenLcd] : [])]);
+    if (settle(ctx, leg, "prepare", p) !== "ok") return;
+    const message = p.out.prepared?.message;
+    if (p.out.sendable !== true || !message) return ctx.fail(leg, "prepare: the kit printed no retirement message, nothing was decided");
+    const why = checkRegenRetire(message, o);
+    if (why) throw new GuardError(`${leg}: refused the kit's message: ${why}`);
+    ctx.say(`${leg}: retire ${o.regenRetireAmount} of batch ${o.regenRetireBatch} for ${o.regenRetireJurisdiction}. A sink: what it retires is gone for good, by design, and no return promised. The reason is written onchain, public and permanent.`);
+    ctx.say(`${leg}: As of 2026-11-18 EcoWealth holds REGEN and may gain if it rises`);
+    ctx.say(`${leg}: DRY, would sign this Regen message: ${clean(JSON.stringify(message), 800)}`);
+    ctx.say(`${leg}: this bot signs no Regen message, with or without --live, and sends nothing. Signing it is a separate step you do with your own Regen wallet.`);
   },
 
   /** ETH to axlREGEN, a slice you set. */
   async regen(ctx) { return buy(ctx, "regen", ctx.opts.regenWei, ["regen", "prepare", "buy-regen"], "axlREGEN"); },
   /** ETH to ECO, a slice you set. */
   async eco(ctx) { return buy(ctx, "eco", ctx.opts.ecoWei, ["uniswap", "prepare", "swap", "--pool", "eth-eco"], "ECO"); },
+  /** ETH to ECO by the NET circle kit's best route (the Zora coin pool or NET's pools), a slice you set. One way: you end up holding ECO. */
+  async "eco-buy"(ctx) { return buyViaCircle(ctx, "eco-buy", ctx.opts.ecoBuyWei, "ECO", "eco-buy-eth"); },
+  /** ETH to NET, a slice you set. One way: you end up holding NET. */
+  async "net-buy"(ctx) { return buyViaCircle(ctx, "net-buy", ctx.opts.netWei, "NET", "net-eth"); },
 
   /** The NET circle, only when the kit's floor passes. */
   async circle(ctx) {
@@ -509,6 +1393,8 @@ export const LEGS = {
     const leg = "gmx", o = ctx.opts;
     if (!o.gmxMarket || !o.gmxSide || !o.gmxCollateral || !o.gmxLeverage) return ctx.say(`${leg}: off (set --gmx-market, --gmx-side, --gmx-collateral and --gmx-leverage to turn it on)`);
     ctx.say(`${leg}: As of 2026-11-18 EcoWealth holds a stake in GMX and may gain if it rises`);
+    const expectedMarket = chosenGmxMarket(o.gmxMarket);
+    if (!expectedMarket) return ctx.halt(leg, "unknown GMX market: use ETH, BTC, ZORA or an explicit market token address");
     const mine = ctx.home.state().gmx ?? {};
     const orders = await kit(ctx, ["gmx", "orders", "--address", ctx.address]);
     if (settle(ctx, leg, "orders", orders) !== "ok") return;
@@ -516,12 +1402,24 @@ export const LEGS = {
     const pos = await kit(ctx, ["gmx", "positions", "--address", ctx.address]);
     if (settle(ctx, leg, "positions", pos) !== "ok") return;
     if (mine.openedAt) {
-      if (!pos.out.length) { const s = ctx.home.state(); s.gmx = { closedAt: new Date(ctx.now()).toISOString() }; ctx.home.save(s); return ctx.say(`${leg}: the position is gone (closed elsewhere, or liquidated)`); }
-      if (!due(mine.openedAt, o.gmxHoldHours, ctx.now())) return ctx.say(`${leg}: holding`);
+      const ownPosition = pos.out.find((p) => same(p.market, expectedMarket) && p.isLong === (o.gmxSide === "long") && same(p.collateralToken ?? ADDR.arbitrumUsdc, ADDR.arbitrumUsdc));
+      if (!ownPosition) { const s = ctx.home.state(); s.gmx = { closedAt: new Date(ctx.now()).toISOString() }; ctx.home.save(s); return ctx.say(`${leg}: the position is gone (closed elsewhere, or liquidated)`); }
+      if (mine.closeRequestedAt) {
+        // A leveraged position that may be stranded is a guard stop (exit 4), not a transient read failure (exit 1).
+        throw new GuardError("the GMX close order is no longer queued but the position is still open. A keeper may have cancelled or rejected it; verify the position and order onchain before any new operation");
+      }
+      if (!mine.positionObservedAt) {
+        const state = ctx.home.state();
+        state.gmx = { ...mine, positionObservedAt: new Date(ctx.now()).toISOString() };
+        ctx.home.save(state);
+        return ctx.say(`${leg}: keeper execution confirmed by the position read; holding period begins now`);
+      }
+      if (!due(mine.positionObservedAt, o.gmxHoldHours, ctx.now())) return ctx.say(`${leg}: holding`);
       const c = await kit(ctx, ["gmx", "prepare", "close", "--from", ctx.address, "--market", o.gmxMarket, "--side", o.gmxSide]);
       if (settle(ctx, leg, "close", c) !== "ok") return;
-      const got = await step(ctx, leg, "close the position", c.out.prepared.tx);
-      if (got === "sent") { const s = ctx.home.state(); s.gmx = { closedAt: new Date(ctx.now()).toISOString() }; ctx.home.save(s); }
+      if (!same(c.out.prepared?.tx?.to, ADDR.gmxExchangeRouter) || c.out.prepared.tx.data?.slice(0, 10).toLowerCase() !== SEL.multicall)
+        throw new GuardError("gmx: close kit did not prepare a GMX market-order multicall");
+      await step(ctx, leg, "submit the GMX position close order", c.out.prepared.tx, { gmxIntent: { ...gmxOrderIntent(o, "close"), closeSizeUsd: BigInt(ownPosition.sizeInUsd) }, completion: { bucket: "gmx", value: { ...mine, closeRequestedAt: new Date(ctx.now()).toISOString() } } });
       return;
     }
     if (pos.out.length) return ctx.say(`${leg}: this wallet already holds a GMX position this bot did not open, so it is left alone`);
@@ -530,11 +1428,16 @@ export const LEGS = {
     for (let turn = 0; turn < 2; turn++) {
       const p = await kit(ctx, args);
       if (settle(ctx, leg, "open", p) !== "ok") return;
-      const kind = p.out.prepared.step;
-      const got = await step(ctx, leg, kind === "approve" ? "the exact USDC approval" : `open ${o.gmxSide} ${o.gmxMarket}, ${o.gmxCollateral} USDC at ${o.gmxLeverage}x`, p.out.prepared.tx);
+      const kind = p.out.prepared.step, tx = p.out.prepared.tx;
+      if (kind !== "approve" && kind !== "order")
+        throw new GuardError("gmx: the kit returned an unrecognized open step");
+      if (kind === "approve" ? (!same(tx?.to, ADDR.arbitrumUsdc) || tx.data?.slice(0, 10).toLowerCase() !== SEL.approve)
+          : (!same(tx?.to, ADDR.gmxExchangeRouter) || tx.data?.slice(0, 10).toLowerCase() !== SEL.multicall))
+        throw new GuardError("gmx: the kit's step name does not match the transaction it prepared");
+      const got = await step(ctx, leg, kind === "approve" ? "the exact USDC approval" : `open ${o.gmxSide} ${o.gmxMarket}, ${o.gmxCollateral} USDC at ${o.gmxLeverage}x`, tx, { gmxIntent: gmxOrderIntent(o, "open"), ...(kind === "order" ? { completion: { bucket: "gmx", value: { openedAt: new Date(ctx.now()).toISOString() } } } : {}) });
       if (got === "dry" && kind === "approve") return ctx.say(`${leg}: DRY, then the order`);
       if (got !== "sent") return;
-      if (kind === "order") { const s = ctx.home.state(); s.gmx = { openedAt: new Date(ctx.now()).toISOString() }; ctx.home.save(s); return; }
+      if (kind === "order") return;
     }
   },
 };
@@ -548,20 +1451,46 @@ async function buy(ctx, leg, size, act, symbol) {
   if (t.disclosure) ctx.say(`${leg}: ${clean(t.disclosure)}`);
   if (leg === "eco") ctx.say("eco: As of 2026-11-18 EcoWealth both buys ECO and swaps ECO it holds for NET; the house can gain if ECO rises");
   if (leg === "regen") ctx.say("regen: As of 2026-11-18 EcoWealth holds REGEN and may gain if it rises");
-  const got = await step(ctx, leg, `buy at least ${clean(t.minOut, 40)} ${symbol}`, t.tx, { sizeWei: size });
-  if (got === "sent") { const s = ctx.home.state(); s[leg] = { at: new Date(ctx.now()).toISOString() }; ctx.home.save(s); }
+  await step(ctx, leg, `buy at least ${clean(t.minOut, 40)} ${symbol}`, t.tx, { sizeWei: size, completion: { bucket: leg, value: { at: new Date(ctx.now()).toISOString() } } });
+}
+
+/** The NET circle kit's one-way buy: it prints the kit's own disclosure, and the step goes through the same gate and caps as every other. */
+async function buyViaCircle(ctx, leg, size, symbol, flag) {
+  if (!(size > 0n)) return ctx.say(`${leg}: off (set --${flag} to turn it on)`);
+  if (!due(ctx.home.state()[leg]?.at, ctx.opts.buyEveryHours, ctx.now())) return ctx.say(`${leg}: not due yet`);
+  const p = await ctx.kit(ctx.circleKitFile, ["buy", "--token", symbol, "--from", ctx.address, "--size", formatEther(size)], ctx.rpcs);
+  if (settle(ctx, leg, "buy", p) !== "ok") return;
+  const t = p.out.prepared;
+  if (t.disclosure) ctx.say(`${leg}: ${clean(t.disclosure, 700)}`);
+  await step(ctx, leg, `buy at least ${clean(t.minOut, 40)} units of ${symbol} by ${clean(t.route, 30)}`, t.tx, { sizeWei: size, completion: { bucket: leg, value: { at: new Date(ctx.now()).toISOString() } } });
 }
 
 // ---- one pass over the loop ------------------------------------------------------------------------------------------
 /** Walk the legs in order once. Returns the exit code: 0 the pass ran, 4 a rule refused a step, 1 a leg was stopped. */
 export async function pass(ctx) {
   if (ctx.home.stopped()) { ctx.say(`stopped by the STOP file at ${ctx.home.files.stop}`); return 0; }
+  if (ctx.live) ctx.safeNow?.();
   const pending = ctx.home.state().pending;
   if (pending && ctx.live) {
-    if (!pending.hash) { ctx.say(`a send got no answer (${clean(pending.leg, 20)}: ${clean(pending.name, 80)} on ${clean(pending.chain, 10)}): it may or may not have gone out, so nothing is sent. Look at your wallet, then delete "pending" from ${ctx.home.files.state} to go on`); return 0; }
+    if (!pending.hash) { ctx.say(`a send got no answer (${clean(pending.leg, 20)}: ${clean(pending.name, 80)} on ${clean(pending.chain, 10)}): it may or may not have gone out. Nothing more will be sent. Verify the original nonce and chain history with independent RPCs; do NOT delete pending without an audited reconciliation.`); return 0; }
     const seen = await ctx.io.seen(pending.chain, pending.hash);
-    if (seen === null) { ctx.say(`a transaction is still unconfirmed (${clean(pending.hash, 66)} on ${clean(pending.chain, 10)}): nothing is sent until it lands. If it was dropped, delete "pending" from ${ctx.home.files.state}`); return 0; }
-    const s = ctx.home.state(); delete s.pending; ctx.home.save(s);
+    if (seen === null) { ctx.say(`the transaction ${clean(pending.hash, 66)} on ${clean(pending.chain, 10)} is not yet final, or its finality cannot be verified. No transactions will be sent; do NOT erase pending or resend by hand without independently reconciling its nonce and outcome.`); return 0; }
+    const s = ctx.home.state();
+    if (s.pending?.hash !== pending.hash) throw new GuardError("pending transaction changed during recovery");
+    if (pending.id) {
+      const stage = ctx.home.journalStage(pending.id, ctx.now());
+      if (stage === "reserved" || stage === "broadcast") ctx.home.record({
+        id: pending.id, phase: "reconciled", at: new Date(ctx.now()).toISOString(),
+        leg: pending.leg, name: pending.name, chain: pending.chain,
+        to: pending.to ?? "", hash: pending.hash,
+        valueWei: "0", feeBoundWei: "0", kvcmUnits: "0", usdcUnits: "0", status: seen ? "success" : "reverted",
+      });
+      else if (stage !== "receipt" && stage !== "reconciled")
+        throw new GuardError("pending transaction has an invalid journal stage during reconciliation");
+    }
+    if (seen) applyCompletion(s, pending.completion);
+    delete s.pending; ctx.home.save(s);
+    ctx.say(`reconciled ${seen ? "confirmed" : "reverted"} transaction ${clean(pending.hash, 66)}; its original budget reservation remains in the ledger`);
   }
   let code = 0;
   for (const leg of LEG_ORDER) {
@@ -579,9 +1508,14 @@ export async function pass(ctx) {
 
 /** Everything a pass needs. `kit` and `io` can be swapped by a test; nothing else reaches the network or the key. */
 export function makeContext({ opts, home, address, io, kit = runKit, say = (line) => console.log(line), now = () => Date.now() }) {
+  const safeNow = makeClockGuard(now);
+  const checkedKit = (...args) => {
+    if (opts.live && kit === runKit) verifyBundledKits(opts.kit, opts.circleKit);
+    return kit(...args);
+  };
   const ctx = {
-    opts, home, address, io, kit, say, now, live: Boolean(opts.live), kitFile: opts.kit, circleKitFile: opts.circleKit, rpcs: opts.rpcs,
-    caps: { maxTxFeeWei: opts.maxTxFeeWei, dayFeeWei: opts.dayFeeWei, daySpendWei: opts.daySpendWei },
+    opts, home, address, io, kit: checkedKit, say, now, safeNow, live: Boolean(opts.live), kitFile: opts.kit, circleKitFile: opts.circleKit, rpcs: opts.rpcs,
+    caps: { maxTxFeeWei: opts.maxTxFeeWei, dayFeeWei: opts.dayFeeWei, daySpendWei: opts.daySpendWei, dayKvcmUnits: MAX_KVCM_APPROVE, dayUsdcUnits: MAX_GMX_USDC },
     halted: {}, fails: {},
     /** A read failed: three in a row stops the leg until the bot is started again. */
     fail(leg, why) { ctx.fails[leg] = (ctx.fails[leg] ?? 0) + 1; say(`${leg}: ${why}`); if (ctx.fails[leg] >= 3) ctx.halt(leg, "three failures in a row"); },
@@ -591,7 +1525,7 @@ export function makeContext({ opts, home, address, io, kit = runKit, say = (line
 }
 
 // ---- the command line ------------------------------------------------------------------------------------------------
-const FLAGS = new Set(["live", "home", "key-file", "address", "every", "legs", "buy-every-hours", "hydrex-top", "hydrex-vote", "klima-class", "klima-credit", "klima-tonnes", "klima-token-id", "klima-name", "regen-eth", "eco-eth", "circle-eth", "gmx-market", "gmx-side", "gmx-collateral", "gmx-leverage", "gmx-hold-hours", "day-fee-eth", "day-spend-eth", "max-tx-fee-eth", "kit", "circle-kit", "base-rpc", "arbitrum-rpc"]);
+const FLAGS = new Set(["live", "home", "key-file", "address", "every", "legs", "buy-every-hours", "hydrex-top", "hydrex-vote", "klima-class", "klima-credit", "klima-tonnes", "klima-token-id", "klima-name", "regen-retire-owner", "regen-retire-batch", "regen-retire-amount", "regen-retire-jurisdiction", "regen-retire-reason", "regen-lcd", "regen-eth", "eco-eth", "eco-buy-eth", "net-eth", "circle-eth", "gmx-market", "gmx-side", "gmx-collateral", "gmx-leverage", "gmx-hold-hours", "day-fee-eth", "day-spend-eth", "max-tx-fee-eth", "kit", "circle-kit", "base-rpc", "arbitrum-rpc", "expect-commitment", "to", "from"]);
 const BOOL = new Set(["live"]);
 const ethFlag = (name, v, max) => {
   if (v === undefined) return 0n;
@@ -610,7 +1544,7 @@ const addrFlag = (name, v) => { if (v !== undefined && !isAddress(v)) throw new 
 
 export function parseArgs(argv, env = process.env) {
   const [cmd, ...rest] = argv;
-  if (!["run", "once", "wallet", "list", "help", undefined].includes(cmd)) throw new ArgError(`no command named ${clean(cmd, 20)}: use run, once, wallet or list`);
+  if (!["run", "once", "wallet", "list", "audit", "compact", "backup", "restore", "help", undefined].includes(cmd)) throw new ArgError(`no command named ${clean(cmd, 20)}: use run, once, wallet, list, audit, compact, backup or restore`);
   const f = {};
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
@@ -625,17 +1559,37 @@ export function parseArgs(argv, env = process.env) {
   for (const l of legs) if (!LEG_ORDER.includes(l)) throw new ArgError(`no leg named ${clean(l, 20)}: the legs are ${LEG_ORDER.join(", ")}`);
   if (f["hydrex-vote"] !== undefined && !validVote(f["hydrex-vote"])) throw new ArgError("--hydrex-vote is 0xPOOL:BPS pairs, comma separated, that sum to exactly 10000");
   if (f["gmx-side"] !== undefined && !["long", "short"].includes(f["gmx-side"])) throw new ArgError("--gmx-side is long or short");
-  if (f["gmx-market"] !== undefined && !/^[A-Za-z0-9.]{1,12}$/.test(f["gmx-market"])) throw new ArgError("--gmx-market is a market symbol, like ETH");
+  if (f["gmx-market"] !== undefined && !(/^[A-Za-z0-9.]{1,12}$/.test(f["gmx-market"]) || isAddress(f["gmx-market"]))) throw new ArgError("--gmx-market must be a market symbol like ETH or a 0x GMX market token address");
   for (const n of ["gmx-collateral", "gmx-leverage", "klima-tonnes"]) if (f[n] !== undefined && !/^\d+(\.\d+)?$/.test(f[n])) throw new ArgError(`--${n} is a number`);
+  if (f["gmx-market"] !== undefined && !chosenGmxMarket(f["gmx-market"])) throw new ArgError("--gmx-market must be ETH, BTC, ZORA, or a GMX market token address");
+  if (f["gmx-collateral"] !== undefined) {
+    if (!/^\d+(\.\d{1,6})?$/.test(f["gmx-collateral"])) throw new ArgError("--gmx-collateral must have at most 6 decimal places");
+    if (parseUnits(f["gmx-collateral"], 6) <= 0n || parseUnits(f["gmx-collateral"], 6) > MAX_GMX_USDC) throw new ArgError("--gmx-collateral must be above zero and at most 5 USDC");
+  }
+  if (f["gmx-leverage"] !== undefined && (!/^\d+(\.\d)?$/.test(f["gmx-leverage"]) || Number(f["gmx-leverage"]) < 1 || Number(f["gmx-leverage"]) > 10)) throw new ArgError("--gmx-leverage must be from 1x to 10x, in tenths");
   if (f["klima-token-id"] !== undefined && !/^\d{1,78}$/.test(f["klima-token-id"])) throw new ArgError("--klima-token-id is a whole number");
   const name = f["klima-name"] ?? "my bot";
   if (!/^[\x20-\x7E]{1,64}$/.test(name) || name.startsWith("-")) throw new ArgError("--klima-name is 1 to 64 plain characters and is public for good");
+  for (const [n, re, what] of [["owner", REGEN_RETIRE_RE.owner, "a regen1... address (your own Regen wallet)"], ["batch", REGEN_RETIRE_RE.batch, "a credit batch denom such as C01-001-20150101-20151231-001"], ["jurisdiction", REGEN_RETIRE_RE.jurisdiction, "a jurisdiction like US, US-CA or US-CA 90001"]]) {
+    if (f[`regen-retire-${n}`] !== undefined && !re.test(f[`regen-retire-${n}`])) throw new ArgError(`--regen-retire-${n} is ${what}`);
+  }
+  const retireAmount = f["regen-retire-amount"], retireReason = f["regen-retire-reason"], regenLcd = f["regen-lcd"];
+  if (retireAmount !== undefined && (!REGEN_RETIRE_RE.amount.test(retireAmount) || !(Number(retireAmount) > 0))) throw new ArgError("--regen-retire-amount is a positive number of credits with at most 6 decimal places");
+  if (retireReason !== undefined && (!/^[\x20-\x7E]{1,200}$/.test(retireReason) || retireReason.startsWith("-") || clean(retireReason, 200) !== retireReason)) throw new ArgError("--regen-retire-reason is 1 to 200 plain characters, single spaced, not starting with a dash; it is written onchain, public and permanent");
+  if (regenLcd !== undefined) { let u = null; try { u = new URL(regenLcd); } catch { u = null; } if (!u || u.protocol !== "https:" || u.username || u.password) throw new ArgError("--regen-lcd is an https address with no login in it"); }
+  if (f["expect-commitment"] !== undefined && (!["audit", "restore"].includes(cmd) || !/^[a-f0-9]{64}$/.test(f["expect-commitment"])))
+    throw new ArgError("--expect-commitment belongs to `audit` and `restore` and is the 64 hex characters an earlier audit or backup printed as auditCommitment");
+  if (f.to !== undefined && cmd !== "backup") throw new ArgError("--to belongs to `backup`");
+  if (f.from !== undefined && cmd !== "restore") throw new ArgError("--from belongs to `restore`");
+  if (cmd === "restore" && f.home === undefined) throw new ArgError("restore needs --home PATH: the NEW folder to build (it must not exist yet)");
   return {
-    cmd: cmd ?? "help", live: Boolean(f.live), home, keyFile: path.resolve(f["key-file"] ?? path.join(home, "wallet.key")), address: addrFlag("address", f.address), legs,
+    cmd: cmd ?? "help", live: Boolean(f.live), home, expectCommitment: f["expect-commitment"],
+    to: f.to === undefined ? undefined : path.resolve(f.to), from: f.from === undefined ? undefined : path.resolve(f.from), keyFile: path.resolve(f["key-file"] ?? path.join(home, "wallet.key")), address: addrFlag("address", f.address), legs,
     everyMinutes: whole("every", f.every, DEFAULTS.everyMinutes, 1, 10_080), buyEveryHours: whole("buy-every-hours", f["buy-every-hours"], DEFAULTS.buyEveryHours, 1, 8_760),
     hydrexTop: whole("hydrex-top", f["hydrex-top"], DEFAULTS.hydrexTop, 1, 10), hydrexVote: f["hydrex-vote"],
     klimaClass: addrFlag("klima-class", f["klima-class"]), klimaCredit: addrFlag("klima-credit", f["klima-credit"]), klimaTonnes: f["klima-tonnes"], klimaTokenId: f["klima-token-id"], klimaName: name,
-    regenWei: ethFlag("regen-eth", f["regen-eth"], MAX_LEG_ETH_WEI), ecoWei: ethFlag("eco-eth", f["eco-eth"], MAX_LEG_ETH_WEI), circleWei: ethFlag("circle-eth", f["circle-eth"], MAX_LEG_ETH_WEI),
+    regenRetireOwner: f["regen-retire-owner"], regenRetireBatch: f["regen-retire-batch"], regenRetireAmount: retireAmount, regenRetireJurisdiction: f["regen-retire-jurisdiction"], regenRetireReason: retireReason, regenLcd,
+    regenWei: ethFlag("regen-eth", f["regen-eth"], MAX_LEG_ETH_WEI), ecoWei: ethFlag("eco-eth", f["eco-eth"], MAX_LEG_ETH_WEI), ecoBuyWei: ethFlag("eco-buy-eth", f["eco-buy-eth"], MAX_LEG_ETH_WEI), netWei: ethFlag("net-eth", f["net-eth"], MAX_LEG_ETH_WEI), circleWei: ethFlag("circle-eth", f["circle-eth"], MAX_LEG_ETH_WEI),
     gmxMarket: f["gmx-market"], gmxSide: f["gmx-side"], gmxCollateral: f["gmx-collateral"], gmxLeverage: f["gmx-leverage"], gmxHoldHours: whole("gmx-hold-hours", f["gmx-hold-hours"], DEFAULTS.gmxHoldHours, 1, 8_760),
     dayFeeWei: ethFlag("day-fee-eth", f["day-fee-eth"] ?? DEFAULTS.dayFeeEth, HARD_MAX.dayFeeWei), daySpendWei: ethFlag("day-spend-eth", f["day-spend-eth"] ?? DEFAULTS.daySpendEth, HARD_MAX.daySpendWei),
     maxTxFeeWei: ethFlag("max-tx-fee-eth", f["max-tx-fee-eth"] ?? DEFAULTS.maxTxFeeEth, HARD_MAX.maxTxFeeWei),
@@ -650,58 +1604,298 @@ Never an offer or advice, no return promised. DRY unless you pass --live.
   node bot.mjs once --address 0xYOU        a dry pass for any address: no key, nothing signed, nothing sent
   node bot.mjs wallet                      make the bot's wallet in <home>/wallet.key (never overwrites one)
   node bot.mjs once --live ...             one pass that sends (for cron or launchd)
+  node bot.mjs audit --home PATH            verify the stopped journal and all archived hashes (no key or RPC)
+           [--expect-commitment HEX]        exit 3 unless the home matches the commitment you saved (restore check)
+  node bot.mjs backup --home PATH --to NEW  copy the stopped home's memory (never the key) into a new private folder and prove the copy
+  node bot.mjs restore --from BACKUP --home NEW [--expect-commitment HEX]   build a NEW home from a backup, verified file by file; never overwrites
+  node bot.mjs compact --home PATH          archive finalized rows older than 48h; recover interrupted rotation (no key or RPC)
   node bot.mjs run --live ...              the loop, forever, one pass every --every minutes (default ${DEFAULTS.everyMinutes})
   node bot.mjs list                        every contract call this program can sign, and nothing else
 
-Legs (--legs hydrex,klima,regen,eco,circle,gmx; default all, each one off until it has what it needs):
+Legs (--legs hydrex,klima,regen-retire,regen,eco,eco-buy,net-buy,circle,gmx; default all, each one off until it has what it needs):
   hydrex   needs a veHYDX lock in the wallet. [--hydrex-top ${DEFAULTS.hydrexTop}] [--hydrex-vote 0xPOOL:10000 to use your own vote]
   klima    --klima-class 0x.. --klima-credit 0x.. --klima-tonnes 0.01 [--klima-token-id n] [--klima-name "my bot"]
+  regen-retire  --regen-retire-owner regen1.. --regen-retire-batch C01-.. --regen-retire-amount 1 --regen-retire-jurisdiction US-CA
+           --regen-retire-reason "text" [--regen-lcd https://..]   prepares the Regen Ledger retirement message and prints it.
+           It never signs or sends, with or without --live: you sign the message with your own Regen wallet.
   regen    --regen-eth 0.0002        eco   --eco-eth 0.0002        circle   --circle-eth 0.0001
+  eco-buy  --eco-buy-eth 0.0002      net-buy  --net-eth 0.0002   one-way buys by the NET circle kit's best route: you end up holding ECO or NET
   gmx      --gmx-market ETH --gmx-side long --gmx-collateral 5 --gmx-leverage 2 [--gmx-hold-hours ${DEFAULTS.gmxHoldHours}]
 Pace and caps:
   --buy-every-hours ${DEFAULTS.buyEveryHours}   --day-fee-eth ${DEFAULTS.dayFeeEth}   --day-spend-eth ${DEFAULTS.daySpendEth}   --max-tx-fee-eth ${DEFAULTS.maxTxFeeEth}
 Where things are:
   --home ~/.vealth-bot   --key-file <home>/wallet.key   --base-rpc / --arbitrum-rpc (or BASE_RPC_URL / ARBITRUM_RPC_URL)
-Stop it: touch <home>/STOP. Everything it sent is in <home>/ledger.jsonl.
-Exit codes: 0 the pass ran | 2 bad arguments | 4 a rule refused a step (nothing was sent) | 1 a leg was stopped`;
+Stop it: touch <home>/STOP. Everything it sent is in <home>/ledger.jsonl. A stale <home>/lock needs manual recovery after checking the previous bot is stopped.
+Exit codes: 0 the pass ran | 2 bad arguments | 3 the audit did not match your saved commitment | 4 a rule refused a step (nothing was sent) | 1 a leg was stopped`;
 
 export function listText() {
   const lines = ["Every contract call this program can sign. A step that is not here is refused.", ""];
-  for (const leg of LEG_ORDER) for (const r of RULES[leg]) {
+  for (const leg of LEG_ORDER) for (const r of RULES[leg] ?? []) {
     const value = r.value === "zero" ? "no ETH" : r.value === "size" ? "at most the size you set" : `at most ${eth(MAX_GMX_EXECUTION_FEE_WEI)} as GMX's execution fee`;
     lines.push(`${leg.padEnd(7)} ${r.chain.padEnd(9)} ${r.to}  ${r.fn}  (${value}${r.spender ? `; spender ${r.spender} only, at most ${r.maxAmount} units` : ""})`);
   }
+  for (const leg of UNSIGNED_LEGS) lines.push("", `${leg} signs nothing: it prepares a message and prints it for you to sign yourself, so it has no line above`);
   return lines.join("\n");
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Keep a forever-loop cadence using monotonic time, not a mutable wall date. */
+export async function waitForNextPass(minutes, sleeper = sleep, ticks = () => process.hrtime.bigint()) {
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 10_080)
+    throw new GuardError("the pass interval must be 1 to 10080 whole minutes");
+  const end = ticks() + BigInt(minutes) * 60_000_000_000n;
+  for (;;) {
+    const remaining = end - ticks();
+    if (remaining <= 0n) return;
+    await sleeper(Math.min(60_000, Math.max(1, Number(remaining / 1_000_000n))));
+  }
+}
+/**
+ * One wallet, one running bot home on this machine. Two homes (or two copies of the bot) signing for the same
+ * address would each count only their own spending and could race for the same nonce, so the second is refused.
+ * The lease is a file named for the address in a private per-user folder; like the home lock it is NOT stolen after
+ * a crash: confirm the first bot is stopped, then remove the file it names. It does not span machines.
+ */
+export function acquireWalletLease(address, home, { dir = process.env.VEALTH_BOT_LEASE_DIR ?? path.join(os.homedir(), ".vealth-bot-leases"), pid = process.pid } = {}) {
+  if (!isAddress(String(address ?? ""))) throw new GuardError("a wallet lease needs one valid wallet address");
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const st = fs.lstatSync(dir);
+  if (!st.isDirectory() || st.isSymbolicLink() || (process.platform !== "win32" && (st.mode & 0o077) !== 0) ||
+      (typeof process.getuid === "function" && st.uid !== process.getuid()))
+    throw new GuardError("the wallet lease folder must be a private real directory owned by you (chmod 700; no symlinks)");
+  const file = path.join(dir, `${String(address).toLowerCase()}.lease`);
+  const nonce = randomBytes(16).toString("hex");
+  let fd;
+  try { fd = fs.openSync(file, "wx", 0o600); }
+  catch (e) {
+    if (e?.code !== "EEXIST") throw e;
+    let who = "another bot";
+    try { const held = JSON.parse(fs.readFileSync(file, "utf8")); who = `the bot home ${clean(held.home, 120)} (pid ${clean(held.pid, 12)}, since ${clean(held.at, 30)})`; } catch { /* unreadable lease is still a lease */ }
+    throw new GuardError(`this wallet is already in use by ${who}. One wallet runs from one bot home at a time. If that bot is stopped, remove ${file} and start again`);
+  }
+  try { fs.writeFileSync(fd, JSON.stringify({ home, pid, nonce, at: new Date().toISOString() })); fs.fsyncSync(fd); }
+  finally { fs.closeSync(fd); }
+  syncDirectory(dir);
+  return { file, release() {
+    try { if (JSON.parse(fs.readFileSync(file, "utf8")).nonce === nonce) fs.unlinkSync(file); } catch { /* already gone or not ours */ }
+  } };
+}
+
+const COMMITMENT_MISMATCH ="bot: this home does not match the commitment you saved: it may be an older backup (spending forgotten), a newer one, or altered. Do not run it live until you reconcile it against the chain.";
+
+/** One read-only look at a stopped home: validate the whole journal and its archives, and hash what is there. The caller holds the home lock. */
+async function auditHome(dir) {
+  const home = openHome(dir);
+  const totals = home.day(Date.now()), state = home.state();
+  const archiveInventory = fs.existsSync(home.files.state) ? verifyArchiveInventory(dir) : { segments: 0, archivedBytes: 0, root: "GENESIS" };
+  const bytes = fs.existsSync(home.files.ledger) ? fs.statSync(home.files.ledger).size : 0;
+  const ledgerSha256 = bytes ? await hashLocalFile(home.files.ledger) : null;
+  const stateSha256 = fs.existsSync(home.files.state) ? await hashLocalFile(home.files.state) : null;
+  const auditCommitment = createHash("sha256").update(JSON.stringify({
+    schemaVersion: STORAGE_SCHEMA_VERSION, wallet: state.walletAddress ?? null,
+    ledgerSha256, stateSha256, archiveHead: archiveInventory.root
+  })).digest("hex");
+  return { home: dir, schemaVersion: STORAGE_SCHEMA_VERSION,
+    ledgerSha256, stateSha256, auditCommitment, archives: archiveInventory, wallet: state.walletAddress ?? null,
+    pending: state.pending ? { leg: state.pending.leg, chain: state.pending.chain,
+      hash: state.pending.hash ?? null, nonce: state.pending.nonce ?? null } : null,
+    ledgerBytes: bytes, rolling24Hours: { feeWei: String(totals.feeWei),
+      spendWei: String(totals.spendWei), kvcmUnits: String(totals.kvcmUnits),
+      usdcUnits: String(totals.usdcUnits) } };
+}
+
+// ---- backup and restore ------------------------------------------------------------------------------------------------
+// A backup holds exactly the bot's memory: state.json, ledger.jsonl and its archived segments, with a manifest of their
+// hashes and the audit commitment. It never holds the wallet key, the lock or the STOP file.
+const BACKUP_FORMAT = "vealth-bot-backup";
+const BACKUP_FILE_RE = /^(?:state\.json|ledger\.jsonl|archives\/ledger-[0-9a-f]{64}\.jsonl)$/;
+const MAX_BACKUP_MANIFEST_BYTES = 1024 * 1024;
+const insideOrSame = (parent, child) => { const rel = path.relative(parent, child); return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel)); };
+function copyPrivateFile(src, dst) {
+  fs.copyFileSync(src, dst, fs.constants.COPYFILE_EXCL);
+  fs.chmodSync(dst, 0o600);
+  const fd = fs.openSync(dst, "r");
+  try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+}
+/** Copy a stopped home's memory into a NEW private folder and prove the copy matches. The caller holds the home lock. */
+export async function backupHome(homeDir, to) {
+  if (!to) throw new ArgError("backup needs --to PATH, a folder that does not exist yet");
+  const dest = path.resolve(to);
+  if (fs.existsSync(dest)) throw new ArgError("the backup folder already exists; a backup never overwrites anything, choose a new one");
+  if (insideOrSame(homeDir, dest) || insideOrSame(dest, homeDir)) throw new ArgError("the backup folder cannot be inside the bot home or contain it");
+  if (!fs.existsSync(path.dirname(dest))) throw new ArgError("the folder that will hold the backup does not exist");
+  const before = await auditHome(homeDir); // a corrupt home is refused here, never copied as if it were good
+  const state = openHome(homeDir).state();
+  const names = ["state.json"];
+  if (fs.existsSync(path.join(homeDir, "ledger.jsonl"))) names.push("ledger.jsonl");
+  for (const entry of state.archives ?? []) names.push(`archives/${entry.file}`);
+  fs.mkdirSync(dest, { mode: 0o700 });
+  fs.mkdirSync(path.join(dest, "archives"), { mode: 0o700 });
+  const files = [];
+  for (const name of names) {
+    const src = path.join(homeDir, name), dst = path.join(dest, name);
+    copyPrivateFile(src, dst);
+    const sha256 = await hashLocalFile(dst);
+    if (sha256 !== await hashLocalFile(src)) throw new GuardError(`the copy of ${name} does not match its source; the backup is not trustworthy`);
+    files.push({ path: name, bytes: fs.statSync(dst).size, sha256 });
+  }
+  const manifest = { format: BACKUP_FORMAT, version: 1, createdAt: new Date().toISOString(),
+    wallet: before.wallet, auditCommitment: before.auditCommitment, archiveHead: before.archives.root, files };
+  const tmp = path.join(dest, `MANIFEST.json.${randomBytes(8).toString("hex")}.tmp`);
+  const fd = fs.openSync(tmp, "wx", 0o600);
+  try { fs.writeFileSync(fd, JSON.stringify(manifest, null, 2)); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  fs.renameSync(tmp, path.join(dest, "MANIFEST.json"));
+  syncDirectory(path.join(dest, "archives")); syncDirectory(dest); syncDirectory(path.dirname(dest));
+  const after = await auditHome(dest); // read the copy back the way a restore will
+  if (after.auditCommitment !== before.auditCommitment) throw new GuardError("the backup does not read back to the same audit commitment; it is not trustworthy");
+  return { backup: dest, auditCommitment: after.auditCommitment, wallet: after.wallet, files: files.length,
+    note: "Save auditCommitment somewhere other than this machine. The wallet key is NOT in the backup. The backup may hold signed transaction bytes: keep it private." };
+}
+/** Build a NEW home from a backup, verified file by file and against the audit commitment, and only then put it in place. */
+export async function restoreHome(from, homeDir, expectCommitment) {
+  if (!from) throw new ArgError("restore needs --from PATH, a backup folder made by `backup`");
+  const source = path.resolve(from);
+  if (fs.existsSync(homeDir)) throw new ArgError("the bot home already exists; restore only creates a new home and never overwrites one");
+  if (!fs.existsSync(path.dirname(homeDir))) throw new ArgError("the folder that will hold the restored home does not exist");
+  if (insideOrSame(source, homeDir) || insideOrSame(homeDir, source)) throw new ArgError("the backup and the restored home cannot contain each other");
+  const sourceStat = fs.lstatSync(source);
+  if (!sourceStat.isDirectory() || sourceStat.isSymbolicLink()) throw new ArgError("--from must be a real backup folder");
+  const manifestFile = path.join(source, "MANIFEST.json");
+  const manifestStat = fs.lstatSync(manifestFile);
+  if (!manifestStat.isFile() || manifestStat.isSymbolicLink() || manifestStat.size > MAX_BACKUP_MANIFEST_BYTES) throw new GuardError("the backup manifest is missing or not a plain file");
+  let manifest;
+  try { manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8")); } catch { throw new GuardError("the backup manifest is not valid JSON"); }
+  if (manifest?.format !== BACKUP_FORMAT || manifest.version !== 1 || !Array.isArray(manifest.files) ||
+      !/^[0-9a-f]{64}$/.test(manifest.auditCommitment ?? ""))
+    throw new GuardError("the backup manifest is not a version 1 bot backup");
+  const listed = new Set();
+  for (const f of manifest.files) {
+    if (!f || typeof f.path !== "string" || !BACKUP_FILE_RE.test(f.path) || listed.has(f.path) ||
+        !Number.isSafeInteger(f.bytes) || f.bytes < 0 || !/^[0-9a-f]{64}$/.test(f.sha256 ?? ""))
+      throw new GuardError("the backup manifest lists a file the bot never backs up, or lists one twice");
+    listed.add(f.path);
+  }
+  if (!listed.has("state.json")) throw new GuardError("the backup holds no state.json");
+  // Nothing may sit in the backup that the manifest does not vouch for (a wallet key, a lock, a stray file).
+  const present = [];
+  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+    if (entry.name === "MANIFEST.json") continue;
+    if (entry.isDirectory() && entry.name === "archives") {
+      for (const a of fs.readdirSync(path.join(source, "archives"))) present.push(`archives/${a}`);
+    } else present.push(entry.name);
+  }
+  for (const name of present) if (!listed.has(name)) throw new GuardError(`the backup holds a file its manifest does not list: ${clean(name, 80)}`);
+  for (const name of listed) if (!present.includes(name)) throw new GuardError(`the backup is missing ${clean(name, 80)}`);
+  const stage = fs.mkdtempSync(path.join(path.dirname(homeDir), ".vealth-bot-restore-"));
+  const discard = () => fs.rmSync(stage, { recursive: true, force: true });
+  try {
+    fs.mkdirSync(path.join(stage, "archives"), { mode: 0o700 });
+    for (const f of manifest.files) {
+      const src = path.join(source, f.path), dst = path.join(stage, f.path);
+      const st = fs.lstatSync(src);
+      if (!st.isFile() || st.isSymbolicLink() || st.size !== f.bytes) throw new GuardError(`${f.path} in the backup is not the file its manifest describes`);
+      copyPrivateFile(src, dst);
+      if (await hashLocalFile(dst) !== f.sha256) throw new GuardError(`${f.path} in the backup has been altered: its hash differs from the manifest`);
+    }
+    syncDirectory(path.join(stage, "archives")); syncDirectory(stage);
+    const audited = await auditHome(stage);
+    if (audited.auditCommitment !== manifest.auditCommitment) throw new GuardError("the restored files do not reproduce the commitment in the manifest");
+    if (expectCommitment !== undefined && expectCommitment !== audited.auditCommitment) {
+      discard();
+      console.error(COMMITMENT_MISMATCH);
+      return null;
+    }
+    fs.renameSync(stage, homeDir);
+    syncDirectory(path.dirname(homeDir));
+    return { restored: homeDir, auditCommitment: audited.auditCommitment, wallet: audited.wallet, pending: audited.pending,
+      verifiedAgainst: expectCommitment === undefined ? "the backup's own manifest only; pass --expect-commitment with the value you saved elsewhere" : "the commitment you saved",
+      note: "The wallet key is not in a backup: put the SAME wallet's key at <home>/wallet.key (chmod 600) or pass --key-file. A send that was in doubt is still in doubt and stays blocked." };
+  } catch (e) { if (fs.existsSync(stage)) discard(); throw e; }
+}
+
 export async function main(argv) {
   let opts;
   try { opts = parseArgs(argv); } catch (e) { if (e instanceof ArgError) { console.error(`bot: ${e.message}`); return 2; } throw e; }
   if (opts.cmd === "help") { console.log(HELP); return 0; }
   if (opts.cmd === "list") { console.log(listText()); return 0; }
   try {
-    if (opts.cmd === "wallet") {
+    if (opts.cmd === "audit") {
+      if (!fs.existsSync(opts.home)) throw new ArgError("audit needs an existing bot home; refusing to create empty history");
+      const home = openHome(opts.home);
+      if (!home.lock()) throw new ArgError("audit cannot run while the bot home is locked; stop the bot first");
+      try {
+        const reported = await auditHome(opts.home);
+        console.log(JSON.stringify(reported, null, 2));
+        // A restored copy that differs from the commitment the owner saved elsewhere is an older, newer or
+        // altered history: the spending it remembers cannot be trusted, so the audit does not pass.
+        if (opts.expectCommitment !== undefined && opts.expectCommitment !== reported.auditCommitment) {
+          console.error(COMMITMENT_MISMATCH);
+          return 3;
+        }
+        return 0;
+      } finally { home.unlock(); }
+    }
+    if (opts.cmd === "backup") {
+      if (!fs.existsSync(opts.home)) throw new ArgError("backup needs an existing bot home");
+      const home = openHome(opts.home);
+      if (!home.lock()) throw new ArgError("backup cannot run while the bot home is locked; stop the bot first");
+      try { console.log(JSON.stringify(await backupHome(opts.home, opts.to), null, 2)); return 0; }
+      finally { home.unlock(); }
+    }
+    if (opts.cmd === "restore") {
+      const restored = await restoreHome(opts.from, opts.home, opts.expectCommitment);
+      if (!restored) return 3;
+      console.log(JSON.stringify(restored, null, 2));
+      return 0;
+    }
+    if (opts.cmd === "compact") {
+      if (!fs.existsSync(opts.home)) throw new ArgError("compact needs an existing bot home");
+      const home = openHome(opts.home);
+      if (!home.lock()) throw new ArgError("compact cannot run while another bot holds the journal lock");
+      try {
+        const now = Date.now();
+        const report = archiveJournal(opts.home, { locked: true, now, force: true, validateActive: () => home.day(now) });
+        console.log(JSON.stringify(report, null, 2));
+        return 0;
+      } finally { home.unlock(); }
+    }    if (opts.cmd === "wallet") {
       const w = makeWallet(opts.keyFile);
       console.log(`${w.made ? "made a new wallet" : "the wallet is"} ${w.address}\nits key is in ${opts.keyFile}, readable by you alone. Keep in it only what you can lose.`);
       return 0;
     }
+    if (opts.live) verifyBundledKits(opts.kit, opts.circleKit);
     const account = opts.live ? loadAccount(opts.keyFile) : null;
     const address = account?.address ?? opts.address ?? (fs.existsSync(opts.keyFile) ? loadAccount(opts.keyFile).address : null);
     if (!address) throw new ArgError("a dry pass needs --address 0xYOU (or a wallet: run `node bot.mjs wallet`)");
     if (opts.live && opts.address && !same(opts.address, address)) throw new ArgError("--address is not the address of the key file");
     const home = openHome(opts.home);
-    if (!home.lock()) throw new ArgError(`another bot is already running from ${opts.home}`);
-    const ctx = makeContext({ opts, home, address, io: makeChainIo(account, opts.rpcs) });
-    console.log(`bot ${VERSION} for ${address}: ${opts.live ? "LIVE, it sends" : "DRY, nothing is sent"}`);
+    if (!home.lock()) throw new ArgError(`the home ${opts.home} is locked: a bot may still be running or left a stale lock. Confirm it is stopped before manually removing ${home.files.lock}`);
+    let lease = null;
     try {
+      // One wallet, one running home on this machine: a second home signing for the same address is refused.
+      if (opts.live) lease = acquireWalletLease(address, opts.home);
+      // Finish a previously interrupted *local* archive using only verified disk hashes.
+      // This cannot sign, broadcast or reset a pending onchain transaction.
+      const recovered = archiveJournal(opts.home, { locked: true, recoveryOnly: true });
+      if (recovered.archived) console.log(`journal archive recovered ${recovered.bytes} verified bytes`);
+      const ctx = makeContext({ opts, home, address, io: makeChainIo(account, opts.rpcs) });
+      console.log(`bot ${VERSION} for ${address}: ${opts.live ? "LIVE, it sends" : "DRY, nothing is sent"}`);
       if (opts.cmd === "once") return await pass(ctx);
       for (;;) {
         await pass(ctx);
-        const until = Date.now() + opts.everyMinutes * 60_000;
-        while (Date.now() < until) await sleep(Math.min(60_000, until - Date.now()));
+        // Only rotate a complete, old and settled journal prefix, under the lock.
+        // The state marker blocks trading if power is lost during the rotation.
+        if (!home.stopped() && !home.state().pending && fs.existsSync(home.files.ledger) &&
+            fs.statSync(home.files.ledger).size >= ARCHIVE_TRIGGER_BYTES) {
+          archiveJournal(opts.home, { locked: true, now: Date.now(), validateActive: () => home.day(Date.now()) });
+        }
+        // Finalized receipts can appear between ordinary hourly passes.
+        // Poll a known pending hash at most every 5 minutes; hashless sends
+        // remain manually blocked and use the ordinary cadence.
+        const pendingHash = !home.stopped() && home.state().pending?.hash;
+        await waitForNextPass(pendingHash ? Math.min(5, opts.everyMinutes) : opts.everyMinutes);
       }
-    } finally { home.unlock(); }
+    } finally { lease?.release(); home.unlock(); }
   } catch (e) {
     if (e instanceof ArgError) { console.error(`bot: ${e.message}`); return 2; }
     console.error(`bot: ${clean(e?.shortMessage || e?.message || e)}`);
