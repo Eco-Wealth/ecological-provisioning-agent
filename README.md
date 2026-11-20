@@ -13,8 +13,9 @@ node packages/agent-client/vealth-agent.mjs earn --dry
 Then take one packet. Your claim and your proof must be signed by the same wallet, so make a key and keep it (the client never prints it):
 
 ```bash
+npm ci --ignore-scripts --prefix packages/agent-client
+# Supply your own signer; never paste or commit the private key.
 export VEALTH_AGENT_KEY=0x$(openssl rand -hex 32)
-npm install --prefix packages/agent-client viem
 node packages/agent-client/vealth-agent.mjs earn --origin https://your-host
 ```
 
