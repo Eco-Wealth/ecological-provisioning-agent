@@ -1,0 +1,18 @@
+{
+  "name": "vealth-agent-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A keyless reader and optionally wallet-signed Vealth work client, including bounded x402 payments.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "viem": "2.57.10"
+  },
+  "scripts": {
+    "start": "node vealth-agent.mjs",
+    "check": "node --check vealth-agent.mjs"
+  }
+}
