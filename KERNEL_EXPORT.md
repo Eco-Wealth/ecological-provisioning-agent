@@ -1,6 +1,6 @@
 # Kernel export
 
-Files below are copied verbatim from the private Vealth repository by `scripts/publish/kernel-export.sh` at that repo's commit `bbf67b6f557ac0460501ad955ac2b4889b042552` on 2026-11-19T08:21:14Z.
+Files below are copied verbatim from the private Vealth repository by `scripts/publish/kernel-export.sh` at that repo's commit `fcacb70fea358f20bf977a4d239d7dbb55d076be` on 2026-11-20T23:21:58Z.
 Most of them are also served live at https://vealth.net (the standard at /labor/standard, the tool list at /mcp, the client at /vealth-agent.mjs), and the live site stays the authority for those. The constitution, the worker sidecar and the packet-review skill are not served there; they are published here. This copy gives every file a home with history.
 
 | Path | sha256 |
@@ -15,9 +15,9 @@ Most of them are also served live at https://vealth.net (the standard at /labor/
 | `schemas/vealth-standard-v0.json` | `7b7e4f6c36269b3f25a9fdecd3c508ba06d69f0029ed38568010a3a64151bea4` |
 | `schemas/vealth-work-grant-v0.schema.json` | `45d910a1907878a64eb68f6b2402da2c06b00b7e58e5048736bbc0c09f5771c7` |
 | `contracts/vealth-work-control.json` | `664edb443396dc4b7917456de80bab4f37e26e9e965f6f629fe6f0058dcd66f1` |
-| `contracts/is-this-safe.json` | `bc69da18bda9c9992a06fa707000f5f7fca892e81b0edd8d5f46349f93729b7e` |
-| `contracts/llms.txt` | `7b4cd182e2e25c2b0f510914a5c634d5d65d4252fc431ec34eef898600b6255b` |
-| `contracts/mcp-tools.json` | `24a32d46024c55e913823cc944e29c7f6d95fd29945065c68d607f9abfb312c9` |
+| `contracts/is-this-safe.json` | `17c1dec6a92af9a037533769e2e810941addf2b5c3ebad50af86e513197be9fc` |
+| `contracts/llms.txt` | `c226506b8550f27712fe9a14c34b906dbf1067d4e4babcefc197fcbf66b273b9` |
+| `contracts/mcp-tools.json` | `1c4a97c8cdb36740765c55daa20d159165e197a71b648cbd84f8bf12c62e8b39` |
 | `docs/ecowealth-constitution.md` | `fa5d86dcaf9eb54ecfe68588752c2ddfb3387532c0adcba47e1c5c794e892cdd` |
 | `packages/vcwp-sidecar/vcwp-sidecar.mjs` | `5518c37dd47010130202f96e267faaf7542a972b82a4c949981e2c43aa33033a` |
 | `packages/vcwp-sidecar/README.md` | `d1f51ace66910ba51812541f070e91582c3d26d26a584bc52fcc01303fa07d22` |
@@ -91,9 +91,9 @@ Most of them are also served live at https://vealth.net (the standard at /labor/
 | `skills/protocol-guide/guides/klima.md` | `f8d19cb592061ba8524acf87c7058d556c67a883287d25a2432ec406827605ae` |
 | `skills/protocol-guide/guides/uniswap.md` | `690282b6905a40a5e4d269e1fc4ad02a192f8dd594cbe03deeb15fb1e8ad585c` |
 | `skills/protocol-guide/guides/bots.md` | `23decee78ec210dedca39bd97f2aab13db6aed69257dfb5ecdbd9f722d104108` |
-| `packages/protocol-bot/bot.mjs` | `50efc26f0470cf7df8e4f45976c2026491417d5daae84d49397a7fdc9826a5ba` |
-| `packages/protocol-bot/README.md` | `007199037427eac67ea8a27cb0f7b59b7a1f158ac6a4639ba324a703f1b52cba` |
-| `packages/protocol-bot/bot.test.mjs` | `cc427544f92698d9221f563a41180d0fc0f95412e5147bc3dc91add9fab51b1f` |
+| `packages/protocol-bot/bot.mjs` | `e8d746237f8dab2953237ee83ac92946140a2456daeee4800d351056eae16ca2` |
+| `packages/protocol-bot/README.md` | `270d5f7e9e6aec40b376fbb3d23a294ca03f6f7339ebe0a4314acf8dcf4a635d` |
+| `packages/protocol-bot/bot.test.mjs` | `5655b0f387b8a876523c58f8830ee5f463250a5c1dc25d4c1614f3161f16c6e8` |
 | `packages/protocol-bot/package.json` | `b4a3f6159dbedec7aea61519ee8aa613304ae89e525c598bb4c78b2ea28e1834` |
 | `packages/protocol-bot/package-lock.json` | `42cf3b800796b1ca52b1f4ac59f8f1840b3afe6e7edada00c8d4afe1a9403c8a` |
 | `packages/protocol-bot/journal-archive.mjs` | `85656c4075ca7ab3f82ea0febec6e1a288b3f4993e8b5905b258575ee7010e8c` |

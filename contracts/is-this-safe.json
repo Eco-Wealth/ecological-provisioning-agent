@@ -44,7 +44,7 @@
   "never_asks_for": [
     "seed phrase or private key",
     "password or account",
-    "token approval or allowance for an x402 payment; the GMX order tools were withdrawn on 2026-10-26, so no vealth.net tool call can ask you to approve the GMX Router",
+    "token approval or allowance for an x402 payment; the GMX order tools were withdrawn on 2026-10-26, so no public tool call can ask you to approve the GMX Router",
     "exchange or bank login",
     "your file when you anchor a proof, only its hash; the one file this site does receive is a worker's own photo evidence of physical work",
     "identity documents"
@@ -64,7 +64,7 @@
     "note": "The literal first move for an agent that has called nothing on https://vealth.net/mcp yet: the same NEXT_CALL line every worker reply ends with, so an agent can follow the loop one literal call at a time (the how_to_claim tool explains the loop). POST it to https://vealth.net/mcp as {\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"find_work\",\"arguments\":{}}}."
   },
   "charges": {
-    "unsigned_write_to_the_labor_board": "$0.05 USDC on Base, or USDG on chain 4663, quoted in the 402",
+    "unsigned_write_to_the_labor_board": "nothing: it is refused with door_closed and its reason, and nothing is charged (the paid way to write has been closed since 2026-11-11)",
     "priced_api_doors": "listed at https://vealth.net/.well-known/x402, generated from the running route mounts",
     "authoritative_price": "the 402 the door itself returns; if the manifest disagrees, believe the 402",
     "never_chargeable_by_law": "verification and discovery surfaces, refused at process boot if a paywall is ever mounted on one"
@@ -135,27 +135,27 @@
     },
     {
       "id": "writes-gated",
-      "claim": "Publishing your own wording exactly as written is gated at $0.05 and nothing is taken before you agree. Sending a request with one signed approval is free.",
+      "claim": "Publishing your own wording exactly as written needs your own signature or an EWP key; with neither it is refused and nothing is taken. Sending a request with one signed approval is free.",
       "check": "curl -sD - -o /dev/null -X POST https://vealth.net/labor/work -H 'content-type: application/json' -d '{\"title\":\"Plant a shade tree\"}'",
-      "expect": "HTTP 402 plus a payment-required header whose decoded quote names asset 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913, amount 50000 in 6 decimals, and a payTo address",
+      "expect": "HTTP 503 with door_closed true and charged false, a reason, and no payment quote (no payment-required header and no accepts list)",
       "vouched_by": "you, directly",
       "independently_verifiable": true,
       "browser_check": {
         "runs_in_browser": "full",
-        "assertion": "POST /labor/work with a title naming documented work answers 402 (an empty body is refused free by the scope gate first), carries a payment-required header, and quotes 50000 of 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 to a well formed payTo under scheme exact."
+        "assertion": "POST /labor/work with a title naming documented work answers 503 (an empty body is refused free by the scope gate first) with door_closed true and charged false, and carries no payment-required header and no accepts list."
       }
     },
     {
       "id": "worker-path-free",
       "claim": "The worker path is free end to end when signed: find, claim, submit proof, settle.",
       "check": "curl -s -X POST https://vealth.net/labor/claim -H 'content-type: application/json' -d '{}'",
-      "expect": "a 402 body containing a freeAlternative object that says the call is free and documents the signature format",
+      "expect": "a 503 body (door_closed true, charged false) containing a freeAlternative object that says the call is free and documents the signature format",
       "vouched_by": "you, directly",
       "independently_verifiable": true,
       "caveat": "this is a live server setting. Re-run the check immediately before acting rather than trusting a stored result.",
       "browser_check": {
         "runs_in_browser": "full",
-        "assertion": "POST /labor/claim with {} answers 402 and the body carries a freeAlternative object whose message tells you the call is free and to sign instead of paying."
+        "assertion": "POST /labor/claim with {} answers 503 with door_closed true and the body carries a freeAlternative object whose message tells you the call is free and to sign instead of paying."
       }
     },
     {
@@ -353,7 +353,7 @@
   "admitted_gaps": [
     {
       "id": "gmx-router-approval",
-      "gap": "NARROWED by withdrawal. The GMX order tools were taken off the published door on 2026-10-26, so no vealth.net tool call can ask you to approve the GMX Router. If they ever return, an order can require a one-time approve() transaction authorizing the Router to spend USDC collateral. That is separate from x402 payments, which use exact expiring EIP-3009 authorizations and never require an allowance.",
+      "gap": "NARROWED by withdrawal. The GMX order tools were taken off the published door on 2026-10-26, so no public tool call can ask you to approve the GMX Router. If they ever return, an order can require a one-time approve() transaction authorizing the Router to spend USDC collateral. That is separate from x402 payments, which use exact expiring EIP-3009 authorizations and never require an allowance.",
       "why_it_matters": "A token allowance can outlive one order. Inspect the Router address and allowance amount, approve only what you intend, and revoke it when you are finished. Vealth prepares or relays caller-signed transactions but does not hold the signing key.",
       "independently_verifiable": true,
       "check": "POST https://vealth.net/mcp with {\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"} and confirm no tool name starts with prepare_gmx or submit_gmx. If one ever appears, inspect its approval warning and transaction target before signing anything."

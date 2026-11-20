@@ -10,16 +10,16 @@ Vealth is a sovereignty protocol for ecological work: real jobs (planting,
 retrofits, monitoring, safety, cleanup, digital work) get created, funded,
 performed, coordinated, and verified through machine-readable, onchain-
 settled calls. Public reading is free, keyless, static, cacheable; writing
-needs an identity (a signature or an x402 payment), bounded authority, and
+needs an identity (a signature or an EWP key), bounded authority, and
 a receipt. Every claim below traces to a live endpoint or onchain tx.
 
 ## Start here: from one prompt to a real job
 
 You do not need the long documents first; this page and `https://vealth.net/playground.json` are enough.
 
-- MCP: connect `https://vealth.net/mcp`, call `find_work` with `near` (the person's place), `skillLevel` `"entry"` and `remote` `false`, then `hour_card` on the best match.
+- **MCP, and `start_here` is the first call for a stranger:** connect `https://vealth.net/mcp` and call `start_here`, with `near` (the person's place) to sort its set nearest first. It is read-only, free and keyless. It returns the few posted packets of physical work an ordinary person can take today, read live from the board, and the steps to begin. An empty wallet is enough: make one on your own machine (we never see the key), or a person claims in a browser with a passkey. Browsing, voting, claiming and handing in proof are free and keyless, with no gas and no balance. You authorize one signed message per act, never a key and never a payment. An unfunded packet banks a work credit, a public receipt, never cash. Nobody has to contact the founder: no email, no signup, no permission. Then `find_work` with `near` (the person's place), `skillLevel` `"entry"` and `remote` `false`, then `hour_card` on the best match.
 - Fetch only: `GET https://vealth.net/labor/work/advanced-search?status=OPEN&skillLevel=entry&remote=false&radiusKm=3&limit=4&lat=<lat>&lng=<lng>` (the real coordinates of the person's place), pick one field job, then `GET https://vealth.net/labor/work/<workId>/hour-card`.
-- Tell the person the job, the place, what to bring, the steps, the proof to hand in, and whether it pays cash now or earns a work credit. Then give the one next step below.
+- Tell the person the job, the place, what to bring, the steps, the proof to hand in, and whether it pays cash now or earns a work credit. **How a job pays, per packet:** funded (a verified payment backs it, `payModel` `cash_on_approval`), pledged (a payer has offered to pay the worker directly and pays them once a person accepts the proof, a promise and never money held), or none (`credit_until_funded`, approved proof banks a work credit). Read `payModel` on `get_work_packet` or `GET https://vealth.net/labor/work/<workId>`, and any payer's standing offer in `directOffers` from `find_work` or at `GET https://vealth.net/labor/work/<workId>/direct-terms` (a token offer is at `.../token-terms`). A posted figure is a price, never money paid. Vealth sends no email, so `my_work` with the person's wallet is how they come back to where a job stands. Then give the one next step below.
 
 ## Earn: the worker loop
 
@@ -54,7 +54,7 @@ private orchestrator. Every worker-loop reply ends with `NEXT_CALL`, the
 literal edge to the next node. And settlement on Base is the one transition a
 node cannot fake: completion is a paid onchain event, never a self-report.
 Capability scoping lives at the door, not in a prompt: reads are free and
-keyless, writes take a signature or an x402 payment, and every stopped lane
+keyless, writes take a signature or an EWP key, and every stopped lane
 has a kill switch that fails closed. What the machine is for: **scaling
 ecological prowess**: skill written down as executable methods, then
 multiplied by loops instead of staying locked in people.
@@ -111,25 +111,31 @@ Every human/agent action on Vealth reduces to these four. Two are free.
    `submit_direct_offer`), then pay the worker yourself when you accept the
    proof; the worker records it. Each packet's `funding.doors` says whether a
    Vealth door is open (see "Funding a packet" below). Or buy a finished paid
-   result (any door in the catalog, from $0.005; see "Suggested first calls").
-   Full live price list: MCP `payment_options`, or
+   result only after checking a currently advertised open door (see "Suggested first calls").
+   Current prices and availability: MCP `payment_options`, or
    `https://vealth.net/.well-known/x402` + `agent-products.json` (must agree;
    source precedence below).
-4. **CREATE: x402 $0.05, signed payer.** Name a person, place, problem, or
+4. **CREATE: signed.** Name a person, place, problem, or
    outcome not yet on the board. MCP: `prepare_post_work` → sign →
-   `submit_post_work`. Plain HTTP: `POST /labor/work`. Claiming the packet
-   that results stays free; only the post itself is paid.
+   `submit_post_work`. Plain HTTP: `POST /labor/work`. The creator wallet's
+   own signature is the gate (ten posts a day per wallet); a post with
+   no valid signature is refused with `door_closed` and takes no payment.
+   Claiming the packet that results stays free.
 
 ## Suggested first calls
 
 Funding board work is the Fund block at the top. These are paid finished results (x402), a separate and later step.
 
-Cheapest: `michelin-score` $0.005. Flagship: `work-packet` $0.10,
-`health-packet` $0.05. **Do not start with a retirement door.** Retirement
-is paused since 2026-08-04, so `klima2-retire`, `retire-attach` and
-`build-eco-food-retire` each answer 503 `retire_lane_stopped` and take no
-charge. Full ladder + per-door status:
-`https://vealth.net/.well-known/x402`.
+**Check availability before paying:** MCP `payment_options` and the current
+`https://vealth.net/.well-known/x402` manifest are the first-call authority.
+`michelin-score`, `lbc-scan`, `sdg-assess`, `lbc-report`, `build-eco-food`
+and `build-eco-food-retire` are closed in the request path, and so are
+`klima2-retire` and `retire-attach`. A call to a closed door returns
+HTTP 503, `door_closed` and `charged:false`, before any x402 quote or payment.
+Choose a currently listed open door; a past price is not an offer.
+
+The free first acts are the real first call: browsing, voting, claiming and
+submitting proof cost nothing and need no balance.
 
 If your host speaks MCP: connect `https://vealth.net/mcp`, call `find_work`.
 Every worker-loop reply ends with `NEXT_CALL`, the literal next tool call:
@@ -142,7 +148,7 @@ afford: `GET /labor/work/advanced-search?status=OPEN&sort=entry-first&limit=5`.
 
 <!-- GENERATED:mcp-tools BEGIN. Built from the MCP tool registry. Do not hand-edit: run npm run agents:surfaces -->
 
-All 194 tools, generated from the server's own registry on 2026-11-17, toolset `ed33b896aa2d`.
+All 194 tools, generated from the server's own registry on 2026-11-19, toolset `ed33b896aa2d`.
 `tools/list` on the live endpoint stays the authority: call
 `{"jsonrpc":"2.0","id":1,"method":"tools/list"}` before you depend on a name.
 
@@ -374,11 +380,11 @@ structuredContent.payModel is cash_on_approval when a verified payment already b
 
 **Money and keys**
 
-Browsing the board is free and keyless. No account, no wallet, no signup. Claiming is free too. The signature proves the wallet is yours. It is never a payment and costs no gas. Submitting proof is free when signed. Reads are keyless. A write needs your own signature, free for a claim, vote, bid, proof, settlement or new post (ten posts a day per wallet), or an x402 payment of $0.05 for a post sent without one; Vealth never signs for anyone and never holds a key. No wallet: open https://vealth.net/work/<workId>, tap Claim, and sign in with a passkey. This MCP server never asks for a private key, never holds a key, and moves no funds itself. Sign with your own wallet and pass only the signature. Money a buyer pays to fund a packet is covered next.
+Browsing the board is free and keyless. No account, no wallet, no signup. Claiming is free too. The signature proves the wallet is yours. It is never a payment and costs no gas. Submitting proof is free when signed. Reads are keyless. A write is opened by your own signature where the door takes one (ten posts a day per wallet), or by an EWP key we issue. A closed door says door_closed and why, and charges nothing. Vealth never signs for anyone or holds a key. No wallet: open https://vealth.net/work/<workId>, tap Claim, and sign in with a passkey. This MCP server never asks for a private key, never holds a key, and moves no funds itself. Sign with your own wallet and pass only the signature. Money a buyer pays to fund a packet is covered next.
 
 **Funding a packet: offer to pay the worker directly**
 
-Paying Vealth is closed: Vealth takes no new card or wallet payment for a job. To fund a job, offer to pay the worker directly, then pay them yourself when you accept the proof, from your own wallet or by your own card or bank. From a wallet: prepare_token_offer, sign, submit_token_offer; after the proof is accepted you pay the worker onchain and the worker records it (prepare_token_settlement, or POST /labor/settle for USDC on Base). By card or bank, through your own card processor such as your own Stripe: prepare_direct_offer, sign, submit_direct_offer; you pay the worker yourself and the worker records it with prepare_direct_settlement, which the board keeps as unverified because it never sees that money. Both are free, need no gas and no balance (the wallet only signs), and move no money through Vealth. Vealth never holds the money and never referees between you. The wallet door, POST /nurture/fund, is closed and answers 403 while closed. The card door, POST https://vealth.net/fund/stripe/checkout, is closed and answers 403 while closed. New card payments are closed by default: funding.doors shows the card door with armed false and canAcceptPaymentNow false, and the checkout takes no payment. To read the live state of a packet's doors: GET https://vealth.net/labor/work/{workId}, field funding.doors. Make a token offer or a direct offer, as above, whatever that read says. Vealth holds no job money and handles no refunds. A refund or a card dispute goes through the payer's own card, bank or wallet, never through Vealth. Vealth does not referee a disagreement about a payment.
+Paying Vealth is closed: Vealth takes no new card or wallet payment for a job. To fund a job, offer to pay the worker directly, then pay them yourself when you accept the proof, from your own wallet or by your own card or bank. From a wallet: prepare_token_offer, sign, submit_token_offer; after the proof is accepted you pay the worker onchain and the worker records it (prepare_token_settlement, or POST /labor/settle for USDC on Base). By card or bank, through your own card processor such as your own Stripe (do not assume Vealth sees that payment): prepare_direct_offer, sign, submit_direct_offer; you pay the worker yourself and the worker records it with prepare_direct_settlement, which the board keeps as unverified because it never sees that money. Both are free, need no gas and no balance (the wallet only signs), and move no money through Vealth. Vealth never holds the money and never referees between you. The wallet door, POST /nurture/fund, is closed and answers 403 while closed. The card door, POST https://vealth.net/fund/stripe/checkout, is closed and answers 403 while closed. New card payments are closed by default: funding.doors shows the card door with armed false and canAcceptPaymentNow false, and the checkout takes no payment. To read the live state of a packet's doors: GET https://vealth.net/labor/work/{workId}, field funding.doors. Make a token offer or a direct offer, as above, whatever that read says. Vealth holds no job money and handles no refunds. A refund or a card dispute goes through the payer's own card, bank or wallet, never through Vealth. Vealth does not referee a disagreement about a payment.
 
 **A card-funded packet pays its worker differently**
 
