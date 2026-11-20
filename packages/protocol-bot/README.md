@@ -8,25 +8,80 @@ Never an offer or advice, no return promised. A loop is a path with its costs, n
 
 ## Start
 
-Node 22 or newer is required. The durable file protocol requires a POSIX local filesystem with directory `fsync` support (macOS or Linux); Windows and filesystems that refuse directory flushes fail closed. Install this package and both neighboring kits (`skills/protocol-guide` and `skills/net-circle`) with `npm ci --ignore-scripts` in each folder before running a pass.
+Node 22 or newer is required. The durable file protocol requires a POSIX local filesystem with directory `fsync` support (macOS or Linux); Windows and filesystems that refuse directory flushes fail closed.
+
+**This works only from a full clone of the repository.** `bot.mjs` runs two kits that sit beside it at fixed paths (`../../skills/protocol-guide` and `../../skills/net-circle`), and each of the three folders needs its own `npm ci`. A packaged or global install is not supported: `package.json` names a `protocol-bot` command and ships only three files, and that is not enough to run the bot. Copying this folder alone fails the same way: a leg prints `Cannot find package 'viem'` or cannot find a kit, and `npm test` cannot load.
+
+Copy this block whole, in this order:
 
 ```
-npm ci --ignore-scripts
-node bot.mjs once --address 0xYOU
+git clone https://github.com/Eco-Wealth/ecological-provisioning-agent.git
+cd ecological-provisioning-agent
+npm --prefix skills/protocol-guide ci --ignore-scripts
+npm --prefix skills/net-circle ci --ignore-scripts
+npm --prefix packages/protocol-bot ci --ignore-scripts
+cd packages/protocol-bot
+npm test
 ```
 
-That is a dry pass for any address. It needs no key, signs nothing and sends nothing. It prints what every leg would do right now.
+`npm test` runs the package's own checks. They are offline: a pretend chain, a pretend node and throwaway keys. Every command below runs from `packages/protocol-bot`. On Node 20, `npm ci` warns that the package asks for Node 22; the install, the tests and the dry loop below all ran on Node 20, and none has been run on Node 22.
+
+### Your first dry loop
+
+A dry pass needs no key, signs nothing, sends nothing, writes nothing into the home folder and takes no lock, so it also runs beside a live bot that uses the same home. If it reads the home in the instant between a live bot's two writes of one send, it waits 300 milliseconds and reads once more; if the home is still inconsistent it exits `4` and says a live bot may be mid-send or the home is damaged, so run it again. This one turns on three legs with a size each and reads real quotes from public nodes:
+
+```
+node bot.mjs once --address 0x000000000000000000000000000000000000bEEF --home /tmp/vealth-bot-scratch \
+  --legs regen,eco-buy,net-buy --regen-eth 0.0001 --eco-buy-eth 0.0001 --net-eth 0.0001 --json
+```
+
+- The address is a throwaway that holds nothing. Use your own to see what your own wallet would do.
+- `--home` names the folder the bot reads its memory from. A dry pass only reads it and writes nothing, so a scratch path is safe, and the folder is not even created.
+- A leg with no size flag says `off` and spends nothing. Run the same command without the three size flags and all three legs print `off`.
+- With `--json`, stdout is one JSON object and every human line goes to stderr (see "Reading a pass by machine").
+
+A good run takes a few seconds (3.9 seconds in the walk recorded on 2026-11-20), exits `0`, and prints one line per leg like these, from a real dry pass that day (the figures move with the market):
+
+```
+regen: DRY, would send buy at least 256.551405 axlREGEN with 0.0001 ETH (fee at most 0.000001684464345212 ETH)
+eco-buy: DRY, would send buy at least 34774.305528068061180188 ECO by WETH>NET>ECO with 0.0001 ETH (fee at most 0.000003107894694961 ETH)
+net-buy: DRY, would send buy at least 0.000000032607091603 NET by WETH>NET with 0.0001 ETH (fee at most 0.000002492391028238 ETH)
+```
+
+The JSON ends with the same three legs, each `"state": "dry"`, with its chain, token symbol, amount and a `"hash": null` because nothing was sent. `off`, `not_due` and `held` legs are normal and are not failures. If the exit code is not `0`, read "Exit codes" below.
+
+### Two-RPC evidence for live use
+
+Live use needs **two separate HTTPS RPC providers for every chain a selected leg signs on**: a primary (`--base-rpc`, `--arbitrum-rpc`) and a witness (`--base-witness-rpc`, `--arbitrum-witness-rpc`, or the `BASE_WITNESS_RPC_URL` and `ARBITRUM_WITNESS_RPC_URL` environment variables). `--live` refuses to load the wallet key without them. The Hydrex, Klima, `regen`, `eco`, `eco-buy`, `net-buy` and `circle` legs sign on Base, and `gmx` signs on Arbitrum. The default leg set includes `gmx`, so the default legs need both witnesses. Pass `--legs` to run fewer legs, and then only the chains those legs sign on need a witness: `--legs regen,eco` needs a Base witness and no Arbitrum one. A same-host URL, a URL that is not HTTPS, or a missing witness is refused. The bot compares hostnames only. It cannot tell whether two hostnames share one operator, so choosing separate providers is on you. Dry runs and the unsigned Regen Ledger preparation need no witness. The same rule holds for code that imports `makeChainIo` and `makeContext` and skips the command line: a signing account with no witness for a chain signs and sends nothing on that chain, and never treats a send there as final.
+
+What the witness checks, and nothing else:
+
+- **Chain id.** Both nodes must report the expected chain id before the bot signs, and again just before it broadcasts.
+- **Wallet nonce.** Both nodes must report the same confirmed and pending nonce before the bot signs, and again just before it broadcasts.
+- **Block time.** Before each send, the witness's latest block time must be within five minutes of the primary's, in either direction.
+- **Finality.** A send stays pending until both nodes independently return the same receipt for the exact transaction hash (same block number, block hash and result), each node's own finalized block is at or past the receipt's block, and each node's canonical block at that height carries the receipt's block hash. The two finalized heights are not compared with each other and do not need to be equal.
+
+If one RPC lags, disappears, reorgs, disagrees, or cannot prove finality, the bot stops subsequent sends until it can reconcile.
+
+What the witness does not check: every kit read still comes from the primary node alone. That covers quotes and the minimum out, GMX positions and the close size, and token allowances. The rules and caps below still apply to every step the bot signs, but the numbers a kit reads, such as a quote, are taken from one node. Two hosts alone do not prove independent infrastructure; this is two-provider corroboration of the four checks above, not Byzantine consensus or a complete independent security audit. A mistaken or unavailable witness will reduce trading availability, intentionally.
 
 To let it send:
 
 ```
 node bot.mjs wallet
-node bot.mjs run --live --regen-eth 0.0002 --eco-eth 0.0002 --circle-eth 0.0001
+node bot.mjs once --live --legs regen,eco-buy --regen-eth 0.0001 --eco-buy-eth 0.0001 \
+  --base-witness-rpc https://<a second Base provider>
 ```
 
-`wallet` makes the bot's own wallet and prints its address. Fund that address with only what you can lose. If the lock or the tokens sit in a wallet you already hold, pass `--key-file` with a file that holds that key and that only you can read.
+`wallet` makes the bot's own wallet and prints its address. Fund that address with only what you can lose. If the lock or the tokens sit in a wallet you already hold, pass `--key-file` with a file that holds that key and that only you can read. Both legs here sign on Base, so only a Base witness is needed. `run --live` with the same flags does the loop forever instead of one pass.
 
-The two kits it drives sit beside it in this repository: `skills/protocol-guide` and `skills/net-circle`. Run `npm ci --ignore-scripts` once in each.
+Pick legs the dry pass shows as `dry` today, at the size you give. A leg the kit refuses for price impact is the kit protecting you, not a fault in the bot: it says `nothing to do now`, sends nothing, and the pass still exits `0`. On 2026-11-20 the `eco` leg (the thin ETH/ECO pool) was refused at 0.0001 ETH for that reason, with about 1,624 basis points of impact against the kit's cap of 300; the `eco-buy` leg, which picks the best route, was not.
+
+### How long a live loop takes
+
+Finality lags about 18 minutes behind each send. Read-only reads on 2026-11-20 measured 1,094 seconds on Base and 1,142 seconds on Arbitrum; that is a measurement from one day, not a promise. The bot sends one transaction, waits, and sends nothing else until that one is final. So `once --live` sends one transaction per pass and a pass that finds the last send still pending sends nothing and exits `0`. A loop of four buys is four passes or more, each after the one before is final: at least about 72 minutes at today's lag with `run` (which checks a pending send at least every five minutes), and about four hours if you call `once` from an hourly timer.
+
+The two kits it drives sit beside it in this repository (`skills/protocol-guide` and `skills/net-circle`); the install block at the top installs both.
 
 ## The loop
 
@@ -35,20 +90,39 @@ Every wake (once an hour unless you set `--every`), the bot walks these legs in 
 | Leg | What it does | Turned on by | The most it can cost you |
 |---|---|---|---|
 | `hydrex` | Claims your veHYDX lock's fees and bribes, then votes by the kit's plain ranking: last epoch's pay per vote, split equally. This is not a copy of any wallet's vote. Once per epoch. | a veHYDX lock in the wallet | gas; a vote replaces your last vote |
-| `klima` | Retires carbon on Klima with kVCM you hold: approves what the retirement needs (never more than 100 kVCM), retires, and takes the approval back once the retirement is final. A sink: what it retires is gone for good, by design. | `--klima-class`, `--klima-credit`, `--klima-tonnes` | the kVCM the retirement spends, at most 100 kVCM, and gas |
+| `klima` | Retires carbon on Klima with kVCM you hold: approves what the retirement needs (never more than 100 kVCM), retires, and takes the approval back as soon as the retirement is final, whether it went through or reverted, or at once if it never went out (finality takes minutes, so that is usually a later pass; see "The `klima` leg"). A sink: what it retires is gone for good, by design. | `--klima-class`, `--klima-credit`, `--klima-tonnes` | the kVCM the retirement spends, at most 100 kVCM, and gas |
 | `regen-retire` | Asks the kit for the exact Regen Ledger retirement message for credits you hold (`regen prepare retire`) and prints it: "DRY, would sign this Regen message: ...". It prepares and prints, and it never signs or sends, with or without `--live`. Signing it is a separate step you do with your own Regen wallet. A sink: what it retires is gone for good, by design, and no return is promised. The reason you give is written onchain, public and permanent. | `--regen-retire-owner`, `--regen-retire-batch`, `--regen-retire-amount`, `--regen-retire-jurisdiction`, `--regen-retire-reason` | nothing from this program. If you sign the message yourself, the credits it names are gone for good, and gas is paid in REGEN |
 | `regen` | Buys axlREGEN, Regen's token on Base, with a slice of ETH. | `--regen-eth` | the slice, and gas |
 | `eco` | Buys ECO with a slice of ETH through the kit's ETH/ECO pool. That pool was very thin in the 2026-11-18 look-only snapshot: the 0.0001 ETH quote showed about 16% price impact. This is a dated quote, not a future rate, so prefer checking `eco-buy` below. | `--eco-eth` | the slice, and gas |
 | `eco-buy` | Buys ECO with a slice of ETH by the NET circle kit's best route (the Zora coin pool, or through NET's pools): one way, you end up holding ECO. The kit prints its own holdings line and the route it took. | `--eco-buy-eth` | the slice, and gas; the price is the market's call afterwards |
 | `net-buy` | Buys NET with a slice of ETH: one way, you end up holding NET. The buying in NET's pools is the house's own. | `--net-eth` | the slice, and gas; the price is the market's call afterwards |
 | `circle` | Sends one trip through NET's pools and back to ETH, only when the kit's floor says at least the input plus gas comes back. | `--circle-eth` | gas on a trip that loses its race and reverts |
-| `gmx` | Holds one small GMX position on Arbitrum by your rule: opens it, holds it for `--gmx-hold-hours`, closes it, starts again. | `--gmx-market`, `--gmx-side`, `--gmx-collateral`, `--gmx-leverage` | the collateral (a liquidation can take all of it, at most 5 USDC), GMX's fees, and gas |
+| `gmx` | Holds one small GMX position on Arbitrum by your rule: opens it, holds it for `--gmx-hold-hours`, closes it, starts again. It needs USDC and also ETH on Arbitrum (see below). | `--gmx-market`, `--gmx-side`, `--gmx-collateral`, `--gmx-leverage` | the collateral (a liquidation can take all of it, at most 5 USDC), GMX's fees, the execution fee and gas |
 
-How the legs join: a lock that votes a kVCM pool earns kVCM, and the `klima` leg retires kVCM. The `regen`, `eco`, `eco-buy` and `net-buy` slices and the circle spend ETH from the same wallet, under one day cap. The GMX leg runs on Arbitrum with USDC you put there yourself.
+How the legs join: a lock that votes a kVCM pool earns kVCM, and the `klima` leg retires kVCM. The `regen`, `eco`, `eco-buy` and `net-buy` slices and the circle spend ETH from the same wallet, under one day cap. The GMX leg runs on Arbitrum with USDC you put there yourself, and it needs ETH on Arbitrum as well: every GMX order carries an execution fee in ETH (at most 0.005 ETH, the part GMX does not use is refunded to you) on top of gas. The kit refuses to prepare an order when the address holds less ETH on Arbitrum than that fee ("the address holds ... ETH on Arbitrum, less than the execution fee"), and the `gmx` leg then says `nothing to do now`.
 
 A leg that spends has no default size. With no size flag it stays off and spends nothing. The buys and the Klima retirement run once every `--buy-every-hours` (24 unless you set it); `regen-retire` has no pace of its own, see below.
 
 The Hydrex vote comes from the kit's `hydrex rank`. A copy of the kit without it stops the `hydrex` leg with a plain line. `--hydrex-vote 0xPOOL:10000` uses your own vote.
+
+### The `klima` leg: where the class and credit come from, and the approval on a slow chain
+
+`--klima-class` and `--klima-credit` are addresses the kit lists. From `packages/protocol-bot`:
+
+```
+node ../../skills/protocol-guide/protocol-guide.mjs klima classes
+node ../../skills/protocol-guide/protocol-guide.mjs klima credits --class 0xCLASS
+```
+
+The first prints every carbon class Klima lists, class address first, with the tonnes available. The second prints the credits that class registers, each with its address and token id (pass a token id other than 0 with `--klima-token-id`). `--klima-tonnes` is from 0.001 to 0.1, and the wallet must hold the kVCM the retirement spends.
+
+Finality takes minutes, so the bot never sees its own approval or retirement final in the pass that sent it. **Every approval the bot sends is owed back from the moment it is sent.** The bot writes that down in `state.json` in the same save that records the send as pending, so a crash cannot lose it. It takes the approval back as soon as the retirement it was made for is final, whether that retirement went through or reverted. It also takes it back when the retirement was never sent: STOP, a cap, a rule that refused the retirement, a failed read, or klima dropped from `--legs`. An approve that is final gets one pass in which its retirement goes out next. A pass that ends without sending it leaves the approval stranded, and the next pass takes it back first; so does the first pass after you remove STOP, and a crash between the two just lets the retirement go out next. An owed take-back is settled on every pass, before "not due yet", before the leg's own stop, before any new approval or retirement, and even if you dropped the leg's flags or the leg itself from `--legs`. The take-back signs on Base, so like every Base send it needs a Base witness: on a live pass with no Base witness (only Arbitrum legs, say) the bot refuses the take-back, exits `4` naming the missing flag, and the approval stays owed until a pass that has one. While a take-back is owed the bot sends no new approval or retirement. While a retirement is still pending (not final either way) the take-back waits: it never revokes under a retirement that may still land. A take-back is an approval of exactly zero to Klima's asset manager, through the same gate as every other step, and the bot refuses anything else. A dry pass says it would send the take-back and writes nothing.
+
+A retirement that reverted owes no less than one that worked. Three reverted approves or retirements in a row still stop the leg, but only after the approval has been taken back, so a stopped Klima leg leaves a zero allowance and there is nothing for you to revoke. A take-back that works is not the retirement's success: the retirements have their own count under `sendFailures` (`klima`), and only a retirement that goes final resets it. The take-backs have a count of their own (`klima:take-back`).
+
+What clears an owed take-back: a take-back that went final, or the kit saying, in its own words, that this address has no kVCM approval to Klima's asset manager. Nothing else does. The kit exits 10 for that and also for "the revoke reverts in simulation", and the bot tells them apart by the reason text, so any other exit-10 answer (the revoke reverts, no reason, a different reason) leaves the take-back owed: the leg ends the pass `held` with the kit's own reason, sends nothing, and approves and retires nothing until a pass where the revoke prepares and goes final. If you upgraded from a version that did not write the take-back down, a klima record left by a retirement it completed counts as owed once: the first live pass asks the kit, and only the no-approval answer clears it. If that older version sent an approve and never wrote a klima record at all, the bot cannot know it is open: the next klima pass retires with it and takes it back, and if you have since dropped klima, check once by hand with the kit's `klima prepare revoke --from 0xYOU`.
+
+**The one case the bot cannot close:** its take-backs themselves revert three times in a row. Then it stops the leg and says so plainly (`A kVCM APPROVAL MAY STILL BE OPEN`), in the output and in `once --json` (`approvalMayBeOpen`). To check it and clear it by hand, run the kit's own command, `klima prepare revoke --from 0xYOU`: it prints the exact approval of zero for Klima's asset manager, which you sign yourself with your own wallet, or it says there is nothing to revoke. When it is cleared, stop the bot, delete `klima:take-back` under `sendFailures` in `state.json`, and start it again.
 
 ### The `regen-retire` leg: it prepares and prints, and it never signs
 
@@ -117,16 +191,16 @@ touch ~/.vealth-bot/STOP
 
 The STOP file is checked at the start of each pass and before each send; no further transaction is sent while it is present. Removing the file resumes the bot only if nothing was in flight. If STOP arrives after a send has been reserved but before it is broadcast, the reservation and its signed bytes stay in the journal and the bot stays paused until you have checked the wallet's nonce and history and reconciled it; removing STOP alone does not release it.
 
-It sends one transaction at a time. **Only the original hash in the canonical finalized chain** is treated as a completed transaction; a replacement, reorg, nonfinal receipt or RPC disagreement keeps the bot paused. After a finalized receipt is observed following a crash, the bot replays its saved completion checkpoint and reconciles its journal without re-broadcasting. If STOP or an unconfirmed transaction interrupts Klima after approval but before retirement or zero-revoke, the approval (at most 100 kVCM) can stay open until explicitly revoked. A retirement that is included but not yet final does the same: the revoke is refused while it is pending, the Klima leg is next due after `--buy-every-hours` (24 unless you set it), and the approval stays open until then or until you revoke it. A Klima pass finding nothing to retire may not revoke an earlier allowance. If the RPC outcome is ambiguous or an intent has no known hash, the bot halts: **do not simply delete `pending`**. Verify the wallet nonce, relevant chain history, and journal using trusted independent reads; if a broadcast cannot be excluded, treat it as potentially live. Clearing or rewriting records without such proof can enable duplicate spending. There is not yet an automated, independently verified recovery tool for hashless sends.
+It sends one transaction at a time. **Only the original hash in the canonical finalized chain** is treated as a completed transaction; a replacement, reorg, nonfinal receipt or RPC disagreement keeps the bot paused. After a finalized receipt is observed following a crash, the bot replays its saved completion checkpoint and reconciles its journal without re-broadcasting. If STOP or an unconfirmed transaction interrupts Klima after approval but before retirement, the approval (at most 100 kVCM) is owed back from the moment it was sent: the first pass after STOP is removed takes it back before anything else the leg does (see "The `klima` leg"). A retirement that is included but not yet final keeps the take-back waiting, and the leg retires nothing new meanwhile. If the RPC outcome is ambiguous or an intent has no known hash, the bot halts: **do not simply delete `pending`**. Verify the wallet nonce, relevant chain history, and journal using trusted independent reads; if a broadcast cannot be excluded, treat it as potentially live. Clearing or rewriting records without such proof can enable duplicate spending. There is not yet an automated, independently verified recovery tool for hashless sends.
 
-The bot requires a real owner-only home directory (`chmod 700` on POSIX) and refuses symlinked or hard-linked state, ledger and lock files. It acquires the home-folder `lock` atomically. If the process crashes, the lock intentionally remains. Confirm the old process is stopped and reconcile its transactions before manually removing the stale lock. File creation, state renames and ledger appends are synced to the containing directory as well as the file itself. Power-loss survival still depends on the storage hardware and operating system honoring those sync requests.
+The bot requires a real owner-only home directory (`chmod 700` on POSIX) and refuses symlinked or hard-linked state, ledger and lock files. A live pass acquires the home-folder `lock` atomically; a dry pass takes no lock and writes nothing into the home, so it can run while a live bot holds it. If the process crashes, the lock intentionally remains. Confirm the old process is stopped and reconcile its transactions before manually removing the stale lock. File creation, state renames and ledger appends are synced to the containing directory as well as the file itself. Power-loss survival still depends on the storage hardware and operating system honoring those sync requests.
 
 ## On a timer
 
-`run` uses monotonic time for its schedule, checks for local clock jumps, and checks live signing time against the chain's latest block within five minutes. Known pending hashes are checked for finality at least every five minutes, even with a slower normal schedule. A single RPC provider is not an independent quorum. For cron or launchd, use `once`:
+`run` uses monotonic time for its schedule, checks for local clock jumps, and checks live signing time against the chain's latest block within five minutes. Known pending hashes are checked for finality at least every five minutes, even with a slower normal schedule. The witness also checks the chain id, the block time and the confirmed/pending nonce before sending, and it takes part in the finality check; it checks nothing else (see "Two-RPC evidence for live use" above). This does not guarantee a cryptographically independent quorum: providers can share upstream data or operators. For cron or launchd, use `once` only after witness endpoints are configured. This example runs only the `regen` leg, which signs on Base, so it needs a Base witness and no Arbitrum one. Without `--legs`, the default legs include `gmx` and would also need `--arbitrum-witness-rpc`:
 
 ```
-0 * * * * cd /path/to/packages/protocol-bot && node bot.mjs once --live --regen-eth 0.0002 >> ~/.vealth-bot/bot.log 2>&1
+0 * * * * cd /path/to/packages/protocol-bot && node bot.mjs once --live --legs regen --regen-eth 0.0002 --base-witness-rpc https://<a second Base provider> >> ~/.vealth-bot/bot.log 2>&1
 ```
 
 ## Audit the stopped bot without a key
@@ -175,11 +249,36 @@ node bot.mjs compact --home ~/.vealth-bot
 
 Startup rehashes archived segments once before permitting trading, and `audit` verifies them again. Keep archive files, state backups and externally saved commitments together. The local archive is not remotely immutable; loss or corruption of an archived segment still requires verified backup recovery. If the active file reaches 64 MiB without a safe completed prefix, the bot fails closed.
 
-For a 100-year, multi-agent service, scheduled off-device copying of backups (the `backup`/`restore` commands and the `--expect-commitment` check exist; moving the copy off the machine is yours), cross-machine nonce and budget coordination (only the one-machine wallet lease exists), isolated signers, reproducible releases, contract upgrade/codehash monitoring, independent RPC quorum and external audit anchoring remain unimplemented. This program is not certified for unattended live operation, and nobody has run it live.
+For a 100-year, multi-agent service, scheduled off-device copying of backups (the `backup`/`restore` commands and the `--expect-commitment` check exist; moving the copy off the machine is yours), cross-machine nonce and budget coordination (only the one-machine wallet lease exists), isolated signers, reproducible releases, contract upgrade/codehash monitoring, *true independently operated RPC quorum beyond the two witness endpoints*, and external audit anchoring remain unimplemented. This program is not certified for unattended live operation, and nobody has run it live.
 
 ## Exit codes
 
-`0` the pass ran. `2` bad arguments. `3` an `audit` or `restore` `--expect-commitment` check did not match. `4` a rule refused a step and nothing was sent for it. `1` a leg was stopped.
+`once` ends with one of these, so a script or a cron job can tell a dead pass from a good one. `run` ignores them between passes (it prints the same summary line each pass).
+
+| Code | Meaning |
+|---|---|
+| `0` | The pass ran clean. Every selected leg was off, not due, held by a rule (a cap, STOP, the kit's own price-impact limit, a send still waiting for finality), dry, sent or pending. None of those is a failure. |
+| `1` | A leg was stopped (a kit stop code, three failures in a row, or three sends of that leg that reverted in a row) and stays stopped until you start the bot again, or, for reverted sends, until you clear the count (below). Also: the bot could not start or finish the pass, and printed one plain line on stderr saying why. |
+| `2` | Bad arguments, or the home is locked by a live bot (live passes only; a dry pass takes no lock). |
+| `3` | An `audit` or `restore` `--expect-commitment` check did not match. |
+| `4` | A rule refused a step and nothing was sent for it. |
+| `5` | One or more selected legs failed: a read failed, an error stopped the leg, or a send reverted. A send counts as reverted whether the bot saw it revert in its own pass or found it reverted once it went final, on a later pass (finality lags about 18 minutes, so that is the usual case). One line names the legs (`this pass failed for regen, eco-buy: ...`). Try again later. |
+
+When more than one applies the pass exits with 4 first, then 1, then 5.
+
+**Three reverted sends of one leg in a row stop that leg.** The count is kept in `state.json` under `sendFailures`, one number per leg, so it holds across passes and restarts, and it goes back to zero when a send of that leg succeeds. The pass that sees the third revert exits `1`, and every later pass says the leg is stopped and sends nothing for it. A revert costs gas, so the bot does not retry a third time on its own. To start the leg again, find out why it reverted, stop the bot, delete that leg's line under `sendFailures` in `state.json`, and start it again. That entry is a counter, not a spending record; do not touch `pending` or the ledger.
+
+The Klima leg keeps two counts, `klima` (its approves and retirements; only a retirement that goes final resets it) and `klima:take-back`, and it stops for the first only after the kVCM approval has been taken back, so there is no approval left for you to revoke by hand. The pass that finds the third reverted retirement sends the take-back and exits `5`; the pass after it, with the take-back final, stops the leg and exits `1`. The one exception is a take-back that itself reverts three times: see "The one case the bot cannot close" under the `klima` leg.
+
+## Reading a pass by machine
+
+`once --json` (dry or live) prints one JSON object on stdout when the pass ends. Every human line goes to stderr instead, so stdout is only the JSON. A pass report holds no key and no node address (a web address inside a kit's error text is cut out and shown as `[url]`). It holds `bot`, `version`, `mode` (`dry` or `live`), `address`, `exitCode` (the same number the command exits with), `failedLegs`, `approvalMayBeOpen` (`null`, or, only when the Klima take-backs themselves stopped, `{ token, spender, check, how }`: the kVCM approval that may still be open, and the kit command that checks it), and `legs`: one entry for every selected leg, in loop order (the Klima leg is also there when it was not selected but settled a take-back it owed), each with:
+
+- `name` and `state`, one of `off` (nothing turns it on), `not_due` (its own schedule says not yet, or it is already done), `dry` (it would send), `sent`, `pending` (sent, not final yet), `held` (a cap, STOP, a pending send, or the kit says nothing to do now), `refused` (a rule refused it, or it is stopped) or `failed` (a failed read, an error, or a send that reverted);
+- `reason`, the plain line the human output shows;
+- `sends`, one entry per transaction the leg tried: `step`, `outcome` (`dry`, `sent`, `pending`, `reverted`, or `budget` when a cap, STOP or a pending send held it), `chain`, `token` (a symbol), `amount` (a decimal string in token units), `amountRaw` (the integer string in the token's smallest unit), `amountIs` (what that amount is: the least you receive, the most it may spend, the approval it sets, the collateral it posts, or the ETH it spends), `valueEth` and `valueWei` (the ETH the transaction carries) and `hash` (null until there is one).
+
+If the pass cannot run (the arguments are refused, the home is locked, the bot cannot start), the object is `{ bot, version, exitCode, error }` with the same exit code the command ends with; `error` is the plain message and can name a folder. `--json` belongs to `once` only.
 
 ## Long-lived deployment boundaries
 
@@ -194,4 +293,4 @@ For a 100-year, multi-agent service, scheduled off-device copying of backups (th
 npm test
 ```
 
-The package suite exercises the bot's transaction guards against mock-chain responses and includes real filesystem crash tests for the archive module. Run the archive tests separately with `npm run test:archive`. All checks are offline: a pretend chain, a pretend node on the loopback address and throwaway keys, never a funded key. The suite tries no real chain, real RPC or live send, and it has run on Node 20 only (the package asks for Node 22 or newer).
+The package suite exercises the bot's transaction guards against mock-chain responses, including witness disagreement and missing-proof cases, and includes real filesystem crash tests for the archive module. Run the archive tests separately with `npm run test:archive`. All checks are offline: a pretend chain, a pretend node on the loopback address and throwaway keys, never a funded key. The suite tries no real chain, real RPC or live send, and it has run on Node 20 only (the package asks for Node 22 or newer).

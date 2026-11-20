@@ -10,9 +10,12 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { decodeAbiParameters, decodeFunctionData, encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiParameters, parseEther, keccak256, toFunctionSelector } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+// The pass report (the --json answer) and the token figures are new: read through the namespace, so a test that asks for
+// them against an older bot.mjs fails on the missing behavior, not on a missing name that would hide every other test.
+import * as bot from "./bot.mjs";
 import {
   ADDR, ADDRESS_THIS, CHAINS, CONTRACT_BALANCE, GMX_STARTER_MARKETS, GuardError, HELP, LEG_ORDER, LEGS, MAX_GMX_USDC, MAX_KVCM_APPROVE, MAX_LEDGER_BYTES, MSG_SENDER, REGEN_RETIRE_RE, REGEN_RETIRE_TYPE_URL, ROUTER_CMD, RULES, SEL, SIGNATURES, STORAGE_SCHEMA_VERSION, PINNED_KIT_GIT_SHA1, UNSIGNED_LEGS, V4_ACT, ArgError,
-  acquireWalletLease, makeChainIo, assertChainClock, assertUncontendedNonce, checkRegenRetire, checkTx, finalizedReceiptStatus, gitBlobSha1, hashLocalFile, kitEnv, listText, loadAccount, main, makeClockGuard, makeContext, makeWallet, openHome, parseArgs, pass, recordedTime, scanJournalFile, step, validVote, verifyBundledKits, verifySignedIntent, waitForNextPass,
+  acquireWalletLease, makeChainIo, assertChainClock, assertUncontendedNonce, assertWitnessRpcConfiguration, agreedFinalizedReceiptStatus, checkRegenRetire, checkTx, finalizedReceiptStatus, gitBlobSha1, hashLocalFile, kitEnv, listText, loadAccount, main, makeClockGuard, makeContext, makeWallet, openHome, parseArgs, pass, recordedTime, scanJournalFile, step, validVote, verifyBundledKits, verifySignedIntent, waitForNextPass,
 } from "./bot.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -755,12 +758,30 @@ test("arguments: no size means no spend, caps have ceilings, unknown words are r
   assert.equal(validVote(`${POOL}:10000;rm`), false);
 });
 
+test("live mode refuses missing or same-host witness, dry mode stays free of witness config", () => {
+  const base = ["once", "--address", ME, "--legs", "regen"];
+  assert.equal(parseArgs(base, {}).witnessRpcs.base, undefined);
+  assert.throws(() => parseArgs([...base, "--live"], {}), /base.*witness-rpc/);
+  assert.throws(() => parseArgs([...base, "--live", "--base-witness-rpc", "https://mainnet.base.org/path"], {}), /different provider host/);
+  assert.throws(() => parseArgs([...base, "--live", "--base-witness-rpc", "http://witness.example"], {}), /HTTPS/);
+  assert.throws(() => assertWitnessRpcConfiguration("https://node.example", "https://witness.example/#bad", "base"), /HTTPS/);
+  assert.equal(assertWitnessRpcConfiguration("https://node.example", "https://witness.example", "base"), true);
+  const live = parseArgs([...base, "--live", "--base-witness-rpc", "https://witness.example"], {});
+  assert.equal(live.witnessRpcs.base, "https://witness.example");
+  assert.equal(live.witnessRpcs.arbitrum, undefined);
+  assert.throws(() => parseArgs(["once", "--address", ME, "--live", "--legs", "gmx"], {}), /arbitrum.*witness-rpc/);
+  assert.equal(parseArgs(["once", "--address", ME, "--live", "--legs", "regen-retire"], {}).live, true,
+    "unsigned Regen Ledger preparation does not need a signing-chain witness");
+});
+
 // ---- whole passes, with a pretend kit and a pretend chain ------------------------------------------------------------
 const EPOCH = { epochStart: "1763000000", secondsToFlip: "100" };
 const VOTE = `${POOL}:10000`;
+/** The witness flags every live fixture needs since live signing requires a second provider per chain (pretend hosts). */
+const LIVE_WITNESS = ["--base-witness-rpc", "https://witness-base.example", "--arbitrum-witness-rpc", "https://witness-arbitrum.example"];
 function world({ live = false, args = [], answers = {}, nowMs = Date.parse("2026-11-20T00:00:00Z") } = {}) {
   const dir = tmp();
-  const opts = parseArgs(["once", "--address", ME, "--home", dir, ...(live ? ["--live"] : []), ...args], {});
+  const opts = parseArgs(["once", "--address", ME, "--home", dir, ...(live ? ["--live", ...LIVE_WITNESS] : []), ...args], {});
   const calls = [], sent = [], said = [];
   const base = {
     "hydrex epoch": { code: 0, out: EPOCH },
@@ -844,7 +865,7 @@ test("no lock, a failed read and a bad vote string each end the leg without a se
   assert.equal(await pass(none.ctx), 0);
   assert.equal(none.sent.length, 0);
   const failed = world({ live: true, answers: { "hydrex epoch": { code: 1, out: null, err: "node down" } } });
-  assert.equal(await pass(failed.ctx), 0);
+  assert.equal(await pass(failed.ctx), 5, "a failed read is not a clean pass: exit 5 names it");
   await pass(failed.ctx);
   assert.equal(await pass(failed.ctx), 1, "three failures in a row stop the leg");
   const odd = world({ live: true, answers: { "hydrex rank": { code: 0, out: { vote: `${POOL}:10000 --from ${THIEF}` } } } });
@@ -921,6 +942,32 @@ test("only the exact canonical finalized transaction receipt can release pending
   assert.equal(await finalizedReceiptStatus(client(), { ...original, status: "unknown" }, hash), null);
   assert.equal(await finalizedReceiptStatus({ getBlock: async () => ({ number: null }) }, original, hash), null, "missing finalized head must not free pending");
 });
+test("independent RPC finality: only matching canonical receipts from both providers release pending", async () => {
+  const hash = "0x" + "21".repeat(32);
+  const blockHash = "0x" + "43".repeat(32);
+  const otherHash = "0x" + "65".repeat(32);
+  const receipt = { transactionHash: hash, blockHash, blockNumber: 222n, status: "success" };
+  const node = ({ chainId = 8453, currentReceipt = receipt, canonicalHash = blockHash, final = 240n, fail = false } = {}) => ({
+    getChainId: async () => chainId,
+    getTransactionReceipt: async () => { if (fail) throw new Error("RPC lost"); return currentReceipt; },
+    getBlock: async ({ blockTag }) => blockTag === "finalized"
+      ? { number: final }
+      : { number: 222n, hash: canonicalHash },
+  });
+  assert.equal(await agreedFinalizedReceiptStatus(node(), node(), hash, null, 8453), true);
+  assert.equal(await agreedFinalizedReceiptStatus(node({ currentReceipt: { ...receipt, status: "reverted" } }), node({ currentReceipt: { ...receipt, status: "reverted" } }), hash, null, 8453), false);
+  assert.equal(await agreedFinalizedReceiptStatus(node(), null, hash, null, 8453), null, "missing witness must never prove finality");
+  assert.equal(await agreedFinalizedReceiptStatus(node(), node({ fail: true }), hash, null, 8453), null, "witness RPC unavailable");
+  assert.equal(await agreedFinalizedReceiptStatus(node(), node({ chainId: 42161 }), hash, null, 8453), null, "wrong witness chain");
+  assert.equal(await agreedFinalizedReceiptStatus(node(), node({ currentReceipt: { ...receipt, status: "reverted" } }), hash, null, 8453), null, "receipt status conflict");
+  assert.equal(await agreedFinalizedReceiptStatus(node(), node({ currentReceipt: { ...receipt, blockHash: otherHash } }), hash, null, 8453), null, "receipt block conflict");
+  assert.equal(await agreedFinalizedReceiptStatus(node(), node({ currentReceipt: { ...receipt, transactionHash: otherHash } }), hash, null, 8453), null, "transaction replacement");
+  assert.equal(await agreedFinalizedReceiptStatus(node(), node({ final: 221n }), hash, null, 8453), null, "one provider has not finalized");
+  assert.equal(await agreedFinalizedReceiptStatus(node(), node({ canonicalHash: otherHash }), hash, null, 8453), null, "reorg conflict");
+  assert.equal(await agreedFinalizedReceiptStatus(node(), node(), hash, receipt, 8453), true, "fast path rechecks witness for the primary's receipt");
+  assert.equal(await agreedFinalizedReceiptStatus(node(), node({ fail: true }), hash, receipt, 8453), null, "no cached-primary bypass around missing witness");
+});
+
 test("a live send durably flushes the state rename and new ledger directory entries before RPC",
   { skip: process.platform === "win32" }, async () => {
   const originalFsync = fs.fsyncSync;
@@ -1047,7 +1094,7 @@ test("lost broadcast reply retains original precomputed hash and prevents duplic
     const signed = await offlineSigned(txBody, 19); candidateHash = signed.hash; return signed;
   };
   w.ctx.io.broadcast = async () => { count++; throw new Error("RPC accepted raw bytes but reply was lost"); };
-  assert.equal(await pass(w.ctx), 0);
+  assert.equal(await pass(w.ctx), 5, "a lost reply is an error for the leg, and the pass says so");
   assert.equal(count, 1);
   assert.equal(w.home.state().pending.hash, candidateHash);
   assert.equal(w.home.state().pending.nonce, "19");
@@ -1067,7 +1114,7 @@ test("changing a signed pending hash, nonce or reservation is detected before re
   w.ctx.address = FAKE_SIGNER.address;
   w.ctx.io.prepare = async (_chain, txBody) => offlineSigned(txBody, 12);
   w.ctx.io.broadcast = async () => { throw new Error("RPC reply lost"); };
-  assert.equal(await pass(w.ctx), 0);
+  assert.equal(await pass(w.ctx), 5);
   const pristine = w.home.state();
   assert.equal(pristine.pending.nonce, "12");
   const changedHash = structuredClone(pristine);
@@ -1397,6 +1444,393 @@ test("klima: approve, retire, take the approval back; gmx: open, hold, close", a
   assert.equal(foreign.sent.length, 0);
 });
 
+/**
+ * A pretend Base whose finality LAGS. Every send is in a block at once (the kit reads its effect on the allowance) but is final
+ * only `finalityMs` later, as on Base (about 18 minutes, measured 2026-11-20). The instant-final fixtures above cannot show what
+ * a lagging chain does to the Klima approval: the retirement is always still pending when the first pass tries the take-back.
+ * Klima spends the quote, not the maximum, so a retirement always leaves part of the approval open.
+ */
+// The two exit-10 answers of the kit's `klima prepare revoke`, taken from the kit's own code with a pretend node (nothing here
+// is typed by hand): "no approval to take back" and "the revoke reverts in simulation". The kit gives no code to tell them apart.
+const NO_KVCM_APPROVAL = (await kit.prepareKlimaRevoke({ readContract: async () => 0n }, { from: ME })).reason;
+const REVOKE_SIM_REVERTS = (await kit.prepareKlimaRevoke({
+  readContract: async () => 6n * 10n ** 17n,
+  call: async () => { throw Object.assign(new Error("execution reverted: paused"), { name: "ExecutionRevertedError" }); },
+}, { from: ME })).reason;
+const KLIMA_FLAGS = ["--legs", "klima", "--klima-class", POOL, "--klima-credit", POOL, "--klima-tonnes", "0.01", "--klima-name", "Test"];
+function laggingKlima({ finalityMs = 18 * 60_000, rejectRevoke = false, behave = {} } = {}) {
+  const dir = tmp();
+  const parse = (args) => parseArgs(["once", "--address", ME, "--home", dir, "--live", ...LIVE_WITNESS, ...args], {});
+  const opts = parse(KLIMA_FLAGS);
+  const home = openHome(dir);
+  const t0 = Date.parse("2026-11-20T00:00:00Z");
+  const chain = { allowance: 0n, clock: t0, sent: [], at: new Map(), status: new Map() };
+  // What the pretend chain and kit do next: change a field between passes to change what happens from then on.
+  const mode = { revokeSim: "ok", retireReverts: false, revokeReverts: false, revoke10: null, ...behave };
+  const calls = [], said = [];
+  const spend = 4n * 10n ** 17n;
+  const kit = async (file, a) => {
+    calls.push(a.slice(0, 3).join(" "));
+    const key = a.slice(0, 3).join(" ");
+    if (key === "klima prepare retire") {
+      return { code: 0, out: { sendable: true, prepared: chain.allowance >= 10n ** 18n
+        ? { step: "retire", tx: retirementTx() }
+        : { step: "approve", tx: tx(ADDR.kvcm, call("approve", [ADDR.klimaAssetManager, 10n ** 18n])) } } };
+    }
+    if (key === "klima prepare revoke") {
+      if (rejectRevoke) return { code: 1, out: null, err: "node down" };
+      if (mode.revoke10) return { code: 10, out: mode.revoke10.out }; // { out: whatever the kit printed }
+      // The kit's real shape: `--json` prints { sendable, prepared: { sendable, reason } } and exits 10 for either answer.
+      const nothing = (reason) => ({ code: 10, out: { sendable: false, prepared: { sendable: false, reason } } });
+      if (chain.allowance === 0n) return nothing(NO_KVCM_APPROVAL);
+      if (mode.revokeSim === "reverts") return nothing(REVOKE_SIM_REVERTS);
+      return { code: 0, out: { sendable: true, prepared: { step: "revoke", tx: tx(ADDR.kvcm, call("approve", [ADDR.klimaAssetManager, 0n])) } } };
+    }
+    return { code: 2, out: null, err: "unknown act" };
+  };
+  const io = {
+    async send(c, t) {
+      const hash = `0x${String(chain.sent.length + 1).padStart(64, "0")}`;
+      let kind, ok = true;
+      if (t.data.slice(0, 10) === SEL.retireCreditViaKlima) { kind = "retire"; if (mode.retireReverts) ok = false; else chain.allowance -= spend; }
+      else { const amount = decodeFunctionData({ abi: ABI.approve, data: t.data }).args[1]; kind = amount === 0n ? "revoke" : "approve"; if ((kind === "revoke" && mode.revokeReverts) || (kind === "approve" && mode.approveReverts)) ok = false; else chain.allowance = amount; }
+      chain.sent.push({ kind, at: chain.clock - t0, ok }); chain.at.set(hash, chain.clock); chain.status.set(hash, ok);
+      return hash;
+    },
+    async wait() { return null; }, // included, not final yet: what Base does for about 18 minutes
+    async seen(c, hash) { return chain.clock - chain.at.get(hash) >= finalityMs ? chain.status.get(hash) : null; },
+  };
+  const w = { chain, calls, said, home, dir, t0, last: null, mode, kit, io, opts };
+  // `args` replaces the leg flags for that pass (for a pass that no longer carries the Klima flags, say).
+  w.passAt = async (ms, { args = null } = {}) => {
+    chain.clock = t0 + ms;
+    w.last = makeContext({ opts: args ? parse(args) : opts, home, address: ME, io: w.io, kit: w.kit, say: (l) => said.push(`[+${Math.round(ms / 60_000)}m] ${l}`), now: () => chain.clock });
+    return pass(w.last);
+  };
+  // A test can wrap w.kit or w.io (to set STOP between two calls, say) and the next pass uses the wrapper.
+  w.parse = parse;
+  w.kinds = () => chain.sent.map((s) => `${s.kind}${s.ok ? "" : "(reverted)"}`);
+  w.asked = (key) => calls.filter((c) => c === key).length;
+  w.leg = (code) => bot.passReport(w.last, code).legs[0];
+  return w;
+}
+
+test("klima: with finality that lags across passes the approval is taken back once the retirement is final, then the next cycle starts clean", async () => {
+  const w = laggingKlima();
+  const allowanceBefore = [];
+  for (let minutes = 0; minutes <= 28 * 60; minutes += 60) {
+    allowanceBefore.push([minutes, w.chain.allowance]);
+    assert.equal(await w.passAt(minutes * 60_000), 0, w.said.join("\n"));
+  }
+  assert.deepEqual(w.chain.sent.map((s) => s.kind), ["approve", "retire", "revoke", "approve", "retire", "revoke"], w.said.join("\n"));
+  assert.deepEqual(w.chain.sent.map((s) => s.at / 60_000), [0, 60, 120, 1500, 1560, 1620], "one send per pass, each only after the one before is final");
+  // From the first take-back until the next cycle begins, the bot leaves no allowance open to Klima's asset manager.
+  for (const [minutes, allowance] of allowanceBefore) {
+    if (minutes >= 180 && minutes <= 1500) assert.equal(allowance, 0n, `allowance open at +${minutes}m`);
+    if (minutes >= 1680) assert.equal(allowance, 0n, `allowance open at +${minutes}m`);
+  }
+  assert.equal(w.chain.allowance, 0n, "the bot ends its second cycle with the approval taken back");
+  assert.equal(w.home.state().klima.revokeOwed, false, "nothing is owed once the take-back is final");
+  assert.ok(w.home.state().klima.at, "the retirement still sets the pace of the leg");
+});
+
+test("klima: a take-back that is owed is settled before 'not due yet', and while it is owed the leg never retires again", async () => {
+  // The retirement is final and its leftover approval is still open, long before the leg is next due.
+  const w = laggingKlima({ rejectRevoke: true });
+  await w.passAt(0); await w.passAt(60 * 60_000); // approve, then retire (pending)
+  assert.deepEqual(w.chain.sent.map((s) => s.kind), ["approve", "retire"]);
+  assert.equal(await w.passAt(120 * 60_000), 5, "the retirement is final, the take-back is owed, and the kit cannot prepare it: a failed read, not a send");
+  assert.equal(w.home.state().klima.revokeOwed, true, "the take-back stays owed");
+  assert.equal(w.chain.sent.length, 2, "no second retirement while the take-back is owed");
+  // Even a day later, when the leg is due again, an owed take-back comes first: no new approve, no new retire.
+  const before = w.calls.filter((c) => c === "klima prepare retire").length;
+  await w.passAt(26 * 60 * 60_000);
+  assert.equal(w.calls.filter((c) => c === "klima prepare retire").length, before, "the kit is not even asked for a retirement while a take-back is owed");
+  assert.equal(w.chain.sent.length, 2);
+  assert.equal(w.chain.allowance > 0n, true, "the open approval is real here: nothing was able to take it back");
+});
+
+test("klima: a dry pass says a take-back is owed and writes nothing", async () => {
+  const w = laggingKlima();
+  w.home.save({ klima: { at: new Date(w.t0 - 3600_000).toISOString(), revokeOwed: true } });
+  w.chain.allowance = 6n * 10n ** 17n;
+  const opts = parseArgs(["once", "--address", ME, "--home", w.dir, "--legs", "klima", "--klima-class", POOL, "--klima-credit", POOL, "--klima-tonnes", "0.01"], {});
+  const said = [];
+  const ctx = makeContext({ opts, home: openHome(w.dir), address: ME, io: { send: async () => { throw new Error("a dry pass sends nothing"); } }, kit: async (f, a) => ({ code: 0, out: { sendable: true, prepared: { step: "revoke", tx: tx(ADDR.kvcm, call("approve", [ADDR.klimaAssetManager, 0n])) } } }), say: (l) => said.push(l), now: () => w.t0 });
+  const before = fs.readFileSync(w.home.files.state, "utf8");
+  assert.equal(await pass(ctx), 0);
+  assert.ok(said.some((l) => /klima: DRY, would send take the kVCM approval back/.test(l)), said.join("\n"));
+  assert.equal(fs.readFileSync(w.home.files.state, "utf8"), before, "a dry pass never clears or sets the owed flag");
+});
+
+// ---- the second reader's four fixes (2026-11-20) -----------------------------------------------------------------------
+const HOUR = 3600_000;
+
+test("klima take-back, fix 1: the bot reads the kit's no-approval answer word for word, and the kit's two exit-10 answers differ", () => {
+  assert.equal(bot.KIT_NO_KVCM_APPROVAL, NO_KVCM_APPROVAL, "the bot's constant is the kit's own text for 'no approval left'");
+  assert.notEqual(NO_KVCM_APPROVAL, REVOKE_SIM_REVERTS);
+  assert.match(REVOKE_SIM_REVERTS, /the revoke reverts in simulation/);
+});
+
+test("klima take-back, fix 1: a revoke that reverts in simulation with an approval left stays owed, holds the leg, never approves or retires again, and a later pass takes it back", async () => {
+  const w = laggingKlima({ behave: { revokeSim: "reverts" } });
+  await w.passAt(0); await w.passAt(60 * 60_000); // approve, then retire (pending)
+  assert.deepEqual(w.kinds(), ["approve", "retire"]);
+  // The retirement is final with 0.6 kVCM still approved. The kit cannot prepare the revoke (exit 10, not "no approval").
+  assert.equal(await w.passAt(120 * 60_000), 0, w.said.join("\n"));
+  assert.equal(w.leg(0).state, "held");
+  assert.match(w.leg(0).reason, /the revoke reverts in simulation/, "the kit's own reason is the leg's reason");
+  assert.equal(w.home.state().klima.revokeOwed, true, "the debt is NOT cleared");
+  assert.ok(!w.said.some((l) => /no allowance left to revoke/.test(l)), w.said.join("\n"));
+  assert.ok(w.chain.allowance > 0n, "the approval is really still open");
+  // Hours and days later: still owed, still held, and the kit is not even asked for an approve or a retire.
+  const retiresAsked = w.asked("klima prepare retire");
+  for (const hours of [3, 26, 50]) {
+    assert.equal(await w.passAt(hours * HOUR), 0);
+    assert.equal(w.leg(0).state, "held", `+${hours}h`);
+    assert.equal(w.home.state().klima.revokeOwed, true, `+${hours}h`);
+  }
+  assert.equal(w.asked("klima prepare retire"), retiresAsked, "no new approve or retire is prepared while the take-back is owed");
+  assert.deepEqual(w.kinds(), ["approve", "retire"], "and none is sent");
+  // The revoke works again: the take-back goes out, stays owed while it is not final, and is cleared once it is.
+  w.mode.revokeSim = "ok";
+  assert.equal(await w.passAt(51 * HOUR), 0);
+  assert.deepEqual(w.kinds(), ["approve", "retire", "revoke"]);
+  assert.equal(w.home.state().klima.revokeOwed, true, "still owed until the take-back is final");
+  assert.equal(await w.passAt(52 * HOUR), 0, w.said.join("\n"));
+  // Final: the debt that take-back paid is cleared, and the leg (due again) goes on in the same pass with its next cycle's approve,
+  // which is owed back in turn from the moment it is sent (round 2).
+  assert.deepEqual(w.kinds(), ["approve", "retire", "revoke", "approve"]);
+  assert.equal(w.home.state().klima.revokeOwed, true, "the new approve is owed back");
+  assert.equal(w.home.state().klima.retireNext, true, "and its retirement comes next");
+  assert.equal(w.home.state().sendFailures?.["klima:take-back"], undefined);
+});
+
+test("klima take-back, fix 1: only the kit's no-approval answer clears the debt, and it clears it without a send", async () => {
+  const owed = (w) => w.home.save({ klima: { at: new Date(w.t0 - HOUR).toISOString(), revokeOwed: true } });
+  // Any other exit-10 answer (no reason, an empty one, a near miss, the exact text with more after it) keeps it owed and held.
+  for (const out of [null, {}, { sendable: false }, { sendable: false, prepared: { sendable: false } }, { reason: "no allowance left" },
+    { sendable: false, prepared: { sendable: false, reason: "no kVCM approval" } },
+    { sendable: false, prepared: { sendable: false, reason: `${NO_KVCM_APPROVAL}, probably` } }]) {
+    const w = laggingKlima({ behave: { revoke10: { out } } });
+    owed(w);
+    assert.equal(await w.passAt(0), 0, JSON.stringify(out));
+    assert.equal(w.home.state().klima.revokeOwed, true, `still owed after ${JSON.stringify(out)}`);
+    assert.equal(w.leg(0).state, "held", JSON.stringify(out));
+    assert.equal(w.chain.sent.length, 0);
+    assert.equal(w.asked("klima prepare retire"), 0);
+  }
+  // The kit's own words for "this address has no kVCM approval": the debt is paid.
+  const w = laggingKlima({ behave: { revoke10: { out: { sendable: false, prepared: { sendable: false, reason: NO_KVCM_APPROVAL } } } } });
+  owed(w);
+  assert.equal(await w.passAt(0), 0);
+  assert.equal(w.home.state().klima.revokeOwed, false);
+  assert.equal(w.chain.sent.length, 0, "nothing is sent to pay a debt that is already paid");
+  // A dry pass never writes it down, in either case.
+  const dry = laggingKlima({ behave: { revokeSim: "reverts" } });
+  owed(dry); dry.chain.allowance = 6n * 10n ** 17n;
+  const before = fs.readFileSync(dry.home.files.state, "utf8"), said = [];
+  const dryCtx = makeContext({ opts: parseArgs(["once", "--address", ME, "--home", dry.dir, ...KLIMA_FLAGS], {}), home: openHome(dry.dir, { readOnly: true }), address: ME,
+    io: { send: async () => { throw new Error("a dry pass sends nothing"); } }, kit: dry.kit, say: (l) => said.push(l), now: () => dry.t0 });
+  assert.equal(await pass(dryCtx), 0);
+  assert.ok(said.some((l) => /the revoke reverts in simulation/.test(l)), said.join("\n"));
+  assert.equal(fs.readFileSync(dry.home.files.state, "utf8"), before);
+});
+
+test("klima take-back, fix 2: a retirement pending across the upgrade is taken back on the first pass where it is final, even if the leg is then turned off", async () => {
+  for (const turnedOff of [false, true]) {
+    const w = laggingKlima();
+    await w.passAt(0); await w.passAt(60 * 60_000); // approve, then retire (pending)
+    // The home an older bot left: its retirement's completion was { at } with no revokeOwed key (the version of this bot published before the take-back rework).
+    const s = w.home.state();
+    assert.equal(s.pending.leg, "klima");
+    const at = s.pending.completion.value.at;
+    s.pending.completion = { bucket: "klima", value: { at } };
+    w.home.save(s);
+    assert.equal(await w.passAt(120 * 60_000, { args: turnedOff ? ["--legs", "klima"] : undefined }), 0, w.said.join("\n"));
+    assert.deepEqual(w.kinds(), ["approve", "retire", "revoke"], `turnedOff=${turnedOff}: the take-back goes out on the first pass where the retirement is final`);
+    assert.deepEqual(w.chain.sent.map((x) => x.at / 60_000), [0, 60, 120]);
+    assert.equal(await w.passAt(180 * 60_000), 0, w.said.join("\n"));
+    assert.equal(w.chain.allowance, 0n, "no approval left open");
+    assert.deepEqual(w.home.state().klima, { at, revokeOwed: false }, "and the record now says nothing is owed");
+  }
+});
+
+test("klima take-back, fix 2: an old record whose take-back already worked is cleared by the kit's no-approval answer, with no send", async () => {
+  const w = laggingKlima();
+  const at = new Date(w.t0 - HOUR).toISOString();
+  w.home.save({ klima: { at } }); // the old shape, allowance already zero
+  assert.equal(await w.passAt(0), 0, w.said.join("\n"));
+  assert.equal(w.chain.sent.length, 0);
+  assert.deepEqual(w.home.state().klima, { at, revokeOwed: false });
+  // An old record while the kit cannot prepare the revoke: held and owed, as for any owed take-back.
+  const stuck = laggingKlima({ behave: { revokeSim: "reverts" } });
+  stuck.home.save({ klima: { at } }); stuck.chain.allowance = 6n * 10n ** 17n;
+  assert.equal(await stuck.passAt(0), 0);
+  assert.equal(stuck.leg(0).state, "held");
+  assert.deepEqual(stuck.home.state().klima, { at }, "left as it was: still owed");
+  assert.equal(stuck.asked("klima prepare retire"), 0);
+});
+
+test("exit 5, fix 3: a retirement found reverted on a later pass fails its leg; three reverts in a row stop it, after the approval is taken back, and it is not sent again", async () => {
+  // Round 2: a reverted retirement owes the approval back too, so each cycle is approve, retire (reverted), take-back; the count
+  // of reverted retirements is its own, and the stop comes only once the third take-back is final.
+  const w = laggingKlima({ behave: { retireReverts: true } });
+  await w.passAt(0);
+  assert.equal(await w.passAt(60 * 60_000), 0); // the approval is final; the retirement goes out (pending)
+  assert.equal(await w.passAt(120 * 60_000), 5, w.said.join("\n")); // it is final, and it reverted; the take-back goes out
+  assert.deepEqual(bot.passReport(w.last, 5).failedLegs, ["klima"], "the pass names the leg");
+  assert.equal(w.leg(5).state, "failed");
+  assert.match(w.leg(5).reason, /was final and REVERTED/);
+  assert.equal(w.home.state().sendFailures.klima, 1, "the revert is written down, durably");
+  assert.equal(await w.passAt(180 * 60_000), 0); // the take-back is final; the next cycle's approve goes out
+  assert.equal(await w.passAt(240 * 60_000), 0); // its retirement goes out
+  assert.equal(await w.passAt(300 * 60_000), 5); // the second retirement is found reverted
+  assert.equal(w.home.state().sendFailures.klima, 2, "and counted across passes, though a take-back went final in between");
+  await w.passAt(360 * 60_000); await w.passAt(420 * 60_000);
+  assert.equal(await w.passAt(480 * 60_000), 5, "the third revert in a row is found; the take-back goes out first");
+  assert.notEqual(w.leg(5).state, "refused");
+  const sentBefore = w.chain.sent.length;
+  assert.equal(await w.passAt(540 * 60_000), 1, "the take-back is final: the leg stops");
+  assert.equal(w.leg(1).state, "refused");
+  assert.match(w.leg(1).reason, /3 sends reverted in a row/);
+  assert.equal(w.chain.sent.length, sentBefore, "nothing is sent on the pass that stops it");
+  const asked = w.asked("klima prepare retire");
+  assert.equal(await w.passAt(600 * 60_000), 1, "a later pass, with a fresh context, still finds it stopped");
+  assert.equal(await w.passAt(36 * HOUR), 1);
+  assert.equal(w.chain.sent.length, sentBefore);
+  assert.equal(w.asked("klima prepare retire"), asked, "the kit is not even asked");
+  assert.deepEqual(w.kinds(), ["approve", "retire(reverted)", "revoke", "approve", "retire(reverted)", "revoke", "approve", "retire(reverted)", "revoke"]);
+  assert.equal(w.chain.allowance, 0n, "and the stopped leg leaves a zero allowance");
+});
+
+test("exit 5, fix 3: a take-back that reverts three passes in a row stops the leg and is not sent a fourth time", async () => {
+  const w = laggingKlima({ behave: { revokeReverts: true } });
+  await w.passAt(0); await w.passAt(60 * 60_000); // approve, retire (pending)
+  assert.equal(await w.passAt(120 * 60_000), 0); // the retirement is final: take-back 1 goes out (pending)
+  assert.deepEqual(w.kinds(), ["approve", "retire", "revoke(reverted)"]);
+  assert.equal(await w.passAt(180 * 60_000), 5, w.said.join("\n")); // take-back 1 is final: reverted. Take-back 2 goes out
+  assert.deepEqual(bot.passReport(w.last, 5).failedLegs, ["klima"]);
+  assert.equal(await w.passAt(240 * 60_000), 5); // take-back 2 reverted. Take-back 3 goes out
+  assert.equal(await w.passAt(300 * 60_000), 1, "take-back 3 reverted: the leg stops");
+  assert.equal(w.home.state().klima.revokeOwed, true, "the debt is still written down");
+  for (const minutes of [360, 420, 26 * 60]) assert.equal(await w.passAt(minutes * 60_000), 1);
+  assert.equal(w.kinds().filter((k) => k.startsWith("revoke")).length, 3, "never sent a fourth time");
+  assert.ok(w.chain.allowance > 0n, "the approval is open and the owner has to take it back by hand");
+});
+
+test("exit 5, fix 3: a final success of the leg resets the count", async () => {
+  const w = laggingKlima({ behave: { retireReverts: true } });
+  await w.passAt(0); await w.passAt(60 * 60_000);
+  w.mode.retireReverts = false; // the next retirement will go through
+  assert.equal(await w.passAt(120 * 60_000), 5); // the first retirement is final and reverted; its approval is taken back
+  assert.equal(w.home.state().sendFailures.klima, 1);
+  assert.equal(await w.passAt(180 * 60_000), 0, w.said.join("\n")); // the take-back is final; a new approve goes out
+  assert.equal(w.home.state().sendFailures.klima, 1, "a take-back that went final does not reset the count");
+  assert.equal(await w.passAt(240 * 60_000), 0, w.said.join("\n")); // the second retirement goes out
+  assert.equal(await w.passAt(300 * 60_000), 0, w.said.join("\n")); // it is final and good
+  assert.equal(w.home.state().sendFailures, undefined, "a retirement that goes final clears it");
+  assert.deepEqual(w.kinds(), ["approve", "retire(reverted)", "revoke", "approve", "retire", "revoke"], "the take-back follows the good retirement");
+  assert.equal(w.home.state().klima.revokeOwed, true, "owed until that take-back is final");
+});
+
+test("exit 5, fix 3: a send that reverts at once counts the same way, and the other exit codes keep their meaning", async () => {
+  const args = ["--legs", "regen", "--regen-eth", "0.0002"];
+  const bad = tx(ADDR.hydrexVoter, call("vote", [[POOL], [10000n]])); // not a step the regen leg may sign
+  // reverted at once, three passes in a row
+  const r = world({ live: true, args });
+  r.ctx.io.wait = async () => false;
+  assert.equal(await pass(r.ctx), 5);
+  assert.equal(r.home.state().sendFailures.regen, 1);
+  assert.equal(await pass(r.ctx), 5);
+  assert.equal(await pass(r.ctx), 1, "the third revert in a row stops the leg");
+  assert.equal(r.sent.length, 3);
+  assert.equal(await pass(r.ctx), 1);
+  assert.equal(await pass(makeContext({ opts: r.ctx.opts, home: r.home, address: ME, io: r.ctx.io, kit: r.ctx.kit, say: () => {}, now: r.ctx.now })), 1, "a restart does not clear it");
+  assert.equal(r.sent.length, 3, "never sent a fourth time");
+  // a success in between resets the count
+  const s = world({ live: true, args });
+  s.ctx.io.wait = async () => false;
+  assert.equal(await pass(s.ctx), 5); assert.equal(await pass(s.ctx), 5);
+  s.ctx.io.wait = async () => true;
+  assert.equal(await pass(s.ctx), 0);
+  assert.equal(s.home.state().sendFailures, undefined);
+  // STOP is 0, a stopped leg is 1, a refused step is 4, and 4 and 1 still outrank a revert in the same pass
+  const stopped = world({ live: true, args });
+  fs.writeFileSync(stopped.home.files.stop, "");
+  assert.equal(await pass(stopped.ctx), 0);
+  assert.equal(await pass(world({ live: true, args, answers: { "regen prepare buy-regen": { code: 2, out: null, err: "no" } } }).ctx), 1);
+  assert.equal(await pass(world({ live: true, args, answers: { "regen prepare buy-regen": { code: 0, out: { sendable: true, prepared: { minOut: "3", tx: bad } } } } }).ctx), 4);
+  const two = ["--legs", "regen,eco", "--regen-eth", "0.0002", "--eco-eth", "0.0002"];
+  const refused = world({ live: true, args: two, answers: { "uniswap prepare swap": { code: 0, out: { sendable: true, prepared: { minOut: "1", tx: bad } } } } });
+  refused.ctx.io.wait = async () => false;
+  assert.equal(await pass(refused.ctx), 4, "a refusal outranks the revert");
+  const halted = world({ live: true, args: two, answers: { "uniswap prepare swap": { code: 2, out: null, err: "no" } } });
+  halted.ctx.io.wait = async () => false;
+  assert.equal(await pass(halted.ctx), 1, "a stopped leg outranks the revert");
+  assert.deepEqual(bot.passReport(halted.ctx, 1).failedLegs, ["regen"], "and the revert is still named");
+});
+
+/**
+ * A home as a live bot leaves it between the two durable writes of one send: state.json already says a send is pending, its
+ * ledger row is the next write. `finish()` makes that write, as the live bot would a moment later.
+ */
+function midSendHome() {
+  const dir = tmp(), live = openHome(dir);
+  const at = new Date(Date.parse("2026-11-20T00:00:00Z")).toISOString();
+  const row = (id, phase, extra = {}) => ({ id, phase, at, leg: "regen", name: "buy", chain: "base", to: ADDR.universalRouter, kvcmUnits: "0", usdcUnits: "0",
+    valueWei: phase === "reserved" ? "100" : "0", feeBoundWei: phase === "reserved" ? "100" : "0", ...extra });
+  const A = "a".repeat(32), B = "b".repeat(32), HA = `0x${"1".repeat(64)}`;
+  live.record(row(A, "reserved", { hash: HA })); live.record(row(A, "broadcast", { hash: HA })); live.record(row(A, "receipt", { hash: HA, status: "success" }));
+  live.save({ walletAddress: ME, ledgerExpected: true, pending: { id: B, chain: "base", hash: null, leg: "eco-buy", name: "buy", at } });
+  return { dir, nowMs: Date.parse(at), finish: () => live.record(row(B, "reserved", { hash: null })) };
+}
+const REGEN_ANSWER = () => ({ code: 0, out: { sendable: true, prepared: { minOut: "3", tx: regenTx(parseEther("0.0001")) } } });
+const NO_JOURNAL = "pending transaction has no matching durable journal entry";
+
+test("dry pass beside a live bot, fix 4: a read between the live bot's two writes is read again, and carries on when it is consistent", async () => {
+  const m = midSendHome(), slept = [], said = [];
+  const ctx = makeContext({ opts: parseArgs(["once", "--address", ME, "--home", m.dir, "--legs", "regen", "--regen-eth", "0.0001"], {}), home: openHome(m.dir, { readOnly: true }),
+    address: ME, io: {}, kit: async () => REGEN_ANSWER(), say: (l) => said.push(l), now: () => m.nowMs, sleep: async (ms) => { slept.push(ms); m.finish(); } });
+  const stateBefore = fs.readFileSync(path.join(m.dir, "state.json"), "utf8");
+  assert.equal(await pass(ctx), 0, said.join("\n"));
+  assert.ok(said.some((l) => /regen: DRY, would send buy/.test(l)), said.join("\n"));
+  assert.equal(bot.passReport(ctx, 0).legs[0].state, "dry");
+  assert.equal(slept.length, 1, "it waited once");
+  assert.ok(slept[0] >= 100 && slept[0] <= 1000, `a short wait, a few hundred milliseconds: ${slept[0]}`);
+  assert.equal(fs.readFileSync(path.join(m.dir, "state.json"), "utf8"), stateBefore, "a dry pass still writes nothing");
+});
+
+test("dry pass beside a live bot, fix 4: a home still inconsistent on the second read is refused, and the line says a live bot may be mid-send or the home is damaged", async () => {
+  const m = midSendHome(), slept = [], said = [];
+  const ctx = makeContext({ opts: parseArgs(["once", "--address", ME, "--home", m.dir, "--legs", "regen", "--regen-eth", "0.0001"], {}), home: openHome(m.dir, { readOnly: true }),
+    address: ME, io: {}, kit: async () => REGEN_ANSWER(), say: (l) => said.push(l), now: () => m.nowMs, sleep: async (ms) => { slept.push(ms); } });
+  assert.equal(await pass(ctx), 4, said.join("\n"));
+  assert.equal(slept.length, 1, "it read the home again once, no more");
+  assert.equal(bot.passReport(ctx, 4).legs[0].state, "refused");
+  const line = said.find((l) => /STOPPED/.test(l));
+  assert.ok(line.includes(NO_JOURNAL), line);
+  assert.match(line, /a live bot may be mid-send/);
+  assert.match(line, /or the home is damaged/);
+  // Any OTHER refusal of the home in a dry pass (a damaged ledger row here) is not read twice.
+  const other = tmp(), seen = [];
+  openHome(other).save({ walletAddress: ME, ledgerExpected: true });
+  fs.writeFileSync(path.join(other, "ledger.jsonl"), "garbage\n", { mode: 0o600 });
+  const ctx2 = makeContext({ opts: parseArgs(["once", "--address", ME, "--home", other, "--legs", "regen", "--regen-eth", "0.0001"], {}), home: openHome(other, { readOnly: true }),
+    address: ME, io: {}, kit: async () => REGEN_ANSWER(), say: () => {}, now: () => m.nowMs, sleep: async (ms) => { seen.push(ms); } });
+  assert.equal(await pass(ctx2), 4);
+  assert.deepEqual(seen, [], "only the one mid-send mismatch earns a second read");
+});
+
+test("dry pass beside a live bot, fix 4: a LIVE pass keeps today's behavior exactly: it refuses at once and never waits", async () => {
+  const m = midSendHome(), slept = [];
+  const ctx = makeContext({ opts: parseArgs(["once", "--address", ME, "--home", m.dir, "--live", ...LIVE_WITNESS, "--legs", "regen", "--regen-eth", "0.0001"], {}), home: openHome(m.dir),
+    address: ME, io: { send: async () => { throw new Error("nothing may be sent"); } }, kit: async () => REGEN_ANSWER(), say: () => {}, now: () => m.nowMs, sleep: async (ms) => { slept.push(ms); m.finish(); } });
+  await assert.rejects(() => step(ctx, "regen", "buy", regenTx(parseEther("0.0001")), { sizeWei: parseEther("0.0001") }),
+    (e) => e instanceof GuardError && e.message === NO_JOURNAL);
+  assert.deepEqual(slept, [], "a live pass does not wait and read again");
+});
+
 test("a delayed GMX keeper cannot silently consume the owner selected hold period", async () => {
   const args = ["--legs", "gmx", "--gmx-market", "ETH", "--gmx-side", "long", "--gmx-collateral", "5", "--gmx-leverage", "2", "--gmx-hold-hours", "1"];
   const market = GMX_STARTER_MARKETS.ETH;
@@ -1601,13 +2035,13 @@ test("regen-retire stops cleanly when the kit cannot prepare: a plain line, and 
   assert.equal(await pass(old.ctx), 1, "a stopped leg stays stopped");
   // A failed read counts like any leg's: three in a row stop it.
   const down = world({ args: ["--legs", "regen-retire", ...RETIRE_ARGS], answers: { "regen prepare retire": { code: 1, out: null, err: "lcd down" } } });
-  assert.equal(await pass(down.ctx), 0);
+  assert.equal(await pass(down.ctx), 5);
   await pass(down.ctx);
   assert.equal(await pass(down.ctx), 1);
   assert.equal(down.sent.length, 0);
   // A kit that says yes and prints no message is a failed read, never a printed line.
   const empty = world({ args: ["--legs", "regen-retire", ...RETIRE_ARGS], answers: { "regen prepare retire": { code: 0, out: { sendable: true, prepared: { sendable: true } } } } });
-  assert.equal(await pass(empty.ctx), 0);
+  assert.equal(await pass(empty.ctx), 5);
   assert.ok(empty.said.some((l) => /^regen-retire: prepare: the kit printed no retirement message/.test(l)), empty.said.join(" | "));
   assert.ok(!empty.said.some((l) => /would sign/.test(l)));
 });
@@ -1834,8 +2268,9 @@ test("the buy gate decodes the complete permitted route: unknown pools, diverted
 test("the buy legs: dry says what they would buy and the kit's own words; live sends through the same gate, caps and ledger; a refused step sends nothing", async () => {
   const size = parseEther("0.0002");
   const answers = {
-    "buy --token NET": { code: 0, out: { sendable: true, prepared: { route: "WETH>NET", minOut: "5", disclosure: circle.BUY_DISCLOSURE.NET, tx: buyTx("NET", "WETH>NET", size) } } },
-    "buy --token ECO": { code: 0, out: { sendable: true, prepared: { route: "WETH>NET>ECO", minOut: "7", disclosure: circle.BUY_DISCLOSURE.ECO, tx: buyTx("ECO", "WETH>NET>ECO", size) } } },
+    // The circle kit prints a buy's floor in RAW units of an 18 decimal token (the figures are the ones a real dry pass printed on 2026-11-20).
+    "buy --token NET": { code: 0, out: { sendable: true, prepared: { route: "WETH>NET", minOut: "32607091603", disclosure: circle.BUY_DISCLOSURE.NET, tx: buyTx("NET", "WETH>NET", size) } } },
+    "buy --token ECO": { code: 0, out: { sendable: true, prepared: { route: "WETH>NET>ECO", minOut: "34774305528068061180188", disclosure: circle.BUY_DISCLOSURE.ECO, tx: buyTx("ECO", "WETH>NET>ECO", size) } } },
   };
   const args = ["--legs", "net-buy,eco-buy", "--net-eth", "0.0002", "--eco-buy-eth", "0.0002"];
   const dry = world({ args, answers });
@@ -1843,8 +2278,9 @@ test("the buy legs: dry says what they would buy and the kit's own words; live s
   assert.equal(dry.sent.length, 0);
   assert.ok(dry.said.some((l) => /net-buy: As of 2026-11-18, EcoWealth created NET and holds it/.test(l)));
   assert.ok(dry.said.some((l) => /eco-buy: As of 2026-11-18, EcoWealth created ECO/.test(l)));
-  assert.ok(dry.said.some((l) => /net-buy: DRY, would send buy at least 5 units of NET by WETH>NET with 0\.0002 ETH/.test(l)));
-  assert.ok(dry.said.some((l) => /eco-buy: DRY, would send buy at least 7 units of ECO by WETH>NET>ECO with 0\.0002 ETH/.test(l)));
+  assert.ok(dry.said.some((l) => /net-buy: DRY, would send buy at least 0\.000000032607091603 NET by WETH>NET with 0\.0002 ETH/.test(l)), dry.said.join(" | "));
+  assert.ok(dry.said.some((l) => /eco-buy: DRY, would send buy at least 34774\.305528068061180188 ECO by WETH>NET>ECO with 0\.0002 ETH/.test(l)), dry.said.join(" | "));
+  assert.ok(!dry.said.some((l) => /units of/.test(l)), "no human line prints raw units any more");
   assert.ok(dry.calls.includes(`buy --token NET --from ${ME} --size 0.0002`) && dry.calls.includes(`buy --token ECO --from ${ME} --size 0.0002`));
   assert.ok(dry.said.some((l) => /net-buy: off|eco-buy: off/.test(l)) === false, "both legs are on");
   // off without a size
@@ -1866,10 +2302,10 @@ test("the buy legs: dry says what they would buy and the kit's own words; live s
   assert.equal(await pass(capped.ctx), 0);
   assert.equal(capped.sent.length, 1, "the second buy waits: the day's spend cap is reached");
   // a step that pays out to someone else is refused, nothing is sent, and the leg stays stopped
-  const bad = world({ live: true, args: ["--legs", "net-buy", "--net-eth", "0.0002"], answers: { "buy --token NET": { code: 0, out: { sendable: true, prepared: { route: "WETH>NET", minOut: "5", tx: tx(ADDR.universalRouter, call("execute", [cmdHex([ROUTER_CMD.V4_SWAP, ROUTER_CMD.SWEEP]), [nativeHop(size)[1], sweepTok(THIEF, ADDR.net)[1]], 2_000_000_000n]), { value: hex(size) }) } } } } });
+  const bad = world({ live: true, args: ["--legs", "net-buy", "--net-eth", "0.0002"], answers: { "buy --token NET": { code: 0, out: { sendable: true, prepared: { route: "WETH>NET", minOut: "32607091603", tx: tx(ADDR.universalRouter, call("execute", [cmdHex([ROUTER_CMD.V4_SWAP, ROUTER_CMD.SWEEP]), [nativeHop(size)[1], sweepTok(THIEF, ADDR.net)[1]], 2_000_000_000n]), { value: hex(size) }) } } } } });
   assert.equal(await pass(bad.ctx), 4);
   assert.equal(bad.sent.length, 0);
-  assert.ok(bad.said.some((l) => /net-buy: STOPPED: net-buy: refused buy at least 5 units of NET by WETH>NET: the buy sweeps to an address that is not yours/.test(l)));
+  assert.ok(bad.said.some((l) => /net-buy: STOPPED: net-buy: refused buy at least 0\.000000032607091603 NET by WETH>NET: the buy sweeps to an address that is not yours/.test(l)), bad.said.join(" | "));
   // STOP and an unconfirmed transaction hold the buys like every other send
   const stopped = world({ live: true, args, answers });
   fs.writeFileSync(stopped.home.files.stop, "");
@@ -1962,7 +2398,7 @@ test("disaster-recovery drill: snapshot, outage, restore; a restored home keeps 
   const commitmentOf = async (dir) => JSON.parse((await runMain(["audit", "--home", dir])).out).auditCommitment;
   const copyOf = (dir) => { const dest = tmp(); fs.rmSync(dest, { recursive: true }); fs.cpSync(dir, dest, { recursive: true }); return dest; };
   const liveCtx = (dir, { address = ME, at }) => makeContext({
-    opts: parseArgs(["once", "--address", address, "--home", dir, "--live", "--legs", "eco", "--eco-eth", "0.0002"], {}),
+    opts: parseArgs(["once", "--address", address, "--home", dir, "--live", ...LIVE_WITNESS, "--legs", "eco", "--eco-eth", "0.0002"], {}),
     home: openHome(dir), address, kit: w.ctx.kit, io: w.ctx.io, say: (l) => w.said.push(l), now: () => at,
   });
 
@@ -2066,7 +2502,7 @@ test("backup and restore: the bot's memory is copied without its key, proven, an
   assert.equal(openHome(restoredHome).state().walletAddress, ME);
   assert.equal(fs.readdirSync(parent).some((n) => n.startsWith(".vealth-bot-restore-")), false, "no staging folder is left behind");
   const sentBefore = w.sent.length;
-  const later = makeContext({ opts: parseArgs(["once", "--address", ME, "--home", restoredHome, "--live", "--legs", "eco", "--eco-eth", "0.0002"], {}),
+  const later = makeContext({ opts: parseArgs(["once", "--address", ME, "--home", restoredHome, "--live", ...LIVE_WITNESS, "--legs", "eco", "--eco-eth", "0.0002"], {}),
     home: openHome(restoredHome), address: ME, kit: w.ctx.kit, io: w.ctx.io, say: () => {}, now: () => Date.now() });
   assert.equal(await pass(later), 0);
   assert.equal(w.sent.length, sentBefore, "a restored home remembers its purchase and does not buy again");
@@ -2186,39 +2622,45 @@ async function pretendNode(initial = {}) {
 
 test("the real chain IO against a pretend node: a first receipt that is not final waits instead of halting, and only finality settles it", async () => {
   const node = await pretendNode({ finalized: 90, receiptBlock: 100 });
+  const witness = await pretendNode({ finalized: 90, receiptBlock: 100 });
   try {
-    const io = makeChainIo(FAKE_SIGNER, { base: node.url, arbitrum: node.url });
+    const io = makeChainIo(FAKE_SIGNER, { base: node.url, arbitrum: node.url }, { base: witness.url });
+    const both = (patch) => { Object.assign(node.state, patch); Object.assign(witness.state, patch); };
     const signed = await io.prepare("base", swapTx(parseEther("0.0002")));
     assert.equal(signed.nonce, 7);
     assert.equal(await io.broadcast("base", signed.raw), signed.hash);
     assert.deepEqual(node.state.received, [signed.raw], "the node saw exactly the signed bytes");
+    assert.deepEqual(witness.state.received, [], "the witness is never a broadcast path");
+    witness.state.received.push(signed.raw); witness.state.mined = true; // the chain now holds it, and the witness reads it from there
     assert.equal(await io.wait("base", signed.hash), null, "included, but the finalized block has not reached it yet");
     assert.equal(await io.seen("base", signed.hash), null);
-    node.state.finalized = 100;
+    both({ finalized: 100 });
     assert.equal(await io.wait("base", signed.hash), true);
     assert.equal(await io.seen("base", signed.hash), true);
-    node.state.status = "0x0";
+    both({ status: "0x0" });
     assert.equal(await io.seen("base", signed.hash), false, "a finalized revert is a revert");
-    node.state.status = "0x1"; node.state.canonicalHash = `0x${"ab".repeat(32)}`;
+    both({ status: "0x1", canonicalHash: `0x${"ab".repeat(32)}` });
     assert.equal(await io.seen("base", signed.hash), null, "a receipt whose block is not the canonical one (a reorg) is never final");
-  } finally { await node.close(); }
+  } finally { await node.close(); await witness.close(); }
 });
 
 test("the real chain IO refuses a node on another chain, a contended nonce and a nonce that moved after signing", async () => {
   const node = await pretendNode();
+  const witness = await pretendNode(); // the two nodes always agree here: this test is about one chain's own rules
   try {
-    const io = makeChainIo(FAKE_SIGNER, { base: node.url, arbitrum: node.url });
-    node.state.chainId = "0x1";
+    const io = makeChainIo(FAKE_SIGNER, { base: node.url, arbitrum: node.url }, { base: witness.url });
+    const both = (patch) => { Object.assign(node.state, patch); Object.assign(witness.state, patch); };
+    both({ chainId: "0x1" });
     await assert.rejects(() => io.prepare("base", swapTx(parseEther("0.0002"))), /another chain/);
-    node.state.chainId = "0x2105"; node.state.pendingNonce = 8;
+    both({ chainId: "0x2105", pendingNonce: 8 });
     await assert.rejects(() => io.prepare("base", swapTx(parseEther("0.0002"))), /unconfirmed transaction or inconsistent nonce/);
-    node.state.pendingNonce = 7;
+    both({ pendingNonce: 7 });
     const signed = await io.prepare("base", swapTx(parseEther("0.0002")));
-    node.state.nonce = 8; node.state.pendingNonce = 8;
+    both({ nonce: 8, pendingNonce: 8 });
     await assert.rejects(() => io.broadcast("base", signed.raw), /nonce changed since local signing/);
     assert.deepEqual(node.state.received, [], "nothing reached the node");
     await assert.rejects(() => io.send("base", swapTx(parseEther("0.0002"))), /direct send is disabled/);
-  } finally { await node.close(); }
+  } finally { await node.close(); await witness.close(); }
 });
 
 test("a Hydrex claim that is included but not final stops the leg's later steps instead of sending the next claim or the vote", async () => {
@@ -2292,4 +2734,791 @@ test("a send that was in doubt when the backup was made is still in doubt after 
     io: { ...run.w.ctx.io, seen: async () => null } });
   assert.equal(await pass(ctx), 0);
   assert.equal(run.sends(), 1, "the restored home does not send again while that transaction is unresolved");
+});
+
+// ---- two nodes, across restarts ------------------------------------------------------------------------------------------
+// The real chain IO with a primary and a witness, both pretend nodes on the loopback address, and a throwaway key.
+
+test("restart: a send the witness cannot confirm survives restarts and blocks every new send until both nodes agree it is final", async () => {
+  const primary = await pretendNode({ finalized: 100, receiptBlock: 100 });
+  const witness = await pretendNode({ finalized: 100, receiptBlock: 100 });
+  try {
+    // The pretend nodes' latest block is 105, stamped 1_900_000_105 s; the bot's clock sits on it so the chain-time guard passes.
+    const chainNowMs = (1_900_000_000 + 105) * 1000;
+    const w = world({ live: true, args: ["--legs", "eco", "--eco-eth", "0.0002"], nowMs: chainNowMs });
+    // Each call is a fresh process: a new context, a new home handle and new RPC clients on the same folder.
+    const boot = () => makeContext({
+      opts: w.ctx.opts, home: openHome(w.dir), address: FAKE_SIGNER.address, kit: w.ctx.kit,
+      say: (l) => w.said.push(l), now: () => chainNowMs,
+      io: makeChainIo(FAKE_SIGNER, { base: primary.url, arbitrum: primary.url }, { base: witness.url }),
+    });
+    const phases = () => fs.readFileSync(w.home.files.ledger, "utf8").trim().split("\n").map((l) => JSON.parse(l).phase);
+
+    // 1. The buy goes out through the primary, which calls it final. The witness has never seen it: unknown, so it stays pending.
+    assert.equal(await pass(boot()), 0);
+    assert.equal(primary.state.received.length, 1, "one signed buy reached the primary");
+    assert.equal(witness.state.received.length, 0, "the witness is never a broadcast path");
+    const pending = openHome(w.dir).state().pending;
+    assert.ok(pending?.hash);
+    assert.equal(pending.hash, keccak256(primary.state.received[0]));
+    assert.deepEqual(phases(), ["reserved", "broadcast"]);
+    assert.equal(openHome(w.dir).state().eco?.at, undefined, "the buy is not done in the bot's memory, so it is due again");
+    assert.ok(w.said.some((l) => /is in a block that is not final yet, or cannot be confirmed\. It stays pending/.test(l)));
+    const held = () => w.said.filter((l) => /is not yet final, or its finality cannot be verified\. No transactions will be sent/.test(l)).length;
+
+    // 2. Restart twice. The buy is due, and the pending send alone holds the whole pass back.
+    for (const n of [1, 2]) {
+      assert.equal(await pass(boot()), 0);
+      assert.equal(primary.state.received.length, 1, `restart ${n}: nothing new reached the node`);
+      assert.equal(openHome(w.dir).state().pending?.hash, pending.hash, `restart ${n}: the same pending send survives`);
+      assert.equal(held(), n, `restart ${n}: held by the unconfirmed send, and it says so`);
+    }
+
+    // 3. The witness now holds the transaction, but in a block its own chain does not keep (a reorg there): still unknown.
+    witness.state.received.push(primary.state.received[0]);
+    witness.state.mined = true;
+    witness.state.canonicalHash = `0x${"cd".repeat(32)}`;
+    assert.equal(await pass(boot()), 0);
+    assert.equal(primary.state.received.length, 1);
+    assert.equal(openHome(w.dir).state().pending?.hash, pending.hash, "one node's reorg keeps it pending");
+    assert.deepEqual(phases(), ["reserved", "broadcast"]);
+    assert.equal(held(), 3);
+
+    // 4. Both nodes agree it is final: the next restart settles it once, and nothing new goes out.
+    witness.state.canonicalHash = null;
+    assert.equal(await pass(boot()), 0);
+    assert.equal(primary.state.received.length, 1);
+    assert.equal(openHome(w.dir).state().pending, undefined);
+    assert.ok(openHome(w.dir).state().eco?.at, "the buy's completion is applied once both nodes call it final");
+    assert.deepEqual(phases(), ["reserved", "broadcast", "reconciled"]);
+    assert.ok(w.said.some((l) => l.startsWith(`reconciled confirmed transaction ${pending.hash}`)));
+    assert.equal(await pass(boot()), 0);
+    assert.equal(primary.state.received.length, 1, "a settled buy is not bought again inside its interval");
+    assert.deepEqual(phases(), ["reserved", "broadcast", "reconciled"]);
+  } finally {
+    await primary.close();
+    await witness.close();
+  }
+});
+
+test("restart: two nodes that disagree on the wallet nonce sign nothing, before or after a restart", async () => {
+  // The witness disagrees on the pending nonce, then on the confirmed one. Either way the bot must not even SIGN: a refusal at
+  // broadcast alone would leave a signed transaction in a pending reservation, so the proof is no ledger row and no pending entry.
+  for (const disagreement of [{ pendingNonce: 8 }, { nonce: 8 }]) {
+    const primary = await pretendNode({ finalized: 100, receiptBlock: 100 });
+    const witness = await pretendNode({ finalized: 100, receiptBlock: 100, ...disagreement });
+    try {
+      const chainNowMs = (1_900_000_000 + 105) * 1000;
+      const w = world({ live: true, args: ["--legs", "eco", "--eco-eth", "0.0002"], nowMs: chainNowMs });
+      const boot = () => makeContext({
+        opts: w.ctx.opts, home: openHome(w.dir), address: FAKE_SIGNER.address, kit: w.ctx.kit,
+        say: (l) => w.said.push(l), now: () => chainNowMs,
+        io: makeChainIo(FAKE_SIGNER, { base: primary.url, arbitrum: primary.url }, { base: witness.url }),
+      });
+      await pass(boot()).catch(() => {});
+      await pass(boot()).catch(() => {});
+      const label = JSON.stringify(disagreement);
+      assert.equal(primary.state.received.length, 0, `${label}: a nonce the nodes disagree on is never signed or sent`);
+      assert.equal(witness.state.received.length, 0);
+      assert.ok(w.said.some((l) => /disagree about chain or wallet nonce; do not sign/.test(l)), `${label}: it says why, and it is the signing check that said it`);
+      assert.equal(fs.existsSync(w.home.files.ledger) ? fs.readFileSync(w.home.files.ledger, "utf8") : "", "", `${label}: no ledger row: nothing was reserved, so nothing was signed`);
+      assert.equal(openHome(w.dir).state().pending, undefined, `${label}: no pending send was recorded after either pass`);
+    } finally {
+      await primary.close();
+      await witness.close();
+    }
+  }
+});
+
+/** Two pretend nodes and a live eco pass wired to them through the real chain IO. `wrapIo` can swap a method before a pass. */
+async function pretendPair({ primary: primaryState = {}, witness: witnessState = {} } = {}) {
+  const primary = await pretendNode({ finalized: 100, receiptBlock: 100, ...primaryState });
+  const witness = await pretendNode({ finalized: 100, receiptBlock: 100, ...witnessState });
+  const chainNowMs = (1_900_000_000 + 105) * 1000; // the primary's latest block (105) is stamped 1_900_000_105 s
+  const w = world({ live: true, args: ["--legs", "eco", "--eco-eth", "0.0002"], nowMs: chainNowMs });
+  const boot = ({ withWitness = true, wrapIo = null } = {}) => {
+    const io = makeChainIo(FAKE_SIGNER, { base: primary.url, arbitrum: primary.url }, withWitness ? { base: witness.url } : {});
+    if (wrapIo) wrapIo(io);
+    return makeContext({ opts: w.ctx.opts, home: openHome(w.dir), address: FAKE_SIGNER.address, kit: w.ctx.kit, say: (l) => w.said.push(l), now: () => chainNowMs, io });
+  };
+  const phases = () => (fs.existsSync(w.home.files.ledger) ? fs.readFileSync(w.home.files.ledger, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l).phase) : []);
+  const pending = () => openHome(w.dir).state().pending;
+  const close = async () => { await primary.close(); await witness.close(); };
+  return { primary, witness, w, boot, phases, pending, close };
+}
+/** A local signer that counts how often it was asked to sign, so "signs nothing" is observed, not inferred. */
+function countingSigner() {
+  const spy = { address: FAKE_SIGNER.address, signed: 0, signTransaction: async (t) => { spy.signed += 1; return FAKE_SIGNER.signTransaction(t); } };
+  return spy;
+}
+
+test("the witness on the wrong chain: the bot signs nothing, and the signing step itself refuses it", async () => {
+  // Pass level: the clock check meets the wrong chain first, so no ledger row, no pending entry and no signature exist.
+  const t = await pretendPair({ witness: { chainId: "0x1" } });
+  try {
+    assert.equal(await pass(t.boot()), 4);
+    assert.equal(t.primary.state.received.length, 0);
+    assert.deepEqual(t.phases(), [], "no ledger row");
+    assert.equal(t.pending(), undefined, "no pending entry");
+    assert.ok(t.w.said.some((l) => /primary and witness nodes must agree on the chain id/.test(l)));
+  } finally { await t.close(); }
+  // Chain IO level, one step at a time, so each guard stands on its own and not on the other one's refusal.
+  const own = await pretendPair({ witness: { chainId: "0x1" } });
+  try {
+    const spy = countingSigner();
+    const io = makeChainIo(spy, { base: own.primary.url, arbitrum: own.primary.url }, { base: own.witness.url });
+    await assert.rejects(() => io.chainTime("base"), /primary and witness nodes must agree on the chain id/);
+    await assert.rejects(() => io.prepare("base", swapTx(parseEther("0.0002"))), /disagree about chain or wallet nonce; do not sign/);
+    assert.equal(spy.signed, 0, "the local key was never asked to sign");
+    own.witness.state.chainId = "0x2105"; // agreed at signing time, then the witness is found on another chain just before the broadcast
+    const signed = await io.prepare("base", swapTx(parseEther("0.0002")));
+    assert.equal(spy.signed, 1);
+    own.witness.state.chainId = "0x1";
+    await assert.rejects(() => io.broadcast("base", signed.raw), /disagree about chain or wallet nonce; do not broadcast/);
+    assert.deepEqual(own.primary.state.received, [], "a witness on another chain never lets the bytes out");
+  } finally { await own.close(); }
+});
+
+test("the witness clock more than five minutes from the primary: the bot signs nothing; exactly five minutes is allowed", async () => {
+  // Pass level: the witness's latest block (505) is 400 s ahead of the primary's (105).
+  const t = await pretendPair({ witness: { receiptBlock: 500 } });
+  try {
+    assert.equal(await pass(t.boot()), 4);
+    assert.equal(t.primary.state.received.length, 0);
+    assert.deepEqual(t.phases(), [], "no ledger row");
+    assert.equal(t.pending(), undefined, "no pending entry");
+    assert.ok(t.w.said.some((l) => /witness chain time disagrees with the primary by more than 5 minutes/.test(l)));
+  } finally { await t.close(); }
+  // Chain IO level: both directions, and the 300 s edge on each side. Latest block = receiptBlock + 5, one second a block here.
+  for (const [witnessBlock, primaryBlock, verdict] of [[400, 100, "ok"], [401, 100, "refused"], [100, 400, "ok"], [100, 401, "refused"]]) {
+    const pair = await pretendPair({ primary: { receiptBlock: primaryBlock }, witness: { receiptBlock: witnessBlock } });
+    try {
+      const io = makeChainIo(FAKE_SIGNER, { base: pair.primary.url, arbitrum: pair.primary.url }, { base: pair.witness.url });
+      const label = `witness block ${witnessBlock} vs primary block ${primaryBlock}`;
+      if (verdict === "ok") assert.equal(await io.chainTime("base"), (1_900_000_000 + primaryBlock + 5) * 1000, `${label}: 300 s apart is allowed`);
+      else await assert.rejects(() => io.chainTime("base"), /witness chain time disagrees with the primary by more than 5 minutes/, `${label}: 301 s apart is refused`);
+    } finally { await pair.close(); }
+  }
+});
+
+test("the witness wallet nonce moving between signing and broadcast: the bot signed, and it does NOT broadcast", async () => {
+  // Pass level: the nodes agree while the bot signs; the witness then sees another transaction from the wallet.
+  const t = await pretendPair();
+  try {
+    let moved = false;
+    const wrapIo = (io) => {
+      const prepare = io.prepare;
+      io.prepare = async (...args) => { const signed = await prepare(...args); t.witness.state.nonce = 8; t.witness.state.pendingNonce = 8; moved = true; return signed; };
+    };
+    assert.equal(await pass(t.boot({ wrapIo })), 4);
+    assert.ok(moved, "the bot did sign: the move happened after signing");
+    assert.equal(t.primary.state.received.length, 0, "nothing reached the primary: the second node's nonce check held the broadcast");
+    assert.equal(t.witness.state.received.length, 0);
+    assert.deepEqual(t.phases(), ["reserved"], "the reservation stays, and no broadcast row was written");
+    assert.ok(t.pending()?.hash, "the signed send stays pending for the owner");
+    assert.ok(t.w.said.some((l) => /disagree about chain or wallet nonce; do not broadcast/.test(l)));
+    assert.equal(await pass(t.boot()), 0, "the next pass is held by the unconfirmed send");
+    assert.equal(t.primary.state.received.length, 0, "and still sends nothing");
+  } finally { await t.close(); }
+  // Chain IO level: each way the witness can move (confirmed, pending, both) stops the broadcast while the primary alone would pass.
+  for (const moved of [{ nonce: 8 }, { pendingNonce: 8 }, { nonce: 8, pendingNonce: 8 }]) {
+    const pair = await pretendPair();
+    try {
+      const io = makeChainIo(FAKE_SIGNER, { base: pair.primary.url, arbitrum: pair.primary.url }, { base: pair.witness.url });
+      const signed = await io.prepare("base", swapTx(parseEther("0.0002")));
+      Object.assign(pair.witness.state, moved);
+      await assert.rejects(() => io.broadcast("base", signed.raw), /disagree about chain or wallet nonce; do not broadcast/, JSON.stringify(moved));
+      assert.deepEqual(pair.primary.state.received, [], JSON.stringify(moved));
+    } finally { await pair.close(); }
+  }
+});
+
+test("a signing chain IO with no witness for a chain refuses to sign or broadcast there and settles nothing, even in code that skips the command line", async () => {
+  const primary = await pretendNode({ finalized: 100, receiptBlock: 100 });
+  const witness = await pretendNode({ finalized: 100, receiptBlock: 100 });
+  try {
+    const spy = countingSigner();
+    const rpcs = { base: primary.url, arbitrum: primary.url };
+    const io = makeChainIo(spy, rpcs); // no witness at all
+    await assert.rejects(() => io.prepare("base", swapTx(parseEther("0.0002"))), GuardError);
+    await assert.rejects(() => io.prepare("base", swapTx(parseEther("0.0002"))), /no base witness RPC is set/);
+    const signed = await offlineSigned(swapTx(parseEther("0.0002")), 7);
+    await assert.rejects(() => io.broadcast("base", signed.raw), /no base witness RPC is set/);
+    assert.equal(spy.signed, 0, "the local key was never asked to sign");
+    assert.deepEqual(primary.state.received, [], "nothing reached the node");
+    // The single node itself calls this transaction final. A signing bot with no witness still treats it as unknown.
+    primary.state.received.push(signed.raw); primary.state.mined = true;
+    assert.equal(await io.seen("base", signed.hash), null);
+    assert.equal(await io.wait("base", signed.hash), null);
+    // A witness on Base does not cover Arbitrum: the chains are checked one by one.
+    const baseOnly = makeChainIo(spy, rpcs, { base: witness.url });
+    await assert.rejects(() => baseOnly.prepare("arbitrum", swapTx(parseEther("0.0002"))), /no arbitrum witness RPC is set/);
+    await assert.rejects(() => baseOnly.broadcast("arbitrum", signed.raw), /no arbitrum witness RPC is set/);
+    assert.equal(await baseOnly.seen("arbitrum", signed.hash), null);
+    assert.equal(await baseOnly.wait("arbitrum", signed.hash), null);
+    assert.equal(spy.signed, 0);
+  } finally { await primary.close(); await witness.close(); }
+  // Pass level: a signing context built by hand with no witness sends nothing and says why.
+  const t = await pretendPair();
+  try {
+    assert.equal(await pass(t.boot({ withWitness: false })), 4);
+    assert.equal(t.primary.state.received.length, 0);
+    assert.deepEqual(t.phases(), [], "no ledger row");
+    assert.equal(t.pending(), undefined, "no pending entry");
+    assert.ok(t.w.said.some((l) => /no base witness RPC is set .*never signs or sends on one node's word/.test(l)));
+  } finally { await t.close(); }
+});
+
+test("live needs a witness for EVERY chain a leg signs on, not only its first rule's", () => {
+  const extra = { chain: "arbitrum", to: ADDR.arbitrumUsdc, fn: "approve", value: "zero", spender: ADDR.gmxRouter, maxAmount: MAX_GMX_USDC };
+  RULES.eco.push(extra);
+  try {
+    assert.throws(() => parseArgs(["once", "--address", ME, "--live", "--legs", "eco", "--base-witness-rpc", "https://witness-base.example"], {}), /arbitrum.*witness-rpc/);
+  } finally {
+    RULES.eco.pop();
+  }
+  assert.equal(RULES.eco.length, 1);
+  assert.equal(parseArgs(["once", "--address", ME, "--live", "--legs", "eco", "--base-witness-rpc", "https://witness-base.example"], {}).live, true);
+});
+
+// ---- a stranger's first full loop: exit codes, a dry pass that touches nothing, a JSON answer, token figures ----------------
+/** Every file and folder in a home, with size, modification time, mode and content hash: any change to the home shows here. */
+const snapshotHome = (dir) => {
+  const rows = [[dir, "root", fs.statSync(dir).mtimeMs]];
+  const walk = (d) => {
+    for (const entry of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const p = path.join(d, entry.name), st = fs.statSync(p);
+      if (entry.isDirectory()) { rows.push([p, "dir", st.mtimeMs]); walk(p); }
+      else rows.push([p, st.size, st.mtimeMs, st.mode, createHash("sha256").update(fs.readFileSync(p)).digest("hex")]);
+    }
+  };
+  walk(dir);
+  return rows;
+};
+/** Run the real command line in this process with the console captured: { code, out (stdout), err (stderr) }. */
+async function runMain(argv) {
+  const out = [], err = [], log = console.log, error = console.error;
+  console.log = (...a) => out.push(a.join(" "));
+  console.error = (...a) => err.push(a.join(" "));
+  try { const code = await main(argv); return { code, out: out.join("\n"), err: err.join("\n") }; }
+  finally { console.log = log; console.error = error; }
+}
+/** A stand-in for a kit: a program that prints the canned answer for the act it is asked, so `main` runs with no network at all. */
+function fakeKit(dir, name, answers) {
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, [
+    'const a = process.argv.slice(2).join(" ");',
+    `const answers = ${JSON.stringify(answers)};`,
+    'const key = Object.keys(answers).sort((x, y) => y.length - x.length).find((k) => a.startsWith(k));',
+    'if (!key) { console.error("unknown act"); process.exit(2); }',
+    'const r = answers[key];',
+    'if (r.stderr) console.error(r.stderr);',
+    'if (r.stdout !== undefined) console.log(JSON.stringify(r.stdout));',
+    'process.exit(r.code ?? 0);', ''].join("\n"));
+  return file;
+}
+const REAL_ECO_FLOOR = "34774305528068061180188"; // a floor the circle kit really printed in a dry pass on 2026-11-20
+const NODE_URL_ERROR = "HTTP request failed. URL: https://rpc.private.example/SECRETKEY123 Details: socket hang up";
+function dryKits() {
+  const dir = tmp(), size = parseEther("0.0001");
+  return {
+    dir,
+    kit: fakeKit(dir, "protocol-kit.mjs", { "regen prepare buy-regen": { stdout: { sendable: true, prepared: { minOut: "256.551405", tx: regenTx(size) } } } }),
+    circle: fakeKit(dir, "circle-kit.mjs", {
+      "buy --token ECO": { stdout: { sendable: true, prepared: { route: "WETH>NET>ECO", minOut: REAL_ECO_FLOOR, disclosure: circle.BUY_DISCLOSURE.ECO, tx: buyTx("ECO", "WETH>NET>ECO", size) } } },
+      "buy --token NET": { code: 1, stderr: NODE_URL_ERROR },
+    }),
+  };
+}
+const DRY_LOOP = (home, k, extra = []) => ["once", "--address", ME, "--home", home, "--kit", k.kit, "--circle-kit", k.circle,
+  "--legs", "regen,eco-buy,net-buy,gmx,klima", "--regen-eth", "0.0001", "--eco-buy-eth", "0.0001", "--net-eth", "0.0001", ...extra];
+
+test("exit codes: a failed read, an error or a reverted send is not a clean pass; off, not due and held are", async () => {
+  // two legs fail their reads: exit 5 and ONE summary line that names them, in loop order
+  const two = world({ args: ["--legs", "hydrex,regen", "--regen-eth", "0.0002"], answers: {
+    "hydrex epoch": { code: 1, out: null, err: "node down" }, "regen prepare buy-regen": { code: 1, out: null, err: "node down" } } });
+  assert.equal(await pass(two.ctx), 5);
+  assert.deepEqual(two.said.filter((l) => /^this pass failed for /.test(l)), ["this pass failed for hydrex, regen: a read failed or an error stopped them, and nothing was decided for them (exit 5)"]);
+  assert.deepEqual(bot.passReport(two.ctx, 5).failedLegs, ["hydrex", "regen"]);
+  // a thrown error (not a rule refusal) is a failure too
+  const thrown = world({ live: true, args: ["--legs", "regen", "--regen-eth", "0.0002"] });
+  thrown.ctx.io.send = async () => { throw new Error("socket hang up"); };
+  assert.equal(await pass(thrown.ctx), 5);
+  assert.ok(thrown.said.some((l) => /this pass failed for regen: .* it\b.*\(exit 5\)/.test(l)));
+  // a send that reverted is an error for its leg
+  const reverted = world({ live: true, args: ["--legs", "regen", "--regen-eth", "0.0002"] });
+  reverted.ctx.io.wait = async () => false;
+  assert.equal(await pass(reverted.ctx), 5);
+  assert.equal(bot.passReport(reverted.ctx, 5).legs[0].state, "failed");
+  // none of these is a failure: off legs, not due, held by a cap, held by STOP, a send still waiting for finality
+  const quiet = world({ args: [] });
+  assert.equal(await pass(quiet.ctx), 0);
+  assert.deepEqual(bot.passReport(quiet.ctx, 0).failedLegs, []);
+  assert.equal(quiet.said.some((l) => /^this pass failed/.test(l)), false);
+  const notDue = world({ live: true, args: ["--legs", "regen", "--regen-eth", "0.0002"] });
+  assert.equal(await pass(notDue.ctx), 0); assert.equal(await pass(notDue.ctx), 0);
+  assert.equal(bot.passReport(notDue.ctx, 0).legs[0].state, "not_due");
+  const held = world({ live: true, args: ["--legs", "regen", "--regen-eth", "0.0002", "--day-spend-eth", "0.0001"] });
+  assert.equal(await pass(held.ctx), 0);
+  assert.equal(bot.passReport(held.ctx, 0).legs[0].state, "held");
+  const waiting = world({ live: true, args: ["--legs", "regen", "--regen-eth", "0.0002"] });
+  waiting.ctx.io.wait = async () => null;
+  assert.equal(await pass(waiting.ctx), 0);
+  assert.equal(bot.passReport(waiting.ctx, 0).legs[0].state, "pending");
+  // a refusal still outranks a failure, and a leg stopped by three failures still exits 1
+  const both = world({ live: true, args: ["--legs", "hydrex,eco", "--eco-eth", "0.0002"], answers: {
+    "hydrex epoch": { code: 1, out: null, err: "node down" }, "uniswap prepare swap": { code: 0, out: { sendable: true, prepared: { minOut: "1", tx: tx(ADDR.hydrexVoter, call("vote", [[POOL], [10000n]])) } } } } });
+  assert.equal(await pass(both.ctx), 4);
+  // each pass reports on its own: a leg that failed once is not "failed" in the next pass's report
+  let reads = 0;
+  const again = world({ args: ["--legs", "hydrex"], answers: {
+    "hydrex epoch": () => (reads++ === 0 ? { code: 1, out: null, err: "node down" } : { code: 0, out: EPOCH }),
+    "hydrex locks": { code: 0, out: { nfts: [], votes: [] } } } });
+  assert.equal(await pass(again.ctx), 5);
+  assert.equal(await pass(again.ctx), 0, "the node is back: the same context passes clean");
+  assert.deepEqual(bot.passReport(again.ctx, 0).failedLegs, []);
+  assert.equal(bot.passReport(again.ctx, 0).legs[0].state, "off", "no veHYDX lock in this wallet");
+});
+
+test("a dry pass takes no lock and writes nothing: it runs beside a bot that holds the home, and the home is unchanged", async () => {
+  const home = tmp(), holder = openHome(home);
+  assert.equal(holder.lock(), true, "a running bot holds the lock");
+  holder.save({ regen: { at: new Date().toISOString() } }); // the regen buy ran just now, so it is not due
+  const before = snapshotHome(home), k = dryKits();
+  const r = await runMain(DRY_LOOP(home, k));
+  assert.equal(r.code, 5, `${r.out}\n${r.err}`); // net-buy's kit read fails on purpose below; what matters here is that it RAN
+  assert.match(r.out, /regen: not due yet/, "it read the home it did not lock: the regen buy is not due");
+  assert.match(r.out, /eco-buy: DRY, would send buy at least 34774\.305528068061180188 ECO/);
+  assert.deepEqual(snapshotHome(home), before, "not one file or folder in the home changed");
+  assert.equal(JSON.parse(fs.readFileSync(home + "/lock", "utf8")).pid, process.pid, "the holder's lock is untouched");
+  assert.equal(holder.lock(), false);
+  // a home that does not exist yet is not created by a dry pass
+  const fresh = path.join(tmp(), "nowhere-yet");
+  const created = await runMain(DRY_LOOP(fresh, k));
+  assert.match(created.out, /regen: DRY, would send buy at least 256\.551405 axlREGEN/);
+  assert.equal(fs.existsSync(fresh), false, "a dry pass creates no home");
+  // the same lock still stops a LIVE pass: only dry went around it
+  const keyFile = path.join(tmp(), "wallet.key");
+  makeWallet(keyFile);
+  const live = await runMain(["once", "--live", "--home", home, "--key-file", keyFile, "--legs", "regen-retire"]);
+  assert.equal(live.code, 2);
+  assert.match(live.err, /is locked/);
+  holder.unlock();
+});
+
+test("--json: one object on stdout with every selected leg, the human lines on stderr, and no key and no node address in it", async () => {
+  const home = tmp(), k = dryKits();
+  const r = await runMain(DRY_LOOP(home, k, ["--json", "--base-rpc", "https://my-node.invalid/KEY999"]));
+  const report = JSON.parse(r.out); // stdout is ONLY the JSON: anything else would not parse
+  assert.equal(report.exitCode, r.code);
+  assert.equal(r.code, 5);
+  assert.deepEqual(report.legs.map((l) => l.name), ["klima", "regen", "eco-buy", "net-buy", "gmx"], "every selected leg, in the loop's order");
+  assert.deepEqual(Object.fromEntries(report.legs.map((l) => [l.name, l.state])), { klima: "off", regen: "dry", "eco-buy": "dry", "net-buy": "failed", gmx: "off" });
+  assert.deepEqual(report.failedLegs, ["net-buy"]);
+  assert.equal(report.mode, "dry"); assert.equal(report.address, ME);
+  for (const l of report.legs) { assert.ok(typeof l.reason === "string" && l.reason.length > 0, l.name); assert.ok(Array.isArray(l.sends), l.name); }
+  const regen = report.legs.find((l) => l.name === "regen").sends[0], eco = report.legs.find((l) => l.name === "eco-buy").sends[0];
+  assert.deepEqual(regen, { step: "buy at least 256.551405 axlREGEN", outcome: "dry", chain: "base", token: "axlREGEN", amount: "256.551405", amountRaw: "256551405", amountIs: "the least you receive", valueEth: "0.0001", valueWei: "100000000000000", hash: null });
+  assert.equal(eco.token, "ECO"); assert.equal(eco.amount, "34774.305528068061180188"); assert.equal(eco.amountRaw, REAL_ECO_FLOOR);
+  assert.equal(eco.step, "buy at least 34774.305528068061180188 ECO by WETH>NET>ECO");
+  // the human lines are on stderr, in plain words
+  assert.match(r.err, /^bot 0\.1\.0 for 0x1111111111111111111111111111111111111111: DRY, nothing is sent/m);
+  assert.match(r.err, /eco-buy: DRY, would send buy at least 34774\.305528068061180188 ECO by WETH>NET>ECO/);
+  assert.match(r.err, /this pass failed for net-buy/);
+  assert.ok(r.out.trim().startsWith("{") && r.out.trim().endsWith("}"), "stdout is the JSON object and nothing else");
+  // no key, no node address, nothing a kit's error text carried in: a dry pass holds no 64 hex character string at all
+  assert.ok(!/https?:\/\//i.test(r.out), "no web address");
+  for (const secret of ["SECRETKEY123", "rpc.private.example", "my-node.invalid", "KEY999"]) assert.ok(!r.out.includes(secret), secret);
+  assert.ok(!/0x[0-9a-fA-F]{64}/.test(r.out), "nothing key shaped");
+  assert.match(report.legs.find((l) => l.name === "net-buy").reason, /\[url\]/, "the address inside a kit's error is cut out");
+  // refused arguments still answer in JSON, and run has no --json
+  const bad = await runMain(["once", "--json", "--legs", "nope"]);
+  assert.equal(bad.code, 2); assert.equal(JSON.parse(bad.out).exitCode, 2); assert.match(JSON.parse(bad.out).error, /no leg named nope/);
+  assert.throws(() => parseArgs(["run", "--json"], {}), /belongs to `once`/);
+});
+
+test("--json for a live pass: a send carries its hash and amounts, and a send still waiting for finality is pending", async () => {
+  const w = laggingKlima();
+  assert.equal(await w.passAt(0), 0);
+  let report = bot.passReport(w.last, 0);
+  assert.equal(report.mode, "live");
+  assert.deepEqual(report.legs.map((l) => [l.name, l.state]), [["klima", "pending"]]);
+  const approve = report.legs[0].sends[0];
+  assert.deepEqual([approve.outcome, approve.chain, approve.token, approve.amount, approve.amountRaw, approve.amountIs], ["pending", "base", "kVCM", "1", "1000000000000000000", "the approval it sets"]);
+  assert.match(approve.hash, /^0x0{63}1$/);
+  assert.equal(await w.passAt(60 * 60_000), 0);
+  const retire = bot.passReport(w.last, 0).legs[0].sends[0];
+  assert.deepEqual([retire.step, retire.amountIs, retire.amount], ["retire 0.01 tonnes", "the most it may spend", "1"]);
+  assert.equal(await w.passAt(120 * 60_000), 0);
+  const revoke = bot.passReport(w.last, 0).legs[0].sends[0];
+  assert.deepEqual([revoke.step, revoke.token, revoke.amount, revoke.amountRaw], ["take the kVCM approval back", "kVCM", "0", "0"]);
+  assert.equal(await w.passAt(180 * 60_000), 0);
+  assert.deepEqual(bot.passReport(w.last, 0).legs.map((l) => [l.state, l.sends.length]), [["not_due", 0]]);
+  // a plain instant-final live pass: sent, with the transaction hash
+  const sent = world({ live: true, args: ["--legs", "regen", "--regen-eth", "0.0002"] });
+  assert.equal(await pass(sent.ctx), 0);
+  const s = bot.passReport(sent.ctx, 0);
+  assert.equal(s.legs[0].state, "sent");
+  assert.deepEqual([s.legs[0].sends[0].outcome, s.legs[0].sends[0].token, s.legs[0].sends[0].amount, s.legs[0].sends[0].amountRaw, s.legs[0].sends[0].valueEth], ["sent", "axlREGEN", "3", "3000000", "0.0002"]);
+  assert.match(s.legs[0].sends[0].hash, /^0x0{63}1$/);
+  assert.ok(!JSON.stringify(s).includes("wallet.key"));
+});
+
+test("the token figures: the bot's pinned decimals are the kit's own, and a raw floor becomes a decimal with its symbol", () => {
+  // axlREGEN has 6 decimals and ECO 18 in the protocol kit's pool table; the circle kit prints NET and ECO through formatEther (18).
+  assert.equal(bot.TOKEN_DECIMALS.axlREGEN, kit.V4_SWAP_POOLS["eth-axlregen"].decimals);
+  assert.equal(bot.TOKEN_DECIMALS.ECO, kit.V4_SWAP_POOLS["eth-eco"].decimals);
+  assert.deepEqual([bot.TOKEN_DECIMALS.NET, bot.TOKEN_DECIMALS.ECO, bot.TOKEN_DECIMALS.kVCM, bot.TOKEN_DECIMALS.USDC, bot.TOKEN_DECIMALS.ETH], [18, 18, 18, 6, 18]);
+  assert.deepEqual(bot.tokenAmount("ECO", { raw: REAL_ECO_FLOOR }), { token: "ECO", amount: "34774.305528068061180188", amountRaw: REAL_ECO_FLOOR });
+  assert.deepEqual(bot.tokenAmount("NET", { raw: "32607091603" }), { token: "NET", amount: "0.000000032607091603", amountRaw: "32607091603" });
+  assert.deepEqual(bot.tokenAmount("axlREGEN", { decimal: "256.551405" }), { token: "axlREGEN", amount: "256.551405", amountRaw: "256551405" });
+  assert.deepEqual(bot.tokenAmount("USDC", { raw: 5_000_000n }), { token: "USDC", amount: "5", amountRaw: "5000000" });
+  for (const bad of [{ raw: "-1" }, { raw: "1.5" }, { raw: "0x10" }, { raw: undefined }, { decimal: "1e3" }, { decimal: "0.1234567" }]) assert.equal(bot.tokenAmount("axlREGEN", bad), null, JSON.stringify(bad));
+  assert.equal(bot.tokenAmount("DOGE", { raw: "1" }), null);
+});
+
+// ---- the second fix round (2026-11-20): every kVCM approval the bot sends is owed back from the moment it is sent -----------
+// One invariant: the approve is owed back from the moment it is SENT, and it is taken back as soon as the retirement it was made
+// for is FINAL (whether it succeeded or reverted), and also when that retirement was never sent. Same pretend chain with lagging
+// finality as above: a send is final 18 minutes after it goes out unless a test says otherwise.
+const MIN = 60_000;
+const APPROVE = "approve", RETIRE = "retire", REVOKE = "revoke";
+const instantFinal = (w) => { w.io.wait = async (_c, hash) => w.chain.status.get(hash); };
+/** Wrap the kit: `hook(key, nth, inner)` may answer instead of the pretend kit, or return undefined to let it answer. */
+const wrapKit = (w, hook) => {
+  const inner = w.kit, nth = {};
+  w.kit = async (file, a) => {
+    const key = a.slice(0, 3).join(" ");
+    nth[key] = (nth[key] ?? 0) + 1;
+    return (await hook(key, nth[key])) ?? inner(file, a);
+  };
+};
+
+test("klima round 2 (a): the approve is final and the retirement reverts: the next pass takes the approval back before anything else, and the allowance is zero", async () => {
+  const w = laggingKlima({ behave: { retireReverts: true } });
+  assert.equal(await w.passAt(0), 0);
+  assert.equal(await w.passAt(60 * MIN), 0);
+  assert.deepEqual(w.kinds(), [APPROVE, `${RETIRE}(reverted)`]);
+  assert.ok(w.chain.allowance > 0n, "a reverted retirement leaves the whole approval open");
+  const retiresAsked = w.asked("klima prepare retire");
+  // The retirement is found final and reverted: the pass fails the leg (exit 5) and sends the take-back, and nothing else.
+  assert.equal(await w.passAt(120 * MIN), 5, w.said.join("\n"));
+  assert.deepEqual(w.kinds(), [APPROVE, `${RETIRE}(reverted)`, REVOKE]);
+  assert.equal(w.chain.allowance, 0n, "the approval is back to zero");
+  assert.equal(w.asked("klima prepare retire"), retiresAsked, "no new approve or retire is even prepared in that pass");
+  assert.equal(w.home.state().klima.revokeOwed, true, "owed until the take-back is final");
+  assert.equal(await w.passAt(180 * MIN), 0, w.said.join("\n"));
+  assert.equal(w.home.state().sendFailures.klima, 1, "a take-back that went final is not the retirement's success: the revert is still counted");
+});
+
+test("klima round 2 (b): approve ok, retire reverts, take-back ok, three times in a row stops the leg on the third, with allowance zero; a fourth pass sends nothing", async () => {
+  const w = laggingKlima({ behave: { retireReverts: true } });
+  const codes = [], states = [];
+  for (let hour = 0; hour <= 9; hour++) { codes.push(await w.passAt(hour * 60 * MIN)); states.push(w.leg(codes.at(-1)).state); }
+  const R = `${RETIRE}(reverted)`;
+  assert.deepEqual(w.kinds(), [APPROVE, R, REVOKE, APPROVE, R, REVOKE, APPROVE, R, REVOKE], `three cycles, each with its take-back\n${w.said.join("\n")}`);
+  assert.deepEqual(w.chain.sent.map((s) => s.at / MIN), [0, 60, 120, 180, 240, 300, 360, 420, 480]);
+  // The pass that finds the third revert sends the third take-back and does NOT stop the leg yet; the next one, with the
+  // take-back final, does.
+  assert.equal(codes[8], 5, "the third revert is found: a failed pass, the take-back goes out");
+  assert.notEqual(states[8], "refused", "the leg is not stopped while its approval is still open");
+  assert.equal(codes[9], 1, "the take-back is final: now the leg stops");
+  assert.equal(states[9], "refused");
+  assert.match(w.leg(1).reason, /3 sends reverted in a row/);
+  assert.equal(w.chain.allowance, 0n, "a stopped leg leaves a zero allowance");
+  assert.equal(w.home.state().sendFailures.klima, 3);
+  assert.equal(w.home.state().sendFailures["klima:take-back"], undefined, "the take-backs have their own count, and they all went final");
+  assert.equal(w.home.state().klima.revokeOwed, false);
+  // A fourth pass, and a day later, send nothing and do not even ask the kit for a retirement.
+  const sent = w.chain.sent.length, retiresAsked = w.asked("klima prepare retire");
+  for (const ms of [10 * 60 * MIN, 36 * 60 * MIN]) { assert.equal(await w.passAt(ms), 1); assert.equal(w.leg(1).state, "refused"); }
+  assert.equal(w.chain.sent.length, sent);
+  assert.equal(w.asked("klima prepare retire"), retiresAsked);
+  assert.equal(w.chain.allowance, 0n);
+});
+
+test("klima round 2 (b2): approves that revert count too, and a take-back is not a success for them", async () => {
+  const w = laggingKlima({ behave: { approveReverts: true } });
+  const codes = [];
+  for (let hour = 0; hour <= 4; hour++) codes.push(await w.passAt(hour * 60 * MIN));
+  assert.deepEqual(w.kinds(), [`${APPROVE}(reverted)`, `${APPROVE}(reverted)`, `${APPROVE}(reverted)`]);
+  assert.equal(codes.at(-1), 1, "the third revert in a row stops the leg");
+  assert.equal(w.chain.allowance, 0n);
+  assert.equal(w.home.state().klima.revokeOwed, false, "the kit says nothing was approved, so the debt is paid without a send");
+});
+
+test("klima round 2 (c): the approve is sent, STOP is set before the retirement; after STOP is removed the take-back is settled first, then the cycle starts clean", async () => {
+  const w = laggingKlima();
+  assert.equal(await w.passAt(0), 0);
+  fs.writeFileSync(w.home.files.stop, "");
+  assert.equal(await w.passAt(60 * MIN), 0);
+  assert.equal(await w.passAt(90 * MIN), 0);
+  assert.deepEqual(w.kinds(), [APPROVE], "STOP: nothing is sent");
+  assert.ok(w.chain.allowance > 0n);
+  fs.rmSync(w.home.files.stop);
+  assert.equal(await w.passAt(120 * MIN), 0, w.said.join("\n"));
+  assert.deepEqual(w.kinds(), [APPROVE, REVOKE], "the take-back first, not the retirement");
+  assert.equal(w.chain.allowance, 0n);
+  assert.equal(await w.passAt(180 * MIN), 0, w.said.join("\n"));
+  assert.deepEqual(w.kinds(), [APPROVE, REVOKE, APPROVE], "then a clean cycle starts");
+  await w.passAt(240 * MIN); await w.passAt(300 * MIN);
+  assert.deepEqual(w.kinds(), [APPROVE, REVOKE, APPROVE, RETIRE, REVOKE]);
+  assert.equal(w.chain.allowance, 0n);
+});
+
+test("klima round 2 (c2): the approve is final in its own pass, STOP arrives before the retirement in that pass: the take-back is owed and comes first on the next pass", async () => {
+  const w = laggingKlima();
+  instantFinal(w);
+  wrapKit(w, (key, nth) => { if (key === "klima prepare retire" && nth === 2) fs.writeFileSync(w.home.files.stop, ""); });
+  assert.equal(await w.passAt(0), 0, w.said.join("\n"));
+  assert.deepEqual(w.kinds(), [APPROVE], "the retirement and the take-back both wait on STOP");
+  assert.equal(w.home.state().klima.revokeOwed, true);
+  assert.ok(w.chain.allowance > 0n);
+  fs.rmSync(w.home.files.stop);
+  assert.equal(await w.passAt(60 * MIN), 0, w.said.join("\n"));
+  assert.deepEqual(w.kinds(), [APPROVE, REVOKE, APPROVE, RETIRE, REVOKE], "the take-back first, then a clean cycle");
+  assert.equal(w.chain.allowance, 0n);
+});
+
+test("klima round 2 (c3): the approve is final, a cap holds the retirement and the take-back: when the cap rolls the take-back comes first", async () => {
+  const w = laggingKlima();
+  instantFinal(w);
+  const args = [...KLIMA_FLAGS, "--day-fee-eth", "0.000003"]; // room for one send of 0.000002 ETH, not two
+  assert.equal(await w.passAt(0, { args }), 0, w.said.join("\n"));
+  assert.deepEqual(w.kinds(), [APPROVE]);
+  assert.ok(w.chain.allowance > 0n);
+  assert.equal(await w.passAt(5 * HOUR, { args }), 0);
+  assert.deepEqual(w.kinds(), [APPROVE], "still capped");
+  assert.equal(w.asked("klima prepare retire"), 2, "and no retirement was asked for after the first pass's two prepares");
+  assert.equal(await w.passAt(25 * HOUR, { args }), 0, w.said.join("\n"));
+  assert.deepEqual(w.kinds().slice(0, 2), [APPROVE, REVOKE], "the take-back comes before any new approve or retirement");
+  assert.equal(w.chain.allowance, 0n);
+});
+
+test("klima round 2 (c4): the approve is final, the gate refuses the retirement: the leg stops (exit 4) and the approval is taken back in that same pass, and again after a restart if it could not be", async () => {
+  const refused = { code: 0, out: { sendable: true, prepared: { step: "retire", tx: retirementTx(1n, ADDR.arbitrumUsdc) } } };
+  const w = laggingKlima();
+  instantFinal(w);
+  wrapKit(w, (key, nth) => (key === "klima prepare retire" && nth === 2 ? refused : undefined));
+  assert.equal(await w.passAt(0), 4, w.said.join("\n"));
+  assert.match(w.leg(4).reason, /must spend kVCM/);
+  assert.deepEqual(w.kinds(), [APPROVE, REVOKE]);
+  assert.equal(w.chain.allowance, 0n);
+  assert.equal(w.home.state().klima.revokeOwed, false);
+  // The same, but the kit cannot prepare the take-back in that pass: it stays owed, and a later pass of the SAME process (a `run`
+  // loop keeps its context, and with it the stopped leg) still takes it back.
+  const v = laggingKlima({ behave: { revokeSim: "reverts" } });
+  instantFinal(v);
+  wrapKit(v, (key, nth) => (key === "klima prepare retire" && nth === 2 ? refused : undefined));
+  assert.equal(await v.passAt(0), 4);
+  assert.deepEqual(v.kinds(), [APPROVE]);
+  const ctx = v.last;
+  assert.ok(ctx.halted.klima, "the leg is stopped in this process");
+  assert.ok(v.chain.allowance > 0n);
+  v.mode.revokeSim = "ok";
+  assert.equal(await pass(ctx), 1, "the stopped leg is reported stopped"); // the same context: its clock guard allows no leap
+  assert.deepEqual(v.kinds(), [APPROVE, REVOKE], "and its owed take-back still goes out");
+  assert.equal(v.chain.allowance, 0n);
+});
+
+test("klima round 2 (d): the approve is sent and final, then klima is dropped from --legs: the take-back is still settled on the next pass", async () => {
+  const w = laggingKlima();
+  assert.equal(await w.passAt(0), 0);
+  assert.equal(await w.passAt(60 * MIN, { args: ["--legs", "regen"] }), 0, w.said.join("\n"));
+  assert.deepEqual(w.kinds(), [APPROVE, REVOKE], "klima is not among the legs, and the take-back goes out anyway");
+  assert.equal(w.chain.allowance, 0n);
+  assert.deepEqual(bot.passReport(w.last, 0).legs.map((l) => l.name), ["klima", "regen"], "the pass report names the take-back's leg although it was not selected");
+  assert.equal(bot.passReport(w.last, 0).legs[0].sends[0].step, "take the kVCM approval back");
+  assert.equal(await w.passAt(120 * MIN, { args: ["--legs", "regen"] }), 0, w.said.join("\n"));
+  assert.equal(w.home.state().klima.revokeOwed, false, "final: nothing is owed");
+  assert.deepEqual(w.kinds(), [APPROVE, REVOKE], "and nothing more is sent");
+  assert.deepEqual(bot.passReport(w.last, 0).legs.map((l) => l.name), ["regen"], "a leg that owes nothing and was not selected is not in the report");
+  // While the approve is still not final nothing can be sent, dropped or not; the take-back follows the pass that finds it final.
+  const slow = laggingKlima({ finalityMs: 3 * 60 * MIN });
+  await slow.passAt(0);
+  await slow.passAt(60 * MIN, { args: ["--legs", "regen"] });
+  assert.deepEqual(slow.kinds(), [APPROVE]);
+  await slow.passAt(4 * HOUR, { args: ["--legs", "regen"] });
+  assert.deepEqual(slow.kinds(), [APPROVE, REVOKE]);
+  assert.equal(slow.chain.allowance, 0n);
+});
+
+test("klima round 2 (d2): a dry pass says a dropped leg's owed take-back would go out, and writes nothing", async () => {
+  const owed = laggingKlima();
+  await owed.passAt(0);
+  owed.chain.clock = owed.t0 + 60 * MIN;
+  const before = fs.readFileSync(owed.home.files.state, "utf8"), said = [];
+  const ctx = makeContext({ opts: parseArgs(["once", "--address", ME, "--home", owed.dir, "--legs", "regen"], {}), home: openHome(owed.dir, { readOnly: true }), address: ME,
+    io: { send: async () => { throw new Error("a dry pass sends nothing"); }, seen: owed.io.seen }, kit: owed.kit, say: (l) => said.push(l), now: () => owed.chain.clock });
+  assert.equal(await pass(ctx), 0, said.join("\n"));
+  assert.ok(said.some((l) => /klima: DRY, would send take the kVCM approval back/.test(l)), said.join("\n"));
+  assert.equal(fs.readFileSync(owed.home.files.state, "utf8"), before);
+});
+
+test("klima round 2 (e): a home the round-1 code wrote (an approve done, no owed key) loads, and the bot takes the approval back", async () => {
+  // Shape 1: the record is { at } from a retirement the round-1 code completed; an approval it left open is still there.
+  const a = laggingKlima();
+  const at = new Date(a.t0 - 20 * HOUR).toISOString(); // not due again for a few hours
+  a.home.save({ klima: { at } });
+  a.chain.allowance = 10n ** 18n;
+  assert.equal(a.home.state().schemaVersion, STORAGE_SCHEMA_VERSION, "the format version is the one the round-1 code wrote");
+  assert.equal(await a.passAt(0), 0, a.said.join("\n"));
+  assert.deepEqual(a.kinds(), [REVOKE], "the first pass takes it back, before the leg is due again");
+  assert.equal(a.chain.allowance, 0n);
+  assert.equal(await a.passAt(60 * MIN), 0, a.said.join("\n"));
+  assert.deepEqual(a.home.state().klima, { at, revokeOwed: false });
+  // Shape 2: nothing was written for klima (the approve went out in the first cycle and the bot stopped): the home loads, the
+  // retirement goes out on the approval that is open, and the take-back follows it. Nothing is left open.
+  const b = laggingKlima();
+  b.chain.allowance = 10n ** 18n;
+  for (const minutes of [0, 60, 120, 180]) assert.equal(await b.passAt(minutes * MIN), 0, b.said.join("\n"));
+  assert.deepEqual(b.kinds(), [RETIRE, REVOKE]);
+  assert.equal(b.chain.allowance, 0n);
+  // Shape 3: the round-1 count (the leg's sends in a row that reverted, any of them) says stopped, and an approval is open:
+  // the take-back goes out first, and only then does the leg stop.
+  const c = laggingKlima();
+  c.home.save({ klima: { at }, sendFailures: { klima: 3 } });
+  c.chain.allowance = 10n ** 18n;
+  assert.equal(await c.passAt(0), 0, c.said.join("\n"));
+  assert.deepEqual(c.kinds(), [REVOKE]);
+  assert.equal(c.chain.allowance, 0n);
+  assert.notEqual(c.leg(0).state, "refused");
+  assert.equal(await c.passAt(60 * MIN), 1, c.said.join("\n"));
+  assert.equal(c.leg(1).state, "refused");
+  assert.deepEqual(c.kinds(), [REVOKE], "and it sends nothing more");
+});
+
+test("klima round 2 (f): five days with a retirement that always succeeds: approve, retire, take-back, and never two retirements in a row", async () => {
+  const w = laggingKlima();
+  const args = [...KLIMA_FLAGS, "--buy-every-hours", "1"];
+  for (let m = 0; m <= 5 * 24 * 60; m += 20) assert.notEqual(await w.passAt(m * MIN, { args }), 4);
+  const seq = w.chain.sent.map((s) => s.kind);
+  const count = (k) => seq.filter((x) => x === k).length;
+  assert.equal(count(RETIRE), 90, `retirements over five days: ${seq.join(",")}`);
+  assert.equal(count(REVOKE), 90);
+  assert.ok(count(APPROVE) === 90 || count(APPROVE) === 91);
+  seq.forEach((kind, i) => assert.equal(kind, [APPROVE, RETIRE, REVOKE][i % 3], `send ${i} of the cycle`));
+  let lastRetire = false, twice = 0;
+  for (const k of seq) { if (k === RETIRE) { if (lastRetire) twice++; lastRetire = true; } if (k === REVOKE) lastRetire = false; }
+  assert.equal(twice, 0, "no retirement without a take-back between");
+  assert.equal(w.home.state().sendFailures, undefined);
+});
+
+test("klima round 2 (g): the take-back is never asked for or sent while the retirement is pending", async () => {
+  const finality = 3 * 60 * MIN;
+  const w = laggingKlima({ finalityMs: finality });
+  let retireAt = [], askedAtRetire = null;
+  for (let m = 0; m <= 10 * 60; m += 20) {
+    await w.passAt(m * MIN);
+    const retires = w.chain.sent.filter((s) => s.kind === RETIRE).map((s) => s.at);
+    if (retires.length > retireAt.length) askedAtRetire = w.asked("klima prepare revoke"); // the pass that sent the retirement
+    retireAt = retires;
+    const lastRetire = retires.at(-1);
+    if (lastRetire !== undefined && m * MIN - lastRetire < finality) {
+      assert.equal(w.chain.sent.filter((s) => s.kind === REVOKE).length, retires.length - 1, `+${m}m: no take-back for the retirement that is pending`);
+      assert.equal(w.asked("klima prepare revoke"), askedAtRetire, `+${m}m: the kit is not even asked for one while the retirement is pending`);
+    }
+  }
+  for (const s of w.chain.sent.filter((x) => x.kind === REVOKE)) {
+    const before = retireAt.filter((t) => t < s.at).at(-1);
+    assert.ok(before !== undefined && s.at - before >= finality, `a take-back at +${s.at / MIN}m came only ${(s.at - before) / MIN}m after its retirement, which needs ${finality / MIN}m`);
+  }
+  assert.ok(w.chain.sent.some((x) => x.kind === REVOKE), "and the take-back did go out once the retirement was final");
+  // The send itself refuses while anything is pending, whoever asks: the take-back goes through the same step.
+  const direct = laggingKlima({ finalityMs: finality });
+  await direct.passAt(0); await direct.passAt(4 * HOUR); // approve final, retire pending
+  const state = direct.home.state();
+  assert.equal(state.pending.name, "retire 0.01 tonnes");
+  const ctx = makeContext({ opts: direct.opts, home: direct.home, address: ME, io: direct.io, kit: direct.kit, say: () => {}, now: () => direct.chain.clock });
+  const outcome = await step(ctx, "klima", "take the kVCM approval back", tx(ADDR.kvcm, call("approve", [ADDR.klimaAssetManager, 0n])));
+  assert.equal(outcome, "budget", "a send with a pending send is held");
+  assert.equal(direct.chain.sent.length, 2);
+});
+
+test("klima round 2 (h): the take-back is owed at the moment the approve is sent, in the same durable write that records it pending", async () => {
+  const w = laggingKlima();
+  const onDisk = [];
+  const inner = w.io.send;
+  w.io.send = async (c, t) => { onDisk.push(JSON.parse(fs.readFileSync(w.home.files.state, "utf8"))); return inner(c, t); };
+  await w.passAt(0);
+  assert.equal(onDisk.length, 1);
+  assert.equal(onDisk[0].pending.name, "the exact kVCM approval", "the approve is pending on disk before it is broadcast");
+  assert.equal(onDisk[0].klima.revokeOwed, true, "and the same file already says a take-back is owed");
+  // A crash right after the broadcast, and a crash before its answer: nothing needs to be recomputed afterwards.
+  const c = laggingKlima();
+  c.io.send = async () => { throw new Error("the process died"); };
+  assert.equal(await c.passAt(0), 5);
+  assert.ok(c.home.state().pending, "the send stays pending");
+  assert.equal(c.home.state().klima.revokeOwed, true, "and the debt is written down");
+});
+
+test("klima round 2 (i): when the take-back itself reverts three times the bot says plainly that an approval may still be open, and how to check and clear it by hand", async () => {
+  const w = laggingKlima({ behave: { revokeReverts: true } });
+  await w.passAt(0); await w.passAt(60 * MIN); await w.passAt(120 * MIN);
+  assert.equal(await w.passAt(180 * MIN), 5);
+  assert.equal(await w.passAt(240 * MIN), 5);
+  assert.equal(await w.passAt(300 * MIN), 1);
+  const report = bot.passReport(w.last, 1);
+  assert.match(report.legs[0].reason, /may still be open/);
+  assert.match(report.legs[0].reason, /klima prepare revoke --from 0xYOU/);
+  const line = w.said.find((l) => /\[\+300m\]/.test(l) && /may still be open/i.test(l) && l.includes(ME));
+  assert.ok(line, w.said.join("\n"));
+  assert.match(line, /Klima's asset manager/);
+  assert.ok(line.includes(`klima prepare revoke --from ${ME}`), "the line names the kit's own revoke command with this wallet");
+  assert.match(line, /sign/);
+  assert.match(line, /nothing to revoke/);
+  assert.ok(report.approvalMayBeOpen, "--json carries it too");
+  assert.equal(report.approvalMayBeOpen.token, "kVCM");
+  assert.equal(report.approvalMayBeOpen.spender, ADDR.klimaAssetManager);
+  assert.match(report.approvalMayBeOpen.check, /klima prepare revoke --from 0x/);
+  assert.ok(!/https?:\/\//i.test(JSON.stringify(report)), "no web address");
+  assert.ok(!/0x[0-9a-fA-F]{64}/.test(JSON.stringify(report.approvalMayBeOpen)), "nothing key shaped");
+  assert.equal(w.kinds().filter((k) => k.startsWith(REVOKE)).length, 3, "never sent a fourth time");
+  // A leg that has no such trouble reports no open approval.
+  const ok = laggingKlima();
+  await ok.passAt(0);
+  assert.equal(bot.passReport(ok.last, 0).approvalMayBeOpen, null);
+});
+
+test("klima round 2 (k): the retirement has its turn and the kit has nothing to send: the approve is stranded, and the next pass takes it back", async () => {
+  const w = laggingKlima();
+  wrapKit(w, (key, nth) => (key === "klima prepare retire" && nth === 2
+    ? { code: 10, out: { sendable: false, prepared: { sendable: false, reason: "nothing to retire right now" } } } : undefined));
+  assert.equal(await w.passAt(0), 0); // the approve goes out (pending)
+  assert.equal(await w.passAt(60 * MIN), 0, w.said.join("\n")); // it is final; its retirement has its turn and the kit has nothing for it
+  assert.deepEqual(w.kinds(), [APPROVE]);
+  assert.equal(w.leg(0).state, "held");
+  assert.ok(w.chain.allowance > 0n);
+  assert.equal(await w.passAt(120 * MIN), 0, w.said.join("\n"));
+  assert.deepEqual(w.kinds(), [APPROVE, REVOKE], "the pass after takes the approval back first");
+  assert.equal(w.chain.allowance, 0n);
+});
+
+test("klima round 2 (l): a leg stopped earlier in this process takes its approve back, rather than retiring, when the approve goes final", async () => {
+  const w = laggingKlima({ finalityMs: 30_000 });
+  assert.equal(await w.passAt(0), 0); // the approve goes out (pending)
+  const ctx = w.last;
+  ctx.halted.klima = "stopped for another reason"; // as three failed reads in this process would
+  w.chain.clock = w.t0 + MIN; // the same context may move its clock a minute at most
+  assert.equal(await pass(ctx), 1, w.said.join("\n"));
+  assert.deepEqual(w.kinds(), [APPROVE, REVOKE]);
+  assert.equal(w.chain.allowance, 0n);
+});
+
+test("klima round 2 (j): a leg stopped by its reverts waits for the take-back the kit cannot prepare yet, and stops once the take-back is final", async () => {
+  const w = laggingKlima({ behave: { revokeSim: "reverts" } });
+  const at = new Date(w.t0 - 25 * HOUR).toISOString();
+  w.home.save({ klima: { at, revokeOwed: true }, sendFailures: { klima: 3 } });
+  w.chain.allowance = 10n ** 18n;
+  assert.equal(await w.passAt(0), 0, w.said.join("\n"));
+  assert.equal(w.leg(0).state, "held", "not stopped yet: an approval is still open");
+  assert.match(w.leg(0).reason, /the revoke reverts in simulation/);
+  assert.equal(w.chain.sent.length, 0);
+  w.mode.revokeSim = "ok";
+  assert.equal(await w.passAt(60 * MIN), 0, w.said.join("\n"));
+  assert.deepEqual(w.kinds(), [REVOKE]);
+  assert.equal(await w.passAt(120 * MIN), 1, w.said.join("\n"));
+  assert.equal(w.leg(1).state, "refused");
+  assert.equal(w.chain.allowance, 0n);
+  assert.deepEqual(w.kinds(), [REVOKE]);
 });

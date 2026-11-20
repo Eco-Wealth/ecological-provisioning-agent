@@ -54,7 +54,7 @@ import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { createPublicClient, decodeAbiParameters, decodeFunctionData, formatEther, http, isAddress, keccak256, parseAbi, parseAbiParameters, parseEther, parseTransaction, parseUnits, recoverTransactionAddress } from "viem";
+import { createPublicClient, decodeAbiParameters, decodeFunctionData, formatEther, formatUnits, http, isAddress, keccak256, parseAbi, parseAbiParameters, parseEther, parseTransaction, parseUnits, recoverTransactionAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arbitrum, base } from "viem/chains";
 import { archiveJournal, verifyArchiveInventory, ARCHIVE_TRIGGER_BYTES } from "./journal-archive.mjs";
@@ -267,6 +267,34 @@ const same = (a, b) => typeof a === "string" && typeof b === "string" && a.toLow
 export const clean = (s, max = 240) => String(s ?? "").replace(/[^\x20-\x7E]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 const big = (v) => { try { return BigInt(v); } catch { return null; } };
 const eth = (wei) => `${formatEther(wei)} ETH`;
+/**
+ * Decimals of the tokens a send names, pinned here on purpose (a test holds each equal to the kit's own pool constant). The
+ * circle kit prints a buy's floor in RAW units of an 18 decimal token; the protocol kit prints it already in token units.
+ */
+export const TOKEN_DECIMALS = Object.freeze({ ETH: 18, axlREGEN: 6, ECO: 18, NET: 18, kVCM: 18, USDC: 6 });
+/**
+ * An amount in a token's own terms: { token, amount, amountRaw }, both as strings. `amount` is the decimal in token units and
+ * `amountRaw` the integer in the token's smallest unit. `raw` is a bigint or an integer string; `decimal` is a decimal string
+ * in token units (exactly one of the two). Returns null when the symbol is unknown or the figure is not a plain number.
+ */
+export function tokenAmount(token, { raw, decimal } = {}) {
+  const decimals = TOKEN_DECIMALS[token];
+  if (decimals === undefined) return null;
+  try {
+    if (decimal !== undefined) {
+      const d = String(decimal);
+      if (!/^\d+(\.\d+)?$/.test(d) || (d.split(".")[1] ?? "").length > decimals) return null;
+      raw = parseUnits(d, decimals);
+    } else if (typeof raw !== "bigint") {
+      if (!/^(0|[1-9]\d*)$/.test(String(raw))) return null;
+      raw = BigInt(raw);
+    }
+    if (raw < 0n) return null;
+    return { token, amount: formatUnits(raw, decimals), amountRaw: raw.toString() };
+  } catch { return null; }
+}
+/** Say in plain words what an amount is (the least you get, the most it may spend, an approval), or keep null. */
+const as = (amount, is) => (amount ? { ...amount, is } : null);
 
 /**
  * The gate every step passes before it is signed. Returns null when the step is on the list, or the reason it is refused.
@@ -751,6 +779,34 @@ export async function finalizedReceiptStatus(pub, receipt, expectedHash) {
   if (!canonical || !same(canonical.hash, receipt.blockHash)) return null;
   return receipt.status === "success";
 }
+/**
+ * A second RPC must independently attest the EXACT same transaction, receipt,
+ * canonical block and finalized head. Any disagreement or read failure remains
+ * UNKNOWN. Never use an optimistic single-node answer to clear a live pending
+ * transaction. Two differently named URLs alone cannot guarantee independent
+ * infrastructure; choose providers operated separately.
+ */
+export async function agreedFinalizedReceiptStatus(primary, witness, hash, primaryReceipt = null, expectedChainId = null) {
+  if (!witness) return null;
+  try {
+    if (expectedChainId !== null) {
+      const [a, b] = await Promise.all([primary.getChainId(), witness.getChainId()]);
+      if (a !== expectedChainId || b !== expectedChainId) return null;
+    }
+    const [receiptA, receiptB] = await Promise.all([
+      primaryReceipt ? Promise.resolve(primaryReceipt) : primary.getTransactionReceipt({ hash }),
+      witness.getTransactionReceipt({ hash }),
+    ]);
+    if (!receiptA || !receiptB || receiptA.blockNumber !== receiptB.blockNumber ||
+        receiptA.status !== receiptB.status || !same(receiptA.blockHash, receiptB.blockHash) ||
+        !same(receiptA.transactionHash, receiptB.transactionHash)) return null;
+    const [resultA, resultB] = await Promise.all([
+      finalizedReceiptStatus(primary, receiptA, hash),
+      finalizedReceiptStatus(witness, receiptB, hash),
+    ]);
+    return resultA !== null && resultA === resultB ? resultA : null;
+  } catch { return null; }
+}
 const isAddressHash = (h) => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
 /** Reject a nonce already occupied by another in-flight transaction. */
 export function assertUncontendedNonce(confirmed, pending, expected = null) {
@@ -761,18 +817,56 @@ export function assertUncontendedNonce(confirmed, pending, expected = null) {
     throw new GuardError("wallet nonce changed since local signing; do not broadcast an outdated transaction");
   return pending;
 }
-export function makeChainIo(account, rpcs) {
+/**
+ * Live signing needs two independently operated HTTPS RPC hosts for every
+ * active signing chain. This is a conservative configuration guard, not a
+ * cryptographic proof of operator independence.
+ */
+export function assertWitnessRpcConfiguration(primaryUrl, witnessUrl, chain) {
+  let a, b;
+  try { a = new URL(primaryUrl); b = new URL(witnessUrl); }
+  catch { throw new ArgError(`live ${chain} requires --${chain}-witness-rpc (a separate HTTPS RPC provider)`); }
+  for (const u of [a, b]) {
+    if (u.protocol !== "https:" || !u.hostname || u.username || u.password || u.hash)
+      throw new ArgError(`live ${chain} primary and witness RPCs must be HTTPS URLs without embedded credentials or fragments`);
+  }
+  if (a.hostname.toLowerCase() === b.hostname.toLowerCase())
+    throw new ArgError(`live ${chain} witness RPC must use a different provider host, not the primary host`);
+  return true;
+}
+export function makeChainIo(account, rpcs, witnessRpcs = {}) {
   const made = {};
   const of = (chain) => (made[chain] ??= {
     pub: createPublicClient({ chain: CHAINS[chain].viem, transport: http(rpcs[chain]) }),
+    witness: witnessRpcs[chain] ? createPublicClient({ chain: CHAINS[chain].viem, transport: http(witnessRpcs[chain]) }) : null,
   });
+  /**
+   * A bot that holds a signing account never acts on one node's word. With no witness for the chain, prepare and broadcast
+   * refuse and wait and seen answer unknown (null), so nothing is signed, sent or settled. parseArgs refuses the same setup on
+   * the command line; this is the same refusal for code that imports makeChainIo and makeContext directly.
+   */
+  const witnessOrRefuse = (chain) => {
+    const witness = of(chain).witness;
+    if (!witness) throw new GuardError(`no ${chain} witness RPC is set (--${chain}-witness-rpc); a signing bot never signs or sends on one node's word`);
+    return witness;
+  };
   return {
     async chainTime(chain) {
       const c = of(chain);
-      if ((await c.pub.getChainId()) !== CHAINS[chain].id) throw new GuardError(`your ${chain} node is on another chain`);
-      const block = await c.pub.getBlock({ blockTag: "latest" });
+      const [primaryId, witnessId] = await Promise.all([
+        c.pub.getChainId(), c.witness ? c.witness.getChainId() : Promise.resolve(CHAINS[chain].id),
+      ]);
+      if (primaryId !== CHAINS[chain].id || witnessId !== CHAINS[chain].id)
+        throw new GuardError(`the ${chain} primary and witness nodes must agree on the chain id`);
+      const [block, witnessBlock] = await Promise.all([
+        c.pub.getBlock({ blockTag: "latest" }),
+        c.witness ? c.witness.getBlock({ blockTag: "latest" }) : Promise.resolve(null),
+      ]);
       if (typeof block?.timestamp !== "bigint" || block.timestamp <= 0n)
         throw new GuardError(`the ${chain} node returned an invalid block timestamp`);
+      if (c.witness && (typeof witnessBlock?.timestamp !== "bigint" || witnessBlock.timestamp <= 0n ||
+          (block.timestamp > witnessBlock.timestamp ? block.timestamp - witnessBlock.timestamp : witnessBlock.timestamp - block.timestamp) > 300n))
+        throw new GuardError(`the ${chain} witness chain time disagrees with the primary by more than 5 minutes`);
       const ms = block.timestamp * 1000n;
       if (ms > BigInt(Number.MAX_SAFE_INTEGER)) throw new GuardError("chain timestamp exceeds safe JavaScript time");
       return Number(ms);
@@ -780,12 +874,20 @@ export function makeChainIo(account, rpcs) {
     /** Sign a fixed EIP-1559 transaction LOCALLY. Do not contact a broadcast RPC. */
     async prepare(chain, tx) {
       if (!account?.signTransaction) throw new GuardError("a local account is required to prepare a raw transaction");
+      const witness = witnessOrRefuse(chain);
       const pub = of(chain).pub;
       if ((await pub.getChainId()) !== CHAINS[chain].id) throw new GuardError(`your ${chain} node is on another chain`);
       const [confirmed, pending] = await Promise.all([
         pub.getTransactionCount({ address: account.address, blockTag: "latest" }),
         pub.getTransactionCount({ address: account.address, blockTag: "pending" }),
       ]);
+      const [id, wc, wp] = await Promise.all([
+        witness.getChainId(),
+        witness.getTransactionCount({ address: account.address, blockTag: "latest" }),
+        witness.getTransactionCount({ address: account.address, blockTag: "pending" }),
+      ]);
+      if (id !== CHAINS[chain].id || wc !== confirmed || wp !== pending)
+        throw new GuardError(`the ${chain} RPCs disagree about chain or wallet nonce; do not sign`);
       const nonce = assertUncontendedNonce(confirmed, pending);
       const raw = await account.signTransaction({
         type: "eip1559", chainId: CHAINS[chain].id, nonce, to: tx.to, data: tx.data,
@@ -798,6 +900,7 @@ export function makeChainIo(account, rpcs) {
     },
     /** Broadcast EXACTLY the signed bytes already fsynced in pending state. */
     async broadcast(chain, serializedTransaction) {
+      const witness = witnessOrRefuse(chain);
       const pub = of(chain).pub;
       if ((await pub.getChainId()) !== CHAINS[chain].id) throw new GuardError(`your ${chain} node is on another chain`);
       const intent = parseTransaction(serializedTransaction);
@@ -808,6 +911,13 @@ export function makeChainIo(account, rpcs) {
         pub.getTransactionCount({ address: account.address, blockTag: "latest" }),
         pub.getTransactionCount({ address: account.address, blockTag: "pending" }),
       ]);
+      const [id, wc, wp] = await Promise.all([
+        witness.getChainId(),
+        witness.getTransactionCount({ address: account.address, blockTag: "latest" }),
+        witness.getTransactionCount({ address: account.address, blockTag: "pending" }),
+      ]);
+      if (id !== CHAINS[chain].id || wc !== confirmed || wp !== pending)
+        throw new GuardError(`the ${chain} RPCs disagree about chain or wallet nonce; do not broadcast`);
       assertUncontendedNonce(confirmed, pending, intent.nonce);
       return pub.sendRawTransaction({ serializedTransaction });
     },
@@ -815,18 +925,24 @@ export function makeChainIo(account, rpcs) {
     /**
      * true / false: the exact hash is in a FINALIZED canonical block and succeeded / reverted.
      * null: it is included but not final yet (a chain's finalized block trails the first receipt by minutes),
-     * or it was replaced or cannot be confirmed. That is not a failure and not a rule refusal: pending stays
-     * locked, nothing more is sent, and the next pass asks again through `seen`.
+     * or it was replaced or cannot be confirmed, or a signing bot has no witness for this chain. That is not a failure
+     * and not a rule refusal: pending stays locked, nothing more is sent, and the next pass asks again through `seen`.
      */
     async wait(chain, hash) {
+      const witness = of(chain).witness;
+      if (account && !witness) return null;
       const pub = of(chain).pub;
       const receipt = await pub.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS });
-      return finalizedReceiptStatus(pub, receipt, hash);
+      return witness
+        ? agreedFinalizedReceiptStatus(pub, witness, hash, receipt, CHAINS[chain].id)
+        : finalizedReceiptStatus(pub, receipt, hash);
     },
-    /** Finalized success/revert only. Null means unknown, replaced or not finalized. */
+    /** Finalized success/revert only. A witness disagreement, or no witness on a signing bot, is UNKNOWN, so pending remains. */
     async seen(chain, hash) {
       try {
-        const pub = of(chain).pub;
+        const { pub, witness } = of(chain);
+        if (account && !witness) return null;
+        if (witness) return await agreedFinalizedReceiptStatus(pub, witness, hash, null, CHAINS[chain].id);
         const receipt = await pub.getTransactionReceipt({ hash });
         return await finalizedReceiptStatus(pub, receipt, hash);
       } catch { return null; }
@@ -906,19 +1022,26 @@ function assertLocalRegularFile(file) {
       (typeof process.getuid === "function" && st.uid !== process.getuid()))
     throw new GuardError(`bot state or ledger is not a private regular file: ${file}`);
 }
-export function openHome(home) {
+/**
+ * Open the bot's home folder. With `readOnly` (what a dry pass uses) nothing is created, locked or written: a home that does
+ * not exist yet is simply empty, and every write refuses. A dry pass can therefore run beside a live bot that holds the lock,
+ * and it changes no file in the home.
+ */
+export function openHome(home, { readOnly = false } = {}) {
   const alreadyExists = fs.existsSync(home);
-  fs.mkdirSync(home, { recursive: true, mode: 0o700 });
-  const homeStat = fs.lstatSync(home);
-  if (!homeStat.isDirectory() || homeStat.isSymbolicLink() ||
-      (process.platform !== "win32" && (homeStat.mode & 0o077) !== 0) ||
-      (typeof process.getuid === "function" && homeStat.uid !== process.getuid()))
-    throw new GuardError("bot home must be a private real directory owned by the running user (chmod 700; no symlinks)");
-  if (!alreadyExists) syncDirectory(path.dirname(home));
+  if (!readOnly || alreadyExists) {
+    if (!readOnly) fs.mkdirSync(home, { recursive: true, mode: 0o700 });
+    const homeStat = fs.lstatSync(home);
+    if (!homeStat.isDirectory() || homeStat.isSymbolicLink() ||
+        (process.platform !== "win32" && (homeStat.mode & 0o077) !== 0) ||
+        (typeof process.getuid === "function" && homeStat.uid !== process.getuid()))
+      throw new GuardError("bot home must be a private real directory owned by the running user (chmod 700; no symlinks)");
+    if (!readOnly && !alreadyExists) syncDirectory(path.dirname(home));
+  }
   const files = { state: path.join(home, "state.json"), ledger: path.join(home, "ledger.jsonl"), stop: path.join(home, "STOP"), lock: path.join(home, "lock") };
   const lockNonce = randomBytes(16).toString("hex");
   let ownsLock = false;
-  return {
+  const opened = {
     files,
     stopped: () => fs.existsSync(files.stop),
     state() {
@@ -1104,6 +1227,11 @@ export function openHome(home) {
       ownsLock = false;
     },
   };
+  if (readOnly) {
+    const refuse = (what) => () => { throw new GuardError(`a dry pass writes nothing into the home (${what})`); };
+    Object.assign(opened, { save: refuse("state"), record: refuse("ledger"), bindWallet: refuse("wallet binding"), lock: refuse("lock"), unlock() {} });
+  }
+  return opened;
 }
 
 // ---- one step: check it, count it against the day, then (only with --live) sign, send and wait ---------------------
@@ -1143,8 +1271,101 @@ function applyCompletion(state, completion) {
     throw new GuardError("pending receipt has an invalid completion checkpoint");
   state[completion.bucket] = completion.value;
 }
-/** Returns "dry" | "sent" | "reverted" | "pending" | "budget". "pending": it went out but is not final yet. STOP and pending transactions return "budget" without sending. Throws GuardError for a refused rule. */
-export async function step(ctx, leg, name, tx, { sizeWei = 0n, gmxIntent = null, hydrexVote = null, klimaIntent = null, completion = null } = {}) {
+
+/** Sends of one leg that reverted in a row, and how many stop the leg. The count lives in state.sendFailures, so it holds across passes and restarts. */
+export const SEND_FAILURE_LIMIT = 3;
+/** The steps of the Klima leg, by the names its ledger rows and pending sends carry. A name picks the count a send belongs to. */
+export const KLIMA_APPROVE_STEP = "the exact kVCM approval";
+export const KLIMA_TAKE_BACK_STEP = "take the kVCM approval back";
+/**
+ * The Klima leg keeps TWO counts under sendFailures. "klima" counts its approvals and retirements: a revert adds one, an approve
+ * that goes final does nothing, and only a retirement that goes final resets it. "klima:take-back" counts the take-backs on their
+ * own. A take-back that works is not the retirement's success: without that split, approve ok, retire reverts, take-back ok would
+ * reset the count every cycle and the leg would never stop.
+ */
+export const KLIMA_TAKE_BACK_COUNT = "klima:take-back";
+/** Which count a send belongs to, and whether a send that goes final resets it. Pure: the same answer when a pending send is reconciled. */
+function countFor(leg, name) {
+  if (leg !== "klima") return { key: leg, resets: true };
+  if (name === KLIMA_TAKE_BACK_STEP) return { key: KLIMA_TAKE_BACK_COUNT, resets: true };
+  if (name === KLIMA_APPROVE_STEP) return { key: "klima", resets: false };
+  return { key: "klima", resets: true }; // the retirement
+}
+/** A count of reverted sends in a row. A damaged entry reads as the limit: the leg stays stopped until the owner looks at it. */
+function revertedInARow(state, key) {
+  const counts = state?.sendFailures;
+  if (counts === undefined) return 0;
+  if (!counts || typeof counts !== "object" || Array.isArray(counts)) return SEND_FAILURE_LIMIT;
+  const n = counts[key];
+  if (n === undefined) return 0;
+  return Number.isSafeInteger(n) && n >= 0 ? n : SEND_FAILURE_LIMIT;
+}
+/**
+ * Write a send's final outcome into `state` (the caller saves it in the same write that clears pending, so a crash cannot lose
+ * or double it): a revert adds one to its count, a success resets it when `resets` says it does. Returns the count now.
+ */
+function countSendOutcome(state, key, ok, resets = true) {
+  if (ok && !resets) return revertedInARow(state, key);
+  const counts = state.sendFailures && typeof state.sendFailures === "object" && !Array.isArray(state.sendFailures) ? { ...state.sendFailures } : {};
+  const next = ok ? 0 : revertedInARow(state, key) + 1;
+  if (next > 0) counts[key] = next; else delete counts[key];
+  if (Object.keys(counts).length) state.sendFailures = counts; else delete state.sendFailures;
+  return next;
+}
+const revertStopReason = (key, n) => `its last ${n} sends reverted in a row${key === "klima" ? ", and the kVCM approval was taken back first" : ""}; to clear it, stop the bot and delete "${key}" under sendFailures in state.json`;
+/** The take-back's own stop. Short on purpose: a leg's stop reason is cut at 240 characters, and this one must keep its instruction. */
+const takeBackStopReason = (n) => `its last ${n} take-backs reverted in a row, so a kVCM approval to Klima's asset manager may still be open on your wallet. Check and clear it by hand: the kit's \`klima prepare revoke --from 0xYOU\``;
+/**
+ * The one case the bot cannot close an approval itself: its take-backs keep reverting. Say so plainly, in the output and in the
+ * pass report (--json), and say how the owner checks it and clears it by hand with the kit's own revoke command. Then stop the leg.
+ */
+function haltTakeBackStopped(ctx, n) {
+  const check = `klima prepare revoke --from ${ctx.address}`;
+  ctx.approvalMayBeOpen = {
+    token: "kVCM", spender: ADDR.klimaAssetManager, check,
+    how: "the kit's revoke command prints the exact approval of zero for you to sign with your own wallet, or says there is nothing to revoke; the bot cannot close this one",
+  };
+  ctx.say(`klima: A kVCM APPROVAL MAY STILL BE OPEN on your wallet (spender: Klima's asset manager). The bot's last ${n} take-backs reverted and it will not send another. To check it, run the kit's \`${check}\` (from this folder: node ../../skills/protocol-guide/protocol-guide.mjs ${check}). It prints the exact approval of zero, which you sign yourself with your own wallet, or says there is nothing to revoke. When it is cleared, stop the bot, delete "${KLIMA_TAKE_BACK_COUNT}" under sendFailures in state.json, and start it again.`);
+  ctx.halt("klima", takeBackStopReason(n));
+}
+/**
+ * A reverted send that reaches its count's limit stops its leg, except on the Klima leg: its approve and retirement count stops
+ * the leg only AFTER the approval has been taken back (klimaTurn), so a stopped leg leaves a zero allowance.
+ */
+function stopOnReverts(ctx, leg, key, n) {
+  if (n < SEND_FAILURE_LIMIT) return;
+  if (key === KLIMA_TAKE_BACK_COUNT) return haltTakeBackStopped(ctx, n);
+  if (leg === "klima") return;
+  ctx.halt(leg, revertStopReason(key, n));
+}
+
+const PENDING_WITHOUT_JOURNAL = "pending transaction has no matching durable journal entry";
+/** How long a dry pass waits before it reads the home a second time (see readDay). */
+export const DRY_REREAD_MS = 300;
+/**
+ * The day's totals from the home. A DRY pass reads a home a live bot may be writing: the bot saves state.json with the pending
+ * send first and appends its ledger row a moment later, and a read between the two sees a pending send with no journal row.
+ * That one mismatch is read once more after a short wait. If the home is consistent then, the pass carries on; if not, it says a
+ * live bot may be mid-send or the home is damaged, and still refuses. A live pass reads once and refuses at once, as before.
+ */
+async function readDay(ctx) {
+  try { return ctx.home.day(ctx.now()); }
+  catch (e) {
+    if (ctx.live || !(e instanceof GuardError) || e.message !== PENDING_WITHOUT_JOURNAL) throw e;
+    await (ctx.pause ?? sleep)(DRY_REREAD_MS);
+    try { return ctx.home.day(ctx.now()); }
+    catch (again) {
+      if (again instanceof GuardError && again.message === PENDING_WITHOUT_JOURNAL)
+        throw new GuardError(`${PENDING_WITHOUT_JOURNAL}: a live bot may be mid-send beside this dry pass, or the home is damaged (read twice, ${DRY_REREAD_MS} ms apart)`);
+      throw again;
+    }
+  }
+}
+/**
+ * Returns "dry" | "sent" | "reverted" | "pending" | "budget". "pending": it went out but is not final yet. STOP and pending transactions return "budget" without sending. Throws GuardError for a refused rule.
+ * `reserve(state)` writes whatever this send makes the bot owe into the SAME state save that records the send as pending, before it is broadcast.
+ */
+export async function step(ctx, leg, name, tx, { sizeWei = 0n, gmxIntent = null, hydrexVote = null, klimaIntent = null, completion = null, amount = null, reserve = null } = {}) {
   // An unrecognized kit step must not bypass the owner's market/side/leverage selection.
   if (leg === "gmx" && typeof tx?.data === "string" && tx.data.slice(0, 10).toLowerCase() === SEL.multicall &&
       (!gmxIntent || typeof gmxIntent !== "object" || !["open", "close"].includes(gmxIntent.action)))
@@ -1160,17 +1381,24 @@ export async function step(ctx, leg, name, tx, { sizeWei = 0n, gmxIntent = null,
     ? decodeFunctionData({ abi: KLIMA_ABI, data: tx.data }).args[6] : 0n;
   const usdcUnits = leg === "gmx" && selector === SEL.multicall && gmxIntent?.action === "open"
     ? gmxIntent.collateralUnits : 0n;
+  // What this send moves, for the pass report: the token amount the leg names, else the ETH it carries.
+  const moved = amount ?? (value > 0n ? as(tokenAmount("ETH", { raw: value }), "the ETH it spends") : null);
+  const outcome = (result, hash = null) => {
+    ctx.recordSend?.(leg, { step: clean(name, 200), outcome: result, chain, token: moved?.token ?? null, amount: moved?.amount ?? null, amountRaw: moved?.amountRaw ?? null,
+      amountIs: moved?.is ?? null, valueEth: formatEther(value), valueWei: value.toString(), hash });
+    return result;
+  };
   if (ctx.live) { ctx.safeNow?.(); ctx.home.bindWallet(ctx.address); }
-  const day = ctx.home.day(ctx.now());
-  if (day.feeWei + feeBound > ctx.caps.dayFeeWei) { ctx.say(`${leg}: ${name} waits: the day's fee cap (${eth(ctx.caps.dayFeeWei)}) is reached`); return "budget"; }
-  if (value > 0n && day.spendWei + value > ctx.caps.daySpendWei) { ctx.say(`${leg}: ${name} waits: the day's spend cap (${eth(ctx.caps.daySpendWei)}) is reached`); return "budget"; }
-  if ((day.kvcmUnits ?? 0n) + kvcmUnits > (ctx.caps.dayKvcmUnits ?? MAX_KVCM_APPROVE)) { ctx.say(`${leg}: ${name} waits: the day\'s kVCM cap is reached`); return "budget"; }
-  if ((day.usdcUnits ?? 0n) + usdcUnits > (ctx.caps.dayUsdcUnits ?? MAX_GMX_USDC)) { ctx.say(`${leg}: ${name} waits: the day\'s GMX USDC cap is reached`); return "budget"; }
-  if (!ctx.live) { ctx.say(`${leg}: DRY, would send ${name}${value > 0n ? ` with ${eth(value)}` : ""} (fee at most ${eth(feeBound)})`); return "dry"; }
+  const day = await readDay(ctx);
+  if (day.feeWei + feeBound > ctx.caps.dayFeeWei) { ctx.say(`${leg}: ${name} waits: the day's fee cap (${eth(ctx.caps.dayFeeWei)}) is reached`, "held"); return outcome("budget"); }
+  if (value > 0n && day.spendWei + value > ctx.caps.daySpendWei) { ctx.say(`${leg}: ${name} waits: the day's spend cap (${eth(ctx.caps.daySpendWei)}) is reached`, "held"); return outcome("budget"); }
+  if ((day.kvcmUnits ?? 0n) + kvcmUnits > (ctx.caps.dayKvcmUnits ?? MAX_KVCM_APPROVE)) { ctx.say(`${leg}: ${name} waits: the day\'s kVCM cap is reached`, "held"); return outcome("budget"); }
+  if ((day.usdcUnits ?? 0n) + usdcUnits > (ctx.caps.dayUsdcUnits ?? MAX_GMX_USDC)) { ctx.say(`${leg}: ${name} waits: the day\'s GMX USDC cap is reached`, "held"); return outcome("budget"); }
+  if (!ctx.live) { ctx.say(`${leg}: DRY, would send ${name}${value > 0n ? ` with ${eth(value)}` : ""} (fee at most ${eth(feeBound)})`, "dry"); return outcome("dry"); }
   await assertChainClock(ctx, chain);
   // These checks must happen for every send, not only at the start of a pass: a prior receipt may have timed out.
-  if (ctx.home.stopped()) { ctx.say(`${leg}: ${name} waits: STOP is set, nothing sent`); return "budget"; }
-  if (ctx.home.state().pending) { ctx.say(`${leg}: ${name} waits: a transaction is still pending, nothing sent`); return "budget"; }
+  if (ctx.home.stopped()) { ctx.say(`${leg}: ${name} waits: STOP is set, nothing sent`, "held"); return outcome("budget"); }
+  if (ctx.home.state().pending) { ctx.say(`${leg}: ${name} waits: a transaction is still pending, nothing sent`, "held"); return outcome("budget"); }
   // Write-ahead protocol: commit the unknown-broadcast barrier and reserve the
   // entire possible spend before invoking any remote RPC. A crash at *any*
   // boundary is conservative: it may strand capital, but never replays blindly.
@@ -1186,9 +1414,10 @@ export async function step(ctx, leg, name, tx, { sizeWei = 0n, gmxIntent = null,
     ...(signed ? { nonce: String(signed.nonce), signedRaw: signed.raw } : {}),
     leg, name, at, ...(completion ? { completion } : {}) };
   const stateBeforeSend = ctx.home.state();
-  if (stateBeforeSend.pending) return "budget";
+  if (stateBeforeSend.pending) { ctx.say(`${leg}: ${name} waits: a transaction is still pending, nothing sent`, "held"); return outcome("budget"); }
   stateBeforeSend.pending = pending;
   stateBeforeSend.ledgerExpected = true;
+  reserve?.(stateBeforeSend); // a debt this send creates is on disk with the send itself, never a later write
   ctx.home.save(stateBeforeSend);
   const row = (phase, fields = {}) => ({
     id, phase, at: new Date(ctx.now()).toISOString(), leg, name, chain,
@@ -1200,7 +1429,7 @@ export async function step(ctx, leg, name, tx, { sizeWei = 0n, gmxIntent = null,
   ctx.home.record(row("reserved", { hash: pending.hash, ...(signed ? { nonce: pending.nonce } : {}) }));
   // STOP may arrive while the durable writes are made. Leave the reservation
   // intact for manual reconciliation rather than race the kill switch.
-  if (ctx.home.stopped()) return "budget";
+  if (ctx.home.stopped()) { ctx.say(`${leg}: ${name} waits: STOP arrived after the send was reserved, nothing was broadcast`, "held"); return outcome("budget", pending.hash); }
   if (ctx.live) ctx.safeNow?.();
   let hash;
   try { hash = signed ? await ctx.io.broadcast(chain, signed.raw) : await ctx.io.send(chain, tx); }
@@ -1220,24 +1449,27 @@ export async function step(ctx, leg, name, tx, { sizeWei = 0n, gmxIntent = null,
   ctx.home.record(row("broadcast", { hash }));
   const ok = await ctx.io.wait(chain, hash);
   if (ok === null) {
-    ctx.say(`${leg}: ${name} ${hash} is in a block that is not final yet, or cannot be confirmed. It stays pending and nothing more is sent; the next pass checks it again`);
-    return "pending";
+    ctx.say(`${leg}: ${name} ${hash} is in a block that is not final yet, or cannot be confirmed. It stays pending and nothing more is sent; the next pass checks it again`, "pending");
+    return outcome("pending", hash);
   }
   ctx.home.record(row("receipt", { hash, status: ok ? "success" : "reverted" }));
   const settled = ctx.home.state();
   if (settled.pending?.id !== id || settled.pending.hash !== hash)
     throw new GuardError("pending transaction changed before confirmation; refusing to clear it");
   if (ok) applyCompletion(settled, pending.completion);
+  const count = countFor(leg, name);
+  const revertedInRow = countSendOutcome(settled, count.key, ok, count.resets); // saved in the same write that clears pending
   delete settled.pending;
   ctx.home.save(settled);
-  ctx.say(`${leg}: ${ok ? "sent" : "REVERTED"} ${name} ${hash}`);
-  return ok ? "sent" : "reverted";
+  ctx.say(`${leg}: ${ok ? "sent" : "REVERTED"} ${name} ${hash}`, ok ? "sent" : "failed");
+  if (!ok) stopOnReverts(ctx, leg, count.key, revertedInRow);
+  return outcome(ok ? "sent" : "reverted", hash);
 }
 
 /** A kit answer, read the way the recipes say: 0 go on, 10 nothing now, 1 a read failed, 2/3/4 stop the leg. */
 function settle(ctx, leg, what, r) {
   if (r.code === 0 && r.out) return "ok";
-  if (r.code === 10) { ctx.say(`${leg}: ${what}: nothing to do now${r.out?.prepared?.reason || r.out?.reason ? ` (${clean(r.out?.prepared?.reason ?? r.out?.reason)})` : ""}`); return "nothing"; }
+  if (r.code === 10) { ctx.say(`${leg}: ${what}: nothing to do now${r.out?.prepared?.reason || r.out?.reason ? ` (${clean(r.out?.prepared?.reason ?? r.out?.reason)})` : ""}`, "held"); return "nothing"; }
   if (r.code === 1 || r.code === 0) { ctx.fail(leg, `${what}: a read failed, nothing was decided${r.err ? ` (${r.err})` : ""}`); return "failed"; }
   ctx.halt(leg, `${what} stopped with exit ${r.code}${r.err ? ` (${r.err})` : ""}`);
   return "halted";
@@ -1278,6 +1510,93 @@ export function checkRegenRetire(message, o) {
   return null;
 }
 
+/**
+ * The kit's own words for "this address has no kVCM approval to Klima's asset manager" (`klima prepare revoke`, exit 10). The kit
+ * exits 10 for that AND for "the revoke reverts in simulation", and prints no code that tells them apart, so the bot reads the
+ * reason. Only this exact text means nothing is open; every other exit-10 answer leaves the take-back owed. A test holds it to the kit.
+ */
+export const KIT_NO_KVCM_APPROVAL = "this address has no kVCM approval to Klima's asset manager, so there is nothing to revoke";
+/**
+ * A take-back is owed when the record says so, and also when it is a record an older bot left: the retirement's completion was
+ * { at } then, with no revokeOwed key at all. That bot never wrote the debt down, so the new one asks the kit once; the kit's
+ * no-approval answer clears it, anything else keeps it owed.
+ */
+const klimaTakeBackOwed = (k) => k?.revokeOwed === true || (k?.at !== undefined && k?.revokeOwed === undefined);
+/**
+ * An approve that is sent for a retirement is owed back from the moment it is sent (`revokeOwed`), and `retireNext` says that
+ * retirement has not had its turn yet: the next pass that runs the leg sends it, and only then, and the take-back follows its
+ * finality. A pass that ends without sending it (STOP, a cap, a refusal, the leg off, not due, or dropped from --legs) clears
+ * `retireNext`: the approve is STRANDED, and the take-back is settled before anything else. Without this flag a lagging chain,
+ * where the approve is never final in its own pass, could not tell "the retirement comes next" from "it never will".
+ */
+const klimaRetireNext = (k) => k?.retireNext === true;
+const withoutRetireNext = (k) => { const { retireNext, ...rest } = k ?? {}; return rest; };
+/** Written in the same save as the send that creates the debt: an approve or a retirement sent means a take-back is owed. */
+function markKlimaOwed(state, retireFollows) {
+  state.klima = { ...withoutRetireNext(state.klima), revokeOwed: true, ...(retireFollows ? { retireNext: true } : {}) };
+}
+/** Strand the approve: its retirement had its turn (or STOP, or the leg was dropped) and did not go out. Live only; the take-back stays owed. */
+function strandKlimaRetire(ctx) {
+  if (!ctx.live) return;
+  const s = ctx.home.state();
+  if (!klimaRetireNext(s.klima)) return;
+  s.klima = withoutRetireNext(s.klima);
+  ctx.home.save(s);
+}
+/**
+ * The leg stops for three approves or retirements that reverted in a row, but only once nothing is owed: the approval is taken
+ * back first, so a stopped leg leaves a zero allowance. Returns true when it stopped the leg.
+ */
+function stopKlimaIfSettled(ctx) {
+  const s = ctx.home.state();
+  if (klimaTakeBackOwed(s.klima)) return false;
+  const n = revertedInARow(s, "klima");
+  if (n < SEND_FAILURE_LIMIT) return false;
+  ctx.halt("klima", revertStopReason("klima", n));
+  return true;
+}
+/**
+ * Take the kVCM approval back: ask the kit for the zero approval, check it, send it. The same path serves the end of a Klima
+ * cycle and an owed take-back found on a later pass. A revoke can never become a positive allowance: the step must be an
+ * approve of exactly zero to the one pinned spender. Its completion clears the owed flag only once the send is final, so a
+ * take-back that is still pending keeps the leg from retiring again. Returns the step's outcome, or "none" / "held" / "failed".
+ * "none" is the kit's no-approval answer and nothing else; "held" is any other exit-10 answer, and the debt stays as it was.
+ */
+async function takeKlimaApprovalBack(ctx) {
+  const leg = "klima";
+  const r = await kit(ctx, ["klima", "prepare", "revoke", "--from", ctx.address]);
+  if (r.code === 10) {
+    const reason = r.out?.prepared?.reason ?? r.out?.reason;
+    if (reason !== KIT_NO_KVCM_APPROVAL) {
+      // The kit cannot prepare the revoke right now (its simulation reverts, or it gave no reason): an approval may still be open.
+      // Whatever was owed stays owed, and the leg approves and retires nothing until it is settled.
+      ctx.say(`klima: the take-back cannot be prepared now (${clean(reason ?? "the kit gave no reason")}); if one is owed it stays owed, and nothing new is approved or retired`, "held");
+      return "held";
+    }
+    // The kit says no approval is open: the debt, if one was owed, is paid. A dry pass never writes it down.
+    const kept = ctx.home.state().klima;
+    if (ctx.live && klimaTakeBackOwed(kept)) { const s = ctx.home.state(); s.klima = { ...withoutRetireNext(kept), revokeOwed: false }; ctx.home.save(s); }
+    ctx.say("klima: the kit reports no allowance left to revoke", "not_due");
+    return "none";
+  }
+  if (settle(ctx, leg, "revoke", r) !== "ok") return "failed";
+  const revoke = r.out?.prepared;
+  if (revoke?.step !== "revoke" || !same(revoke.tx?.to, ADDR.kvcm) ||
+      revoke.tx.data?.slice(0, 10).toLowerCase() !== SEL.approve)
+    throw new GuardError("klima: revoke kit returned an unknown step or a different transaction");
+  let revokeArgs;
+  try { revokeArgs = decodeFunctionData({ abi: ERC20, data: revoke.tx.data }).args; }
+  catch { throw new GuardError("klima: revoke approval calldata does not decode"); }
+  if (!same(revokeArgs[0], ADDR.klimaAssetManager) || revokeArgs[1] !== 0n)
+    throw new GuardError("klima: revoke must set exactly zero kVCM allowance for the pinned asset manager");
+  return step(ctx, leg, KLIMA_TAKE_BACK_STEP, revoke.tx,
+    { amount: as(tokenAmount("kVCM", { raw: 0n }), "the approval it sets"), completion: { bucket: "klima", value: { ...withoutRetireNext(ctx.home.state().klima), revokeOwed: false } } });
+}
+/** The token amount a step's calldata names at argument `index`, or null when it does not decode: the gate still judges the step. */
+function decodedAmount(token, abi, data, index) {
+  try { return tokenAmount(token, { raw: decodeFunctionData({ abi, data }).args[index] }); } catch { return null; }
+}
+
 // ---- the legs ------------------------------------------------------------------------------------------------------
 export const LEGS = {
   /** Claim, then vote by the plain kit rank (NOT any wallet's vote), once per epoch. */
@@ -1286,10 +1605,10 @@ export const LEGS = {
     const e = await kit(ctx, ["hydrex", "epoch"]);
     if (settle(ctx, leg, "epoch", e) !== "ok") return;
     const epoch = String(e.out.epochStart);
-    if (ctx.home.state().hydrex?.votedEpoch === epoch) return ctx.say(`${leg}: already voted this epoch`);
+    if (ctx.home.state().hydrex?.votedEpoch === epoch) return ctx.say(`${leg}: already voted this epoch`, "not_due");
     const locks = await kit(ctx, ["hydrex", "locks", "--address", ctx.address]);
     if (settle(ctx, leg, "locks", locks) !== "ok") return;
-    if (!locks.out.nfts?.length) return ctx.say(`${leg}: this wallet holds no veHYDX lock, so there is nothing to claim or vote (the Hydrex guide says how a lock is made)`);
+    if (!locks.out.nfts?.length) return ctx.say(`${leg}: this wallet holds no veHYDX lock, so there is nothing to claim or vote (the Hydrex guide says how a lock is made)`, "off");
     const claim = await kit(ctx, ["hydrex", "prepare", "claim", "--from", ctx.address]);
     const claimed = settle(ctx, leg, "claim", claim);
     if (claimed === "failed" || claimed === "halted") return;
@@ -1310,41 +1629,57 @@ export const LEGS = {
     await step(ctx, leg, `vote ${vote}`, v.out.prepared.tx, { hydrexVote: vote, completion: { bucket: "hydrex", value: { votedEpoch: epoch, vote, at: new Date(ctx.now()).toISOString() } } });
   },
 
-  /** Approve the exact amount, retire, take the approval back. */
+  /**
+   * Approve the exact amount, retire, take the approval back. THE INVARIANT: every kVCM approval the bot sends is owed back from
+   * the moment the approve is SENT (state.klima.revokeOwed, written in the same save that records the send as pending), and it is
+   * taken back as soon as the retirement it was made for is final, whether that retirement succeeded or reverted, and also when
+   * the retirement was never sent (see klimaTurn, which settles the debt before this cycle runs, on every pass, selected or not).
+   * Finality takes minutes (about 18 on Base), so the approve is usually final only on a later pass: `retireNext` gives it that
+   * one pass to be followed by its retirement. This is the cycle itself; it runs only when nothing is owed, or when the retirement
+   * is the next thing owed. A retirement that is still pending keeps the take-back waiting, here and in `step`.
+   */
   async klima(ctx) {
     const leg = "klima", o = ctx.opts;
-    if (!o.klimaClass || !o.klimaCredit || !o.klimaTonnes) return ctx.say(`${leg}: off (set --klima-class, --klima-credit and --klima-tonnes to turn it on; \`klima classes\` and \`klima credits\` in the kit list them)`);
-    if (!due(ctx.home.state().klima?.at, o.buyEveryHours, ctx.now())) return ctx.say(`${leg}: not due yet`);
+    // The approve had its pass: if this pass does not send the retirement (off, not due, a failed read, a cap, STOP, a refusal),
+    // it is stranded, and the next pass takes it back first. Cleared BEFORE anything can end the pass.
+    strandKlimaRetire(ctx);
+    if (!o.klimaClass || !o.klimaCredit || !o.klimaTonnes) return ctx.say(`${leg}: off (set --klima-class, --klima-credit and --klima-tonnes to turn it on; \`klima classes\` and \`klima credits\` in the kit list them)`, "off");
+    if (!due(ctx.home.state().klima?.at, o.buyEveryHours, ctx.now())) return ctx.say(`${leg}: not due yet`, "not_due");
     ctx.say(`${leg}: As of 2026-11-18 EcoWealth holds a stake in Klima and may gain if it rises`);
     const args = ["klima", "prepare", "retire", "--from", ctx.address, "--class", o.klimaClass, "--credit", o.klimaCredit, "--tonnes", o.klimaTonnes, "--beneficiary-name", o.klimaName, ...(o.klimaTokenId ? ["--token-id", o.klimaTokenId] : [])];
-    for (let turn = 0; turn < 2; turn++) {
-      const p = await kit(ctx, args);
-      if (settle(ctx, leg, "retire", p) !== "ok") return;
-      const kind = p.out.prepared.step, tx = p.out.prepared.tx;
-      if (kind !== "approve" && kind !== "retire")
-        throw new GuardError("klima: the kit returned an unrecognized retirement step");
-      if (kind === "approve" ? (!same(tx?.to, ADDR.kvcm) || tx.data?.slice(0, 10).toLowerCase() !== SEL.approve) :
-          (!same(tx?.to, ADDR.klimaAggregator) || tx.data?.slice(0, 10).toLowerCase() !== SEL.retireCreditViaKlima))
-        throw new GuardError("klima: the kit step label does not match its onchain transaction");
-      const got = await step(ctx, leg, kind === "approve" ? "the exact kVCM approval" : `retire ${o.klimaTonnes} tonnes`, tx,
-        { klimaIntent: klimaRetireIntent(o), ...(kind === "retire" ? { completion: { bucket: "klima", value: { at: new Date(ctx.now()).toISOString() } } } : {}) });
-      if (got === "dry" && kind === "approve") return ctx.say(`${leg}: DRY, then the retirement, then the approval is taken back`);
-      if (got !== "sent") break;
-      if (kind === "retire") break;
+    let last = null, failure = null;
+    try {
+      for (let turn = 0; turn < 2; turn++) {
+        const p = await kit(ctx, args);
+        if (settle(ctx, leg, "retire", p) !== "ok") return;
+        const kind = p.out.prepared.step, tx = p.out.prepared.tx;
+        if (kind !== "approve" && kind !== "retire")
+          throw new GuardError("klima: the kit returned an unrecognized retirement step");
+        if (kind === "approve" ? (!same(tx?.to, ADDR.kvcm) || tx.data?.slice(0, 10).toLowerCase() !== SEL.approve) :
+            (!same(tx?.to, ADDR.klimaAggregator) || tx.data?.slice(0, 10).toLowerCase() !== SEL.retireCreditViaKlima))
+          throw new GuardError("klima: the kit step label does not match its onchain transaction");
+        // Either send makes a take-back owed, written with the send itself; the retirement's completion keeps it owed and sets the pace.
+        const got = last = await step(ctx, leg, kind === "approve" ? KLIMA_APPROVE_STEP : `retire ${o.klimaTonnes} tonnes`, tx,
+          { klimaIntent: klimaRetireIntent(o), amount: as(decodedAmount("kVCM", kind === "approve" ? ERC20 : KLIMA_ABI, tx.data, kind === "approve" ? 1 : 6), kind === "approve" ? "the approval it sets" : "the most it may spend"),
+            reserve: (state) => markKlimaOwed(state, kind === "approve"),
+            ...(kind === "retire" ? { completion: { bucket: "klima", value: { at: new Date(ctx.now()).toISOString(), revokeOwed: true } } } : {}) });
+        if (got === "dry" && kind === "approve") return ctx.say(`${leg}: DRY, then the retirement, then the approval is taken back`);
+        if (got !== "sent") break;
+        if (kind === "retire") break;
+      }
+    } catch (e) { failure = e; }
+    // A send that is waiting for finality blocks every later one. The next pass finds the retirement final and settles the take-back.
+    if (!failure && last === "pending") return;
+    if (failure) {
+      // A send that went out and is not answered stays pending and nothing can follow it; otherwise, a refused or failed retirement
+      // after an approve that went out leaves that approve open: strand it and take it back now, then say what went wrong.
+      if (!ctx.live || ctx.home.state().pending || !klimaTakeBackOwed(ctx.home.state().klima)) throw failure;
     }
-    const r = await kit(ctx, ["klima", "prepare", "revoke", "--from", ctx.address]);
-    if (r.code === 10) return ctx.say("klima: the kit reports no allowance left to revoke");
-    if (settle(ctx, leg, "revoke", r) !== "ok") return;
-    const revoke = r.out?.prepared;
-    if (revoke?.step !== "revoke" || !same(revoke.tx?.to, ADDR.kvcm) ||
-        revoke.tx.data?.slice(0, 10).toLowerCase() !== SEL.approve)
-      throw new GuardError("klima: revoke kit returned an unknown step or a different transaction");
-    let revokeArgs;
-    try { revokeArgs = decodeFunctionData({ abi: ERC20, data: revoke.tx.data }).args; }
-    catch { throw new GuardError("klima: revoke approval calldata does not decode"); }
-    if (!same(revokeArgs[0], ADDR.klimaAssetManager) || revokeArgs[1] !== 0n)
-      throw new GuardError("klima: revoke must set exactly zero kVCM allowance for the pinned asset manager");
-    await step(ctx, leg, "take the kVCM approval back", revoke.tx);
+    // The cycle is over for this pass and no retirement is pending (it went final, reverted, or was never sent): the approve is stranded.
+    strandKlimaRetire(ctx);
+    try { await takeKlimaApprovalBack(ctx); } catch (e) { failure ??= e; }
+    if (failure) throw failure;
+    stopKlimaIfSettled(ctx);
   },
 
   /**
@@ -1354,8 +1689,8 @@ export const LEGS = {
   async "regen-retire"(ctx) {
     const leg = "regen-retire", o = ctx.opts;
     const missing = [["owner", o.regenRetireOwner], ["batch", o.regenRetireBatch], ["amount", o.regenRetireAmount], ["jurisdiction", o.regenRetireJurisdiction], ["reason", o.regenRetireReason]].filter(([, v]) => !v).map(([n]) => `--regen-retire-${n}`);
-    if (missing.length) return ctx.say(`${leg}: off (set ${missing.join(", ")} to turn it on; it prepares and prints a Regen Ledger message and never signs it)`);
-    if (ctx.home.stopped()) return ctx.say(`${leg}: STOP is set, so the kit was not asked`);
+    if (missing.length) return ctx.say(`${leg}: off (set ${missing.join(", ")} to turn it on; it prepares and prints a Regen Ledger message and never signs it)`, "off");
+    if (ctx.home.stopped()) return ctx.say(`${leg}: STOP is set, so the kit was not asked`, "held");
     const p = await kit(ctx, ["regen", "prepare", "retire", "--owner", o.regenRetireOwner, "--batch", o.regenRetireBatch, "--amount", o.regenRetireAmount, "--jurisdiction", o.regenRetireJurisdiction, "--reason", o.regenRetireReason, ...(o.regenLcd ? ["--lcd", o.regenLcd] : [])]);
     if (settle(ctx, leg, "prepare", p) !== "ok") return;
     const message = p.out.prepared?.message;
@@ -1364,7 +1699,7 @@ export const LEGS = {
     if (why) throw new GuardError(`${leg}: refused the kit's message: ${why}`);
     ctx.say(`${leg}: retire ${o.regenRetireAmount} of batch ${o.regenRetireBatch} for ${o.regenRetireJurisdiction}. A sink: what it retires is gone for good, by design, and no return promised. The reason is written onchain, public and permanent.`);
     ctx.say(`${leg}: As of 2026-11-18 EcoWealth holds REGEN and may gain if it rises`);
-    ctx.say(`${leg}: DRY, would sign this Regen message: ${clean(JSON.stringify(message), 800)}`);
+    ctx.say(`${leg}: DRY, would sign this Regen message: ${clean(JSON.stringify(message), 800)}`, "dry");
     ctx.say(`${leg}: this bot signs no Regen message, with or without --live, and sends nothing. Signing it is a separate step you do with your own Regen wallet.`);
   },
 
@@ -1380,41 +1715,47 @@ export const LEGS = {
   /** The NET circle, only when the kit's floor passes. */
   async circle(ctx) {
     const leg = "circle", size = ctx.opts.circleWei;
-    if (!(size > 0n)) return ctx.say(`${leg}: off (set --circle-eth to turn it on)`);
+    if (!(size > 0n)) return ctx.say(`${leg}: off (set --circle-eth to turn it on)`, "off");
     const p = await ctx.kit(ctx.circleKitFile, ["prepare", "--from", ctx.address, "--size", formatEther(size)], ctx.rpcs);
     if (settle(ctx, leg, "prepare", p) !== "ok") return;
     const t = p.out.prepared;
-    if (!(Number(t.deadline) * 1000 > ctx.now() + 3000)) return ctx.say(`${leg}: the prepared trip is past its deadline, skipped`);
+    if (!(Number(t.deadline) * 1000 > ctx.now() + 3000)) return ctx.say(`${leg}: the prepared trip is past its deadline, skipped`, "held");
     await step(ctx, leg, `one trip through NET's pools (${clean(t.loop, 40)})`, t.tx, { sizeWei: size });
   },
 
   /** One small position by your rule: open, hold, close, start again. */
   async gmx(ctx) {
     const leg = "gmx", o = ctx.opts;
-    if (!o.gmxMarket || !o.gmxSide || !o.gmxCollateral || !o.gmxLeverage) return ctx.say(`${leg}: off (set --gmx-market, --gmx-side, --gmx-collateral and --gmx-leverage to turn it on)`);
+    if (!o.gmxMarket || !o.gmxSide || !o.gmxCollateral || !o.gmxLeverage) return ctx.say(`${leg}: off (set --gmx-market, --gmx-side, --gmx-collateral and --gmx-leverage to turn it on)`, "off");
     ctx.say(`${leg}: As of 2026-11-18 EcoWealth holds a stake in GMX and may gain if it rises`);
     const expectedMarket = chosenGmxMarket(o.gmxMarket);
     if (!expectedMarket) return ctx.halt(leg, "unknown GMX market: use ETH, BTC, ZORA or an explicit market token address");
     const mine = ctx.home.state().gmx ?? {};
     const orders = await kit(ctx, ["gmx", "orders", "--address", ctx.address]);
     if (settle(ctx, leg, "orders", orders) !== "ok") return;
-    if (orders.out.length) return ctx.say(`${leg}: an order is waiting for GMX's keeper`);
+    if (orders.out.length) return ctx.say(`${leg}: an order is waiting for GMX's keeper`, "held");
     const pos = await kit(ctx, ["gmx", "positions", "--address", ctx.address]);
     if (settle(ctx, leg, "positions", pos) !== "ok") return;
     if (mine.openedAt) {
       const ownPosition = pos.out.find((p) => same(p.market, expectedMarket) && p.isLong === (o.gmxSide === "long") && same(p.collateralToken ?? ADDR.arbitrumUsdc, ADDR.arbitrumUsdc));
-      if (!ownPosition) { const s = ctx.home.state(); s.gmx = { closedAt: new Date(ctx.now()).toISOString() }; ctx.home.save(s); return ctx.say(`${leg}: the position is gone (closed elsewhere, or liquidated)`); }
+      // A dry pass writes nothing into the home, so it says what a live pass would record and records none of it.
+      if (!ownPosition) {
+        if (ctx.live) { const s = ctx.home.state(); s.gmx = { closedAt: new Date(ctx.now()).toISOString() }; ctx.home.save(s); }
+        return ctx.say(`${leg}: the position is gone (closed elsewhere, or liquidated)${ctx.live ? "" : "; a dry pass records nothing"}`, "not_due");
+      }
       if (mine.closeRequestedAt) {
         // A leveraged position that may be stranded is a guard stop (exit 4), not a transient read failure (exit 1).
         throw new GuardError("the GMX close order is no longer queued but the position is still open. A keeper may have cancelled or rejected it; verify the position and order onchain before any new operation");
       }
       if (!mine.positionObservedAt) {
-        const state = ctx.home.state();
-        state.gmx = { ...mine, positionObservedAt: new Date(ctx.now()).toISOString() };
-        ctx.home.save(state);
-        return ctx.say(`${leg}: keeper execution confirmed by the position read; holding period begins now`);
+        if (ctx.live) {
+          const state = ctx.home.state();
+          state.gmx = { ...mine, positionObservedAt: new Date(ctx.now()).toISOString() };
+          ctx.home.save(state);
+        }
+        return ctx.say(`${leg}: keeper execution confirmed by the position read; holding period begins now${ctx.live ? "" : " (a dry pass records nothing)"}`, "not_due");
       }
-      if (!due(mine.positionObservedAt, o.gmxHoldHours, ctx.now())) return ctx.say(`${leg}: holding`);
+      if (!due(mine.positionObservedAt, o.gmxHoldHours, ctx.now())) return ctx.say(`${leg}: holding`, "not_due");
       const c = await kit(ctx, ["gmx", "prepare", "close", "--from", ctx.address, "--market", o.gmxMarket, "--side", o.gmxSide]);
       if (settle(ctx, leg, "close", c) !== "ok") return;
       if (!same(c.out.prepared?.tx?.to, ADDR.gmxExchangeRouter) || c.out.prepared.tx.data?.slice(0, 10).toLowerCase() !== SEL.multicall)
@@ -1422,8 +1763,8 @@ export const LEGS = {
       await step(ctx, leg, "submit the GMX position close order", c.out.prepared.tx, { gmxIntent: { ...gmxOrderIntent(o, "close"), closeSizeUsd: BigInt(ownPosition.sizeInUsd) }, completion: { bucket: "gmx", value: { ...mine, closeRequestedAt: new Date(ctx.now()).toISOString() } } });
       return;
     }
-    if (pos.out.length) return ctx.say(`${leg}: this wallet already holds a GMX position this bot did not open, so it is left alone`);
-    if (!due(mine.closedAt, o.buyEveryHours, ctx.now())) return ctx.say(`${leg}: not due yet`);
+    if (pos.out.length) return ctx.say(`${leg}: this wallet already holds a GMX position this bot did not open, so it is left alone`, "held");
+    if (!due(mine.closedAt, o.buyEveryHours, ctx.now())) return ctx.say(`${leg}: not due yet`, "not_due");
     const args = ["gmx", "prepare", "open", "--from", ctx.address, "--market", o.gmxMarket, "--side", o.gmxSide, "--collateral", o.gmxCollateral, "--leverage", o.gmxLeverage];
     for (let turn = 0; turn < 2; turn++) {
       const p = await kit(ctx, args);
@@ -1434,7 +1775,10 @@ export const LEGS = {
       if (kind === "approve" ? (!same(tx?.to, ADDR.arbitrumUsdc) || tx.data?.slice(0, 10).toLowerCase() !== SEL.approve)
           : (!same(tx?.to, ADDR.gmxExchangeRouter) || tx.data?.slice(0, 10).toLowerCase() !== SEL.multicall))
         throw new GuardError("gmx: the kit's step name does not match the transaction it prepared");
-      const got = await step(ctx, leg, kind === "approve" ? "the exact USDC approval" : `open ${o.gmxSide} ${o.gmxMarket}, ${o.gmxCollateral} USDC at ${o.gmxLeverage}x`, tx, { gmxIntent: gmxOrderIntent(o, "open"), ...(kind === "order" ? { completion: { bucket: "gmx", value: { openedAt: new Date(ctx.now()).toISOString() } } } : {}) });
+      const intent = gmxOrderIntent(o, "open");
+      const got = await step(ctx, leg, kind === "approve" ? "the exact USDC approval" : `open ${o.gmxSide} ${o.gmxMarket}, ${o.gmxCollateral} USDC at ${o.gmxLeverage}x`, tx,
+        { gmxIntent: intent, amount: as(kind === "approve" ? decodedAmount("USDC", ERC20, tx.data, 1) : tokenAmount("USDC", { raw: intent.collateralUnits }), kind === "approve" ? "the approval it sets" : "the collateral it posts"),
+          ...(kind === "order" ? { completion: { bucket: "gmx", value: { openedAt: new Date(ctx.now()).toISOString() } } } : {}) });
       if (got === "dry" && kind === "approve") return ctx.say(`${leg}: DRY, then the order`);
       if (got !== "sent") return;
       if (kind === "order") return;
@@ -1443,38 +1787,118 @@ export const LEGS = {
 };
 
 async function buy(ctx, leg, size, act, symbol) {
-  if (!(size > 0n)) return ctx.say(`${leg}: off (set --${leg}-eth to turn it on)`);
-  if (!due(ctx.home.state()[leg]?.at, ctx.opts.buyEveryHours, ctx.now())) return ctx.say(`${leg}: not due yet`);
+  if (!(size > 0n)) return ctx.say(`${leg}: off (set --${leg}-eth to turn it on)`, "off");
+  if (!due(ctx.home.state()[leg]?.at, ctx.opts.buyEveryHours, ctx.now())) return ctx.say(`${leg}: not due yet`, "not_due");
   const p = await kit(ctx, [...act, "--from", ctx.address, "--size", formatEther(size)]);
   if (settle(ctx, leg, "buy", p) !== "ok") return;
   const t = p.out.prepared;
   if (t.disclosure) ctx.say(`${leg}: ${clean(t.disclosure)}`);
   if (leg === "eco") ctx.say("eco: As of 2026-11-18 EcoWealth both buys ECO and swaps ECO it holds for NET; the house can gain if ECO rises");
   if (leg === "regen") ctx.say("regen: As of 2026-11-18 EcoWealth holds REGEN and may gain if it rises");
-  await step(ctx, leg, `buy at least ${clean(t.minOut, 40)} ${symbol}`, t.tx, { sizeWei: size, completion: { bucket: leg, value: { at: new Date(ctx.now()).toISOString() } } });
+  // The protocol kit prints the floor in token units already.
+  const floor = tokenAmount(symbol, { decimal: t.minOut });
+  await step(ctx, leg, `buy at least ${floor?.amount ?? clean(t.minOut, 40)} ${symbol}`, t.tx, { sizeWei: size, amount: as(floor, "the least you receive"), completion: { bucket: leg, value: { at: new Date(ctx.now()).toISOString() } } });
 }
 
 /** The NET circle kit's one-way buy: it prints the kit's own disclosure, and the step goes through the same gate and caps as every other. */
 async function buyViaCircle(ctx, leg, size, symbol, flag) {
-  if (!(size > 0n)) return ctx.say(`${leg}: off (set --${flag} to turn it on)`);
-  if (!due(ctx.home.state()[leg]?.at, ctx.opts.buyEveryHours, ctx.now())) return ctx.say(`${leg}: not due yet`);
+  if (!(size > 0n)) return ctx.say(`${leg}: off (set --${flag} to turn it on)`, "off");
+  if (!due(ctx.home.state()[leg]?.at, ctx.opts.buyEveryHours, ctx.now())) return ctx.say(`${leg}: not due yet`, "not_due");
   const p = await ctx.kit(ctx.circleKitFile, ["buy", "--token", symbol, "--from", ctx.address, "--size", formatEther(size)], ctx.rpcs);
   if (settle(ctx, leg, "buy", p) !== "ok") return;
   const t = p.out.prepared;
   if (t.disclosure) ctx.say(`${leg}: ${clean(t.disclosure, 700)}`);
-  await step(ctx, leg, `buy at least ${clean(t.minOut, 40)} units of ${symbol} by ${clean(t.route, 30)}`, t.tx, { sizeWei: size, completion: { bucket: leg, value: { at: new Date(ctx.now()).toISOString() } } });
+  // The circle kit prints the floor in RAW units of an 18 decimal token: say it in token units, with its symbol.
+  const floor = tokenAmount(symbol, { raw: t.minOut });
+  await step(ctx, leg, floor ? `buy at least ${floor.amount} ${symbol} by ${clean(t.route, 30)}` : `buy at least ${clean(t.minOut, 40)} units of ${symbol} by ${clean(t.route, 30)}`, t.tx,
+    { sizeWei: size, amount: as(floor, "the least you receive"), completion: { bucket: leg, value: { at: new Date(ctx.now()).toISOString() } } });
 }
 
 // ---- one pass over the loop ------------------------------------------------------------------------------------------
-/** Walk the legs in order once. Returns the exit code: 0 the pass ran, 4 a rule refused a step, 1 a leg was stopped. */
+/** The exit code of a pass that ended with one or more legs failed (a read failed, an error, a reverted send) and no stop or refusal. */
+export const EXIT_LEG_FAILED = 5;
+/** The states a leg can end a pass in, least to most to tell the owner. A leg keeps the highest state it reached. */
+export const LEG_STATES = Object.freeze(["off", "not_due", "dry", "sent", "pending", "held", "failed", "refused"]);
+const STATE_RANK = Object.fromEntries(LEG_STATES.map((s, i) => [s, i]));
+/** Plain words for a report: one line, printable, and no web address (a kit's error text can carry the node address you chose). */
+const reportText = (s, max = 400) => clean(s, max).replace(/\bhttps?:\/\/\S+/gi, "[url]");
+const newReport = () => ({ legs: new Map() });
+
+/**
+ * What one pass did, as plain data for a machine to read. Every selected leg is there, with its state and the plain reason line.
+ * A send carries its chain, its token symbol, its amount as a decimal in token units and as the raw integer (both strings), the
+ * ETH it carried and its transaction hash once it has one. There is no key, no node address and no file path in it.
+ */
+export function passReport(ctx, exitCode) {
+  const legs = LEG_ORDER.filter((name) => inReport(ctx, name)).map((name) => {
+    const entry = ctx.report.legs.get(name);
+    return {
+      name, state: entry?.state ?? "held", reason: entry?.reason ?? "this leg did not run in this pass",
+      sends: (entry?.sends ?? []).map((s) => ({ ...s, step: reportText(s.step, 200) })),
+    };
+  });
+  return {
+    bot: "protocol-bot", version: VERSION, mode: ctx.live ? "live" : "dry", address: ctx.address, exitCode,
+    failedLegs: legs.filter((l) => l.state === "failed").map((l) => l.name),
+    // null, or the one thing the bot cannot close itself: its take-backs kept reverting, so a kVCM approval may still be open
+    // (token, spender, the kit command that checks it, and what it does). Set only by the take-back's own stop.
+    approvalMayBeOpen: ctx.approvalMayBeOpen ?? null, legs,
+  };
+}
+
+/** A leg is in a pass's report when it was selected, and also when the Klima leg was not but still settled a take-back it owed. */
+const inReport = (ctx, leg) => ctx.opts.legs.includes(leg) || (leg === "klima" && ctx.report.legs.has(leg));
+/**
+ * The Klima leg's turn in a pass, selected or not. Order of business: (1) an owed take-back is settled FIRST, before 'off', before
+ * 'not due yet', before the leg's stop, before any new approve or retire, and even when the leg was dropped from --legs or was
+ * stopped earlier in this process; the one exception is an approve that is final and whose retirement has its turn now
+ * (`retireNext`). (2) Only once nothing is owed does the leg stop for its reverts, and only then does its cycle run.
+ * Returns the exit code the leg adds: 0, 1 (stopped) or 4 (a rule refused a step).
+ */
+async function klimaTurn(ctx, selected) {
+  const leg = "klima", o = ctx.opts;
+  try {
+    const state = ctx.home.state();
+    const owed = klimaTakeBackOwed(state.klima);
+    if (!selected && !owed) return 0;
+    const takeBackReverts = revertedInARow(state, KLIMA_TAKE_BACK_COUNT);
+    if (owed && takeBackReverts >= SEND_FAILURE_LIMIT) { haltTakeBackStopped(ctx, takeBackReverts); return 1; }
+    const stopped = revertedInARow(state, leg) >= SEND_FAILURE_LIMIT;
+    const retireMayFollow = selected && !ctx.halted[leg] && !stopped && Boolean(o.klimaClass && o.klimaCredit && o.klimaTonnes) && klimaRetireNext(state.klima);
+    if (owed && !retireMayFollow) {
+      await takeKlimaApprovalBack(ctx);
+      // A dry pass never clears the debt. A live pass moves on only when the take-back is final (or the kit says nothing was left open).
+      if (!ctx.live || klimaTakeBackOwed(ctx.home.state().klima)) return ctx.halted[leg] ? 1 : 0;
+    }
+    if (!selected) return 0;
+    if (ctx.halted[leg]) { ctx.say(`${leg}: stopped earlier (${ctx.halted[leg]})`, "refused"); return 1; }
+    // Three reverted approves or retirements in a row, counted across passes and restarts, stop the leg: now that nothing is owed.
+    if (stopKlimaIfSettled(ctx)) return 1;
+    await LEGS.klima(ctx);
+    return ctx.halted[leg] ? 1 : 0;
+  } catch (e) {
+    if (e instanceof GuardError) { ctx.halt(leg, e.message); return 4; }
+    ctx.fail(leg, `stopped this pass: ${clean(e?.shortMessage || e?.message || e)}`);
+    return ctx.halted[leg] ? 1 : 0;
+  }
+}
+
+/** Walk the legs in order once. Returns the exit code: 0 the pass ran, 1 a leg was stopped, 4 a rule refused a step, 5 a leg failed (a failed read, an error or a reverted send; a leg that is off, not due or held is not a failure). */
 export async function pass(ctx) {
-  if (ctx.home.stopped()) { ctx.say(`stopped by the STOP file at ${ctx.home.files.stop}`); return 0; }
+  ctx.report = newReport(); // each pass reports on its own, so a long `run` never carries one pass's states into the next
+  if (ctx.home.stopped()) {
+    ctx.say(`stopped by the STOP file at ${ctx.home.files.stop}`); ctx.holdAll("stopped by the STOP file, nothing was asked or sent");
+    // STOP is the owner's word that no retirement follows: an approve still waiting for its retirement is stranded, so the take-back
+    // comes first when STOP is removed. A note in the state, nothing asked and nothing sent; if the home cannot be read, STOP still holds.
+    try { strandKlimaRetire(ctx); } catch { /* the next pass that reads the home refuses it in plain words */ }
+    return 0;
+  }
   if (ctx.live) ctx.safeNow?.();
   const pending = ctx.home.state().pending;
   if (pending && ctx.live) {
-    if (!pending.hash) { ctx.say(`a send got no answer (${clean(pending.leg, 20)}: ${clean(pending.name, 80)} on ${clean(pending.chain, 10)}): it may or may not have gone out. Nothing more will be sent. Verify the original nonce and chain history with independent RPCs; do NOT delete pending without an audited reconciliation.`); return 0; }
+    if (!pending.hash) { ctx.say(`a send got no answer (${clean(pending.leg, 20)}: ${clean(pending.name, 80)} on ${clean(pending.chain, 10)}): it may or may not have gone out. Nothing more will be sent. Verify the original nonce and chain history with independent RPCs; do NOT delete pending without an audited reconciliation.`); ctx.holdAll("an earlier send got no answer and may be out; nothing more is sent until the owner reconciles it"); return 0; }
     const seen = await ctx.io.seen(pending.chain, pending.hash);
-    if (seen === null) { ctx.say(`the transaction ${clean(pending.hash, 66)} on ${clean(pending.chain, 10)} is not yet final, or its finality cannot be verified. No transactions will be sent; do NOT erase pending or resend by hand without independently reconciling its nonce and outcome.`); return 0; }
+    if (seen === null) { ctx.say(`the transaction ${clean(pending.hash, 66)} on ${clean(pending.chain, 10)} is not yet final, or its finality cannot be verified. No transactions will be sent; do NOT erase pending or resend by hand without independently reconciling its nonce and outcome.`); ctx.holdAll(`an earlier send on ${clean(pending.chain, 10)} is not final yet; nothing more is sent until it is`); return 0; }
     const s = ctx.home.state();
     if (s.pending?.hash !== pending.hash) throw new GuardError("pending transaction changed during recovery");
     if (pending.id) {
@@ -1489,44 +1913,87 @@ export async function pass(ctx) {
         throw new GuardError("pending transaction has an invalid journal stage during reconciliation");
     }
     if (seen) applyCompletion(s, pending.completion);
+    // A send found final here is counted like one seen final in its own pass: a revert is a failure of its leg (exit 5, and three
+    // in a row stop it, across passes), a success resets the count. The count is saved in the same write that clears pending.
+    const named = LEG_ORDER.includes(pending.leg);
+    if (named) { const count = countFor(pending.leg, pending.name); countSendOutcome(s, count.key, Boolean(seen), count.resets); }
     delete s.pending; ctx.home.save(s);
     ctx.say(`reconciled ${seen ? "confirmed" : "reverted"} transaction ${clean(pending.hash, 66)}; its original budget reservation remains in the ledger`);
+    if (!seen && named) ctx.say(`${pending.leg}: ${clean(pending.name, 80)} ${clean(pending.hash, 66)} was final and REVERTED, so it did not happen`, "failed");
   }
   let code = 0;
   for (const leg of LEG_ORDER) {
+    if (leg === "klima") {
+      // The Klima leg owes a take-back whether or not it is selected, and whether or not it was stopped: see klimaTurn.
+      const c = await klimaTurn(ctx, ctx.opts.legs.includes(leg));
+      if (c === 4) code = 4; else if (c) code = code || c;
+      continue;
+    }
     if (!ctx.opts.legs.includes(leg)) continue;
-    if (ctx.halted[leg]) { ctx.say(`${leg}: stopped earlier (${ctx.halted[leg]})`); code = code || 1; continue; }
-    try { await LEGS[leg](ctx); }
-    catch (e) {
+    if (ctx.halted[leg]) { ctx.say(`${leg}: stopped earlier (${ctx.halted[leg]})`, "refused"); code = code || 1; continue; }
+    try {
+      // Three reverted sends of one leg in a row (counted in state.sendFailures, across passes and restarts) stop the leg.
+      const revertedInRow = revertedInARow(ctx.home.state(), leg);
+      if (revertedInRow >= SEND_FAILURE_LIMIT) ctx.halt(leg, revertStopReason(leg, revertedInRow));
+      else await LEGS[leg](ctx);
+    } catch (e) {
       if (e instanceof GuardError) { ctx.halt(leg, e.message); code = 4; }
       else ctx.fail(leg, `stopped this pass: ${clean(e?.shortMessage || e?.message || e)}`);
     }
     if (ctx.halted[leg]) code = code || 1;
   }
+  // A leg that failed is not a leg that was off, not due or held by a rule: say which ones, and do not exit 0.
+  const failed = LEG_ORDER.filter((leg) => inReport(ctx, leg) && ctx.report.legs.get(leg)?.state === "failed");
+  if (failed.length) {
+    const them = failed.length === 1 ? "it" : "them";
+    ctx.say(`this pass failed for ${failed.join(", ")}: a read failed or an error stopped ${them}, and nothing was decided for ${them} (exit ${EXIT_LEG_FAILED})`);
+    code = code || EXIT_LEG_FAILED;
+  }
   return code;
 }
 
 /** Everything a pass needs. `kit` and `io` can be swapped by a test; nothing else reaches the network or the key. */
-export function makeContext({ opts, home, address, io, kit = runKit, say = (line) => console.log(line), now = () => Date.now() }) {
+export function makeContext({ opts, home, address, io, kit = runKit, say = (line) => console.log(line), now = () => Date.now(), sleep: pause = sleep }) {
   const safeNow = makeClockGuard(now);
   const checkedKit = (...args) => {
     if (opts.live && kit === runKit) verifyBundledKits(opts.kit, opts.circleKit);
     return kit(...args);
   };
   const ctx = {
-    opts, home, address, io, kit: checkedKit, say, now, safeNow, live: Boolean(opts.live), kitFile: opts.kit, circleKitFile: opts.circleKit, rpcs: opts.rpcs,
+    opts, home, address, io, kit: checkedKit, now, pause, safeNow, live: Boolean(opts.live), kitFile: opts.kit, circleKitFile: opts.circleKit, rpcs: opts.rpcs,
     caps: { maxTxFeeWei: opts.maxTxFeeWei, dayFeeWei: opts.dayFeeWei, daySpendWei: opts.daySpendWei, dayKvcmUnits: MAX_KVCM_APPROVE, dayUsdcUnits: MAX_GMX_USDC },
-    halted: {}, fails: {},
+    halted: {}, fails: {}, report: newReport(), approvalMayBeOpen: null,
+    /**
+     * Say a line. With a state ("off", "not_due", "dry", "sent", "pending", "held", "failed", "refused") the line is also the
+     * leg's reason in the pass report; the leg is the line's own "leg: " prefix. A leg keeps the highest state it reached.
+     */
+    say(line, state) {
+      say(line);
+      const named = state ? /^([a-z-]+): /.exec(line) : null;
+      if (named) ctx.mark(named[1], state, line.slice(named[0].length));
+    },
+    mark(leg, state, reason) {
+      if (!LEG_ORDER.includes(leg) || STATE_RANK[state] === undefined) return;
+      let entry = ctx.report.legs.get(leg);
+      if (!entry) { entry = { state, rank: -1, reason: "", sends: [] }; ctx.report.legs.set(leg, entry); }
+      if (STATE_RANK[state] >= entry.rank) { entry.state = state; entry.rank = STATE_RANK[state]; entry.reason = reportText(reason); }
+    },
+    /** A leg that never ran this pass (STOP, an unsettled send) is held, with the pass's reason. */
+    holdAll(reason) { for (const leg of ctx.opts.legs) if (!ctx.report.legs.has(leg)) ctx.mark(leg, "held", reason); },
+    recordSend(leg, send) {
+      if (!ctx.report.legs.has(leg)) ctx.report.legs.set(leg, { state: "off", rank: -1, reason: "", sends: [] });
+      ctx.report.legs.get(leg).sends.push(send);
+    },
     /** A read failed: three in a row stops the leg until the bot is started again. */
-    fail(leg, why) { ctx.fails[leg] = (ctx.fails[leg] ?? 0) + 1; say(`${leg}: ${why}`); if (ctx.fails[leg] >= 3) ctx.halt(leg, "three failures in a row"); },
-    halt(leg, why) { ctx.halted[leg] = clean(why); say(`${leg}: STOPPED: ${clean(why)}. Fix it and start the bot again.`); },
+    fail(leg, why) { ctx.fails[leg] = (ctx.fails[leg] ?? 0) + 1; say(`${leg}: ${why}`); ctx.mark(leg, "failed", why); if (ctx.fails[leg] >= 3) ctx.halt(leg, "three failures in a row"); },
+    halt(leg, why) { ctx.halted[leg] = clean(why); say(`${leg}: STOPPED: ${clean(why)}. Fix it and start the bot again.`); ctx.mark(leg, "refused", `STOPPED: ${clean(why)}`); },
   };
   return ctx;
 }
 
 // ---- the command line ------------------------------------------------------------------------------------------------
-const FLAGS = new Set(["live", "home", "key-file", "address", "every", "legs", "buy-every-hours", "hydrex-top", "hydrex-vote", "klima-class", "klima-credit", "klima-tonnes", "klima-token-id", "klima-name", "regen-retire-owner", "regen-retire-batch", "regen-retire-amount", "regen-retire-jurisdiction", "regen-retire-reason", "regen-lcd", "regen-eth", "eco-eth", "eco-buy-eth", "net-eth", "circle-eth", "gmx-market", "gmx-side", "gmx-collateral", "gmx-leverage", "gmx-hold-hours", "day-fee-eth", "day-spend-eth", "max-tx-fee-eth", "kit", "circle-kit", "base-rpc", "arbitrum-rpc", "expect-commitment", "to", "from"]);
-const BOOL = new Set(["live"]);
+const FLAGS = new Set(["live", "json", "home","key-file", "address", "every", "legs", "buy-every-hours", "hydrex-top", "hydrex-vote", "klima-class", "klima-credit", "klima-tonnes", "klima-token-id", "klima-name", "regen-retire-owner", "regen-retire-batch", "regen-retire-amount", "regen-retire-jurisdiction", "regen-retire-reason", "regen-lcd", "regen-eth", "eco-eth", "eco-buy-eth", "net-eth", "circle-eth", "gmx-market", "gmx-side", "gmx-collateral", "gmx-leverage", "gmx-hold-hours", "day-fee-eth", "day-spend-eth", "max-tx-fee-eth", "kit", "circle-kit", "base-rpc", "arbitrum-rpc", "base-witness-rpc", "arbitrum-witness-rpc", "expect-commitment", "to", "from"]);
+const BOOL = new Set(["live", "json"]);
 const ethFlag = (name, v, max) => {
   if (v === undefined) return 0n;
   if (!/^\d+(\.\d{1,18})?$/.test(v)) throw new ArgError(`--${name} is an amount of ETH, like 0.0002`);
@@ -1579,11 +2046,12 @@ export function parseArgs(argv, env = process.env) {
   if (regenLcd !== undefined) { let u = null; try { u = new URL(regenLcd); } catch { u = null; } if (!u || u.protocol !== "https:" || u.username || u.password) throw new ArgError("--regen-lcd is an https address with no login in it"); }
   if (f["expect-commitment"] !== undefined && (!["audit", "restore"].includes(cmd) || !/^[a-f0-9]{64}$/.test(f["expect-commitment"])))
     throw new ArgError("--expect-commitment belongs to `audit` and `restore` and is the 64 hex characters an earlier audit or backup printed as auditCommitment");
+  if (f.json && cmd !== "once") throw new ArgError("--json belongs to `once`: it prints one JSON object on stdout when the pass ends");
   if (f.to !== undefined && cmd !== "backup") throw new ArgError("--to belongs to `backup`");
   if (f.from !== undefined && cmd !== "restore") throw new ArgError("--from belongs to `restore`");
   if (cmd === "restore" && f.home === undefined) throw new ArgError("restore needs --home PATH: the NEW folder to build (it must not exist yet)");
-  return {
-    cmd: cmd ?? "help", live: Boolean(f.live), home, expectCommitment: f["expect-commitment"],
+  const parsed = {
+    cmd: cmd ?? "help", live: Boolean(f.live), json: Boolean(f.json), home, expectCommitment: f["expect-commitment"],
     to: f.to === undefined ? undefined : path.resolve(f.to), from: f.from === undefined ? undefined : path.resolve(f.from), keyFile: path.resolve(f["key-file"] ?? path.join(home, "wallet.key")), address: addrFlag("address", f.address), legs,
     everyMinutes: whole("every", f.every, DEFAULTS.everyMinutes, 1, 10_080), buyEveryHours: whole("buy-every-hours", f["buy-every-hours"], DEFAULTS.buyEveryHours, 1, 8_760),
     hydrexTop: whole("hydrex-top", f["hydrex-top"], DEFAULTS.hydrexTop, 1, 10), hydrexVote: f["hydrex-vote"],
@@ -1595,13 +2063,23 @@ export function parseArgs(argv, env = process.env) {
     maxTxFeeWei: ethFlag("max-tx-fee-eth", f["max-tx-fee-eth"] ?? DEFAULTS.maxTxFeeEth, HARD_MAX.maxTxFeeWei),
     kit: path.resolve(f.kit ?? DEFAULT_KIT), circleKit: path.resolve(f["circle-kit"] ?? DEFAULT_CIRCLE_KIT),
     rpcs: { base: f["base-rpc"] ?? env.BASE_RPC_URL ?? CHAINS.base.rpc, arbitrum: f["arbitrum-rpc"] ?? env.ARBITRUM_RPC_URL ?? CHAINS.arbitrum.rpc },
+    witnessRpcs: { base: f["base-witness-rpc"] ?? env.BASE_WITNESS_RPC_URL, arbitrum: f["arbitrum-witness-rpc"] ?? env.ARBITRUM_WITNESS_RPC_URL },
   };
+  if (parsed.live) {
+    // Every chain ANY of a leg's rules signs on, not only the first rule's: a leg that later gains a step on a second
+    // chain must not sign there on one node's word.
+    const signingChains = new Set(parsed.legs.flatMap((leg) => (RULES[leg] ?? []).map((r) => r.chain)).filter(Boolean));
+    for (const chain of signingChains)
+      assertWitnessRpcConfiguration(parsed.rpcs[chain], parsed.witnessRpcs[chain], chain);
+  }
+  return parsed;
 }
 
 export const HELP = `vealth protocol bot ${VERSION}: one loop over Hydrex, Klima, Regen, ECO (the Zora coin), NET's circle and GMX, with your own key.
 Never an offer or advice, no return promised. DRY unless you pass --live.
 
-  node bot.mjs once --address 0xYOU        a dry pass for any address: no key, nothing signed, nothing sent
+  node bot.mjs once --address 0xYOU        a dry pass for any address: no key, nothing signed, nothing sent, nothing written, no lock taken
+  node bot.mjs once --json ...             one JSON object on stdout when the pass ends (dry or live); the human lines go to stderr
   node bot.mjs wallet                      make the bot's wallet in <home>/wallet.key (never overwrites one)
   node bot.mjs once --live ...             one pass that sends (for cron or launchd)
   node bot.mjs audit --home PATH            verify the stopped journal and all archived hashes (no key or RPC)
@@ -1625,8 +2103,11 @@ Pace and caps:
   --buy-every-hours ${DEFAULTS.buyEveryHours}   --day-fee-eth ${DEFAULTS.dayFeeEth}   --day-spend-eth ${DEFAULTS.daySpendEth}   --max-tx-fee-eth ${DEFAULTS.maxTxFeeEth}
 Where things are:
   --home ~/.vealth-bot   --key-file <home>/wallet.key   --base-rpc / --arbitrum-rpc (or BASE_RPC_URL / ARBITRUM_RPC_URL)
+  LIVE must also set --base-witness-rpc and --arbitrum-witness-rpc (or BASE_WITNESS_RPC_URL / ARBITRUM_WITNESS_RPC_URL)
+  for each active signing chain. Use genuinely separate HTTPS providers; RPC disagreement leaves sends pending.
 Stop it: touch <home>/STOP. Everything it sent is in <home>/ledger.jsonl. A stale <home>/lock needs manual recovery after checking the previous bot is stopped.
-Exit codes: 0 the pass ran | 2 bad arguments | 3 the audit did not match your saved commitment | 4 a rule refused a step (nothing was sent) | 1 a leg was stopped`;
+Exit codes: 0 the pass ran clean | 1 a leg was stopped | 2 bad arguments | 3 the audit did not match your saved commitment | 4 a rule refused a step (nothing was sent) | ${EXIT_LEG_FAILED} a leg failed (a failed read, an error or a reverted send)
+A leg that is off, not due or held by a rule is not a failure: it does not change the exit code.`;
 
 export function listText() {
   const lines = ["Every contract call this program can sign. A step that is not here is refused.", ""];
@@ -1815,7 +2296,15 @@ export async function restoreHome(from, homeDir, expectCommitment) {
 
 export async function main(argv) {
   let opts;
-  try { opts = parseArgs(argv); } catch (e) { if (e instanceof ArgError) { console.error(`bot: ${e.message}`); return 2; } throw e; }
+  try { opts = parseArgs(argv); } catch (e) {
+    if (e instanceof ArgError) {
+      console.error(`bot: ${e.message}`);
+      // A machine that asked for --json gets its answer as JSON, even when the arguments were refused.
+      if (argv[0] === "once" && argv.includes("--json")) console.log(JSON.stringify({ bot: "protocol-bot", version: VERSION, exitCode: 2, error: reportText(e.message) }, null, 2));
+      return 2;
+    }
+    throw e;
+  }
   if (opts.cmd === "help") { console.log(HELP); return 0; }
   if (opts.cmd === "list") { console.log(listText()); return 0; }
   try {
@@ -1868,24 +2357,34 @@ export async function main(argv) {
     const address = account?.address ?? opts.address ?? (fs.existsSync(opts.keyFile) ? loadAccount(opts.keyFile).address : null);
     if (!address) throw new ArgError("a dry pass needs --address 0xYOU (or a wallet: run `node bot.mjs wallet`)");
     if (opts.live && opts.address && !same(opts.address, address)) throw new ArgError("--address is not the address of the key file");
-    const home = openHome(opts.home);
-    if (!home.lock()) throw new ArgError(`the home ${opts.home} is locked: a bot may still be running or left a stale lock. Confirm it is stopped before manually removing ${home.files.lock}`);
+    // A dry pass takes no exclusive lock and writes nothing into the home (it only reads what is there), so it runs beside a
+    // live bot that holds the lock. Only a live pass locks the home, takes the wallet lease and rotates the journal.
+    const home = openHome(opts.home, { readOnly: !opts.live });
+    if (opts.live && !home.lock()) throw new ArgError(`the home ${opts.home} is locked: a bot may still be running or left a stale lock. Confirm it is stopped before manually removing ${home.files.lock}`);
+    // With --json, stdout holds the one JSON object and nothing else: every human line goes to stderr.
+    const say = opts.json ? (line) => console.error(line) : (line) => console.log(line);
     let lease = null;
     try {
       // One wallet, one running home on this machine: a second home signing for the same address is refused.
       if (opts.live) lease = acquireWalletLease(address, opts.home);
       // Finish a previously interrupted *local* archive using only verified disk hashes.
       // This cannot sign, broadcast or reset a pending onchain transaction.
-      const recovered = archiveJournal(opts.home, { locked: true, recoveryOnly: true });
-      if (recovered.archived) console.log(`journal archive recovered ${recovered.bytes} verified bytes`);
-      const ctx = makeContext({ opts, home, address, io: makeChainIo(account, opts.rpcs) });
-      console.log(`bot ${VERSION} for ${address}: ${opts.live ? "LIVE, it sends" : "DRY, nothing is sent"}`);
-      if (opts.cmd === "once") return await pass(ctx);
+      if (opts.live) {
+        const recovered = archiveJournal(opts.home, { locked: true, recoveryOnly: true });
+        if (recovered.archived) say(`journal archive recovered ${recovered.bytes} verified bytes`);
+      }
+      const ctx = makeContext({ opts, home, address, io: makeChainIo(account, opts.rpcs, opts.witnessRpcs), say });
+      say(`bot ${VERSION} for ${address}: ${opts.live ? "LIVE, it sends" : "DRY, nothing is sent"}`);
+      if (opts.cmd === "once") {
+        const code = await pass(ctx);
+        if (opts.json) console.log(JSON.stringify(passReport(ctx, code), null, 2));
+        return code;
+      }
       for (;;) {
         await pass(ctx);
         // Only rotate a complete, old and settled journal prefix, under the lock.
         // The state marker blocks trading if power is lost during the rotation.
-        if (!home.stopped() && !home.state().pending && fs.existsSync(home.files.ledger) &&
+        if (opts.live && !home.stopped() && !home.state().pending && fs.existsSync(home.files.ledger) &&
             fs.statSync(home.files.ledger).size >= ARCHIVE_TRIGGER_BYTES) {
           archiveJournal(opts.home, { locked: true, now: Date.now(), validateActive: () => home.day(Date.now()) });
         }
@@ -1897,9 +2396,11 @@ export async function main(argv) {
       }
     } finally { lease?.release(); home.unlock(); }
   } catch (e) {
-    if (e instanceof ArgError) { console.error(`bot: ${e.message}`); return 2; }
-    console.error(`bot: ${clean(e?.shortMessage || e?.message || e)}`);
-    return 1;
+    const code = e instanceof ArgError ? 2 : 1;
+    const message = e instanceof ArgError ? e.message : clean(e?.shortMessage || e?.message || e);
+    console.error(`bot: ${message}`);
+    if (opts.json) console.log(JSON.stringify({ bot: "protocol-bot", version: VERSION, mode: opts.live ? "live" : "dry", exitCode: code, error: reportText(message) }, null, 2));
+    return code;
   }
 }
 

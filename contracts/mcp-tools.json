@@ -3,7 +3,7 @@
   "law": "A description change is a trust change. Re-pin deliberately with `npm run check:mcp-tool-descriptions -- --write` and let the reviewer read the before/after text in the diff. Never re-pin to make a red lane green.",
   "regenerate_with": "npm run check:mcp-tool-descriptions -- --write",
   "tool_count": 194,
-  "registry_digest": "sha256:12e14ee291f3d96f6b5fabb273eed9d436d28b16c8b9f8aabaca330e817641f2",
+  "registry_digest": "sha256:393906871921fb15360ff7e9316c44d3fbfbfe1d818ec998283cf6015546cc5e",
   "tools": [
     {
       "name": "start_here",
@@ -2151,7 +2151,7 @@
     {
       "name": "prepare_post_work",
       "title": "Post your own work packet (step 1 of 2)",
-      "description": "Put work YOU define on the public board — your place, your problem, your terms. Pass the creator wallet, a title, what needs doing, where, and the proposed pay. Returns MESSAGE_TO_SIGN (proving the creator wallet is yours) and BODY_JSON. Posting is FREE when the creator wallet signs: the signature is the gate, not a fee (one wallet may post ten jobs a day this way; an unsigned post is the $0.05 x402 door). The pay you propose stays PROPOSED until someone funds it — approved proof on an unfunded packet earns provable credit rather than cash, and the packet says which before anyone claims. Sign MESSAGE_TO_SIGN with the creator wallet's personal_sign, then call submit_post_work within 5 minutes. The board carries only work with a home in the Vealth Standard and a documented method: a post that names neither is refused before any charge, and the refusal lists the nearest documented standards; pass one back as `standard`. Say who can do it (skillLevel; omitted, it posts as entry), its hazards (safetyNotes), its proof items (proofRequirements) and any permit or licensed trade it needs (flags). Cost and signer: free, no gas; the person signs the result with their own wallet or passkey, and the house never holds a key.",
+      "description": "Put work YOU define on the public board — your place, your problem, your terms. Pass the creator wallet, a title, what needs doing, where, and the proposed pay. Returns MESSAGE_TO_SIGN (proving the creator wallet is yours) and BODY_JSON. Posting is FREE when the creator wallet signs: the signature is the gate, not a fee (one wallet may post ten jobs a day this way; a post with no valid signature is refused with door_closed and takes no payment). The pay you propose stays PROPOSED until someone funds it — approved proof on an unfunded packet earns provable credit rather than cash, and the packet says which before anyone claims. Sign MESSAGE_TO_SIGN with the creator wallet's personal_sign, then call submit_post_work within 5 minutes. The board carries only work with a home in the Vealth Standard and a documented method: a post that names neither is refused before any charge, and the refusal lists the nearest documented standards; pass one back as `standard`. Say who can do it (skillLevel; omitted, it posts as entry), its hazards (safetyNotes), its proof items (proofRequirements) and any permit or licensed trade it needs (flags). Cost and signer: free, no gas; the person signs the result with their own wallet or passkey, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -2231,12 +2231,12 @@
           "proposedPayUsd"
         ]
       },
-      "digest": "sha256:e52134e32939c8fb4ba6535d6a8647c8c2b07e2851f9b32bc6c89ddba112c3b6"
+      "digest": "sha256:6ab5e648aaf3edd04bc8c233d296095318bf7426d5eb223bb839d8c5072299c4"
     },
     {
       "name": "submit_post_work",
       "title": "Submit the signed posting (step 2 of 2)",
-      "description": "Complete the posting: pass BODY_JSON from prepare_post_work UNCHANGED and the creator wallet's signature over MESSAGE_TO_SIGN. A valid creator signature posts for free (the signature is the gate, not a fee); xPayment is only for a post with no signature, the $0.05 x402 door. A failed signature is answered in words with the fix; sign again with a fresh prepare. This server relays to the same public gate any HTTP client uses — it holds no keys and no funds. Success returns your packet's id and public page; claiming it (even yourself) is free. Cost and signer: free, no gas; signed by the person's own wallet or passkey, and the house never holds a key.",
+      "description": "Complete the posting: pass BODY_JSON from prepare_post_work UNCHANGED and the creator wallet's signature over MESSAGE_TO_SIGN. A valid creator signature posts for free (the signature is the gate, not a fee). A post with no valid signature is refused with door_closed and takes no payment. A failed signature is answered in words with the fix; sign again with a fresh prepare. This server relays to the same public gate any HTTP client uses — it holds no keys and no funds. Success returns your packet's id and public page; claiming it (even yourself) is free. Cost and signer: free, no gas; signed by the person's own wallet or passkey, and the house never holds a key.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -2250,7 +2250,7 @@
           },
           "xPayment": {
             "type": "string",
-            "description": "Optional, and not needed with a valid creator signature: the X-PAYMENT header value (EIP-3009 USDC on Base, from YOUR wallet) for an unsigned post's $0.05 fee."
+            "description": "Optional, and not needed with a valid creator signature. Leave it out: the paid way to post is closed, so a payment header does not open a post."
           }
         },
         "required": [
@@ -2258,7 +2258,7 @@
           "signature"
         ]
       },
-      "digest": "sha256:bbc0aaf3fcd889ea673ee5216e97a270e84f1342ec881ddfbabedd7392d74187"
+      "digest": "sha256:a385be185c969c093f467b8c02789b6a4504bb2897537deed9fee25dd82b6883"
     },
     {
       "name": "prepare_proof",
